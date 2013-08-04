@@ -142,6 +142,7 @@ func handleCreateBid(w http.ResponseWriter, r *http.Request) {
 			c := appengine.NewContext(r)
 			c.Errorf("enqueueBid failed: %v, %v %v %v", err, bidType, bidAddress, bidNonce)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		c.Infof("enqueueBid successful: %v %v %v", bidType, bidAddress, bidNonce)
 	} else {
