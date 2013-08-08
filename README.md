@@ -34,14 +34,16 @@ News
 ----
 
 - 2013-08-08: The client no longer places a random bid on the server.
-  Performing a POST to http://localhost:8081/buy/<articleid> simulates
+  Performing a POST to <pre>http://localhost:8081/buy/&lt;articleid&gt;</pre> simulates
   how a buy appears to clients, where the result is just a copy of the
   work data.  A rudimentary in-memory content-addressable file storage
   (CAFS) keeps files and serves them under
-  http://localhost:8081/file/<sha256, hex-encoded>
+  <pre>http://localhost:8081/file/&lt;sha256, hex-encoded&gt;</pre>
   To see what's going on, execute:
-  > curl -v -H "Content-Type: application/octet-stream" \
-  >   --data-binary @<some filename> -L http://localhost:8081/buy/foobar
+<pre>
+curl -v -H "Content-Type: application/octet-stream" \
+  --data-binary @<some filename> -L http://localhost:8081/buy/foobar
+</pre>
 
 Have fun!
 2013-08-08, Jonas Eschenburg
