@@ -5,7 +5,7 @@ This is going to be a proof-of-concept implementation of a marketplace
 for computing services, an idea I had in 2011 when I saw the enormous
 amounts of computing capacity dedicated to mining Bitcoin.
 
-Since then, the work needed to mine a single bitcoin has increased by
+Since then, the work needed to mine a single Bitcoin has increased by
 at least a factor of 50! (See http://blockchain.info/charts/hash-rate)
 
 If generating this enormous amount of work for nothing more than a
@@ -21,16 +21,28 @@ weeks and currently consists of:
   transactions. The lifecycle of every transaction can be traced,
   and all communication is secured with Elliptic-Curve cryptographic
   signatures of the same kind than those that can be generated using
-  the originaö Bitcoin client.
+  the original Bitcoin client.
 - An even more rudimentary client, also written in Go, that currently
-  doesn't do anything more useful than create a random bid under a
-  random address. I used it to test the workload the server can handle.
-  Some day, the client will act as an intermediary, taking tasks from
+  doesn't do anything more useful than simulate the client-side mimics
+  of a buy operation.
+  Some day, the client will act as a proxy, taking tasks from
   local programs and dispatching them to the internet.
 
 There is no pretty UI and no actual money can be made or lost.
 
+News
+----
+
+- 2013-08-08: The client no longer places a random bid on the server.
+  Performing a POST to http://localhost:8081/buy/<articleid> simulates
+  how a buy appears to clients, where the result is just a copy of the
+  work data.  A rudimentary in-memory content-addressable file storage
+  (CAFS) keeps files and serves them under
+  http://localhost:8081/file/<sha256, hex-encoded>
+  To see what's going on, execute:
+  > curl -v -H "Content-Type: application/octet-stream" \
+  >   --data-binary @<some filename> -L http://localhost:8081/buy/foobar
 
 Have fun!
-2013-08-01, Jonas Eschenburg
+2013-08-08, Jonas Eschenburg
 

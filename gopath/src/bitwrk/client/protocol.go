@@ -14,21 +14,18 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package client
 
 import (
 	"bitwrk"
 	"bitwrk/bitcoin"
-	"bitwrk/money"
 	"crypto/rand"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 )
 
 var ErrRedirect = fmt.Errorf("Redirect encountered")
@@ -57,7 +54,7 @@ func getFromServer(relpath string) (*http.Response, error) {
 	return client.Do(req)
 }
 
-func getJsonFromServer(relpath, etag string) (*http.Response, error) {
+func GetJsonFromServer(relpath, etag string) (*http.Response, error) {
 	req, err := newServerRequest("GET", relpath, nil)
 	if err != nil {
 		return nil, err
@@ -98,20 +95,25 @@ func GetNonce() (string, error) {
 	return getStringFromServer("nonce", 80)
 }
 
-func PlaceBid(bidType bitwrk.BidType, article bitwrk.ArticleId, price money.Money) (bidId string, err error) {
-	nonce, err := GetNonce()
+func PlaceBid(bid *bitwrk.RawBid, identity *bitcoin.KeyPair) (bidId string, err error) {
+	var nonce string
+	if _nonce, err := GetNonce(); err != nil {
+		return "", err
+	} else {
+		nonce = _nonce
+	}
 
-	articleString := article.FormString()
-	priceString := normalize(price.String())
-	bidTypeString := bidType.FormString()
+	articleString := bid.Article.FormString()
+	priceString := normalize(bid.Price.String())
+	bidTypeString := bid.Type.FormString()
 	document := fmt.Sprintf(
 		"article=%s&type=%s&price=%s&address=%s&nonce=%s",
 		articleString,
 		bidTypeString,
 		priceString,
-		BitcoinAddress,
+		identity.GetAddress(),
 		nonce)
-	signature, err := bitcoin.SignMessage(document, ECDSAKey, BitcoinKeyCompressed, rand.Reader)
+	signature, err := identity.SignMessage(document, rand.Reader)
 	if err != nil {
 		err = fmt.Errorf("Error signing message: %v", err)
 		return
@@ -129,38 +131,6 @@ func PlaceBid(bidType bitwrk.BidType, article bitwrk.ArticleId, price money.Mone
 	}
 
 	return
-}
-
-func TestPlaceBid() {
-	randombyte := make([]byte, 1)
-	rand.Read(randombyte)
-	buyOrSell := bitwrk.Buy
-	if randombyte[0] > 127 {
-		buyOrSell = bitwrk.Sell
-	}
-	bidId, err := PlaceBid(buyOrSell, "foobar", money.MustParse("BTC 0.001"))
-	if err != nil {
-		log.Fatalf("Place Bid failed: %v", err)
-		return
-	}
-	log.Printf("bidId: %v", bidId)
-
-	etag := ""
-	for i := 0; i < 30; i++ {
-		resp, err := getJsonFromServer("bid/"+bidId, etag)
-		if err != nil {
-			panic(err)
-		}
-		log.Printf("Response: %v", resp)
-		if resp.StatusCode == http.StatusOK {
-			etag = resp.Header.Get("ETag")
-		} else if resp.StatusCode == http.StatusNotModified {
-			log.Printf("  Cache hit")
-		} else {
-			log.Fatalf("UNEXPECTED STATUS CODE %v", resp.StatusCode)
-		}
-		time.Sleep(5 * time.Second)
-	}
 }
 
 func normalize(s string) string {

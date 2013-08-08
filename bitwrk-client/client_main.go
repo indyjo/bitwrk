@@ -17,14 +17,16 @@
 package main
 
 import (
-	"bitecdsa"
-	"bitelliptic"
+	"bitwrk"
 	"bitwrk/bitcoin"
+	"bitwrk/cafs"
+	"bitwrk/client"
+	"bitwrk/money"
 	"crypto/rand"
 	"flag"
 	"fmt"
+	"io"
 	"log"
-	"math/big"
 	"net/http"
 	"os"
 	"time"
@@ -34,37 +36,7 @@ var ExternalAddress string
 var ExternalPort int
 var InternalPort int
 var BitcoinPrivateKeyEncoded string
-var BitcoinPrivateKey []byte
-var BitcoinKeyCompressed bool
-var BitcoinAddress string
-var ECDSAKey *bitecdsa.PrivateKey
-
-func decodeBitcoinKey(privKey string) (key []byte, compressed bool, address string, err error) {
-	key, compressed, err = bitcoin.DecodePrivateKeyWIF(privKey)
-	if err != nil {
-		err = fmt.Errorf("Error decoding private key: %v", err)
-		return
-	}
-
-	curve := bitelliptic.S256()
-	x, y := curve.ScalarBaseMult(key)
-
-	pubkey, err := bitcoin.EncodePublicKey(x, y, compressed)
-	if err != nil {
-		err = fmt.Errorf("Error encoding public key: %v", err)
-	}
-
-	address = bitcoin.PublicKeyToBitcoinAddress(0, pubkey)
-	return
-}
-
-func makeECDSAKey(key []byte) (*bitecdsa.PrivateKey, error) {
-	result, err := bitecdsa.GenerateFromPrivateKey(new(big.Int).SetBytes(key), bitelliptic.S256())
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
+var BitcoinIdentity *bitcoin.KeyPair
 
 func main() {
 	flags := flag.NewFlagSet("", flag.ExitOnError)
@@ -89,30 +61,23 @@ func main() {
 			log.Fatalf("Error generating random key: %v", err)
 			os.Exit(1)
 		}
-		if key, err := bitcoin.EncodePrivateKeyWIF(data, true); err != nil {
-			log.Fatalf("Error encoding random key: %v", err)
+		if key, err := bitcoin.FromPrivateKeyRaw(data, true, bitcoin.AddrVersionBitcoin); err != nil {
+			log.Fatalf("Error creating key: %v", err)
 			os.Exit(1)
 		} else {
-			BitcoinPrivateKeyEncoded = key
+			BitcoinIdentity = key
+		}
+	} else {
+		if key, err := bitcoin.FromPrivateKeyWIF(BitcoinPrivateKeyEncoded, bitcoin.AddrVersionBitcoin); err != nil {
+			log.Fatalf("Error creating key: %v", err)
+			os.Exit(1)
+		} else {
+			BitcoinIdentity = key
 		}
 	}
 
-	BitcoinPrivateKey, BitcoinKeyCompressed, BitcoinAddress, err = decodeBitcoinKey(BitcoinPrivateKeyEncoded)
-	if err != nil {
-		log.Fatalf("Error decoding Bitcoin key: %v", err)
-		os.Exit(1)
-	}
-	ECDSAKey, err = makeECDSAKey(BitcoinPrivateKey)
-	if err != nil {
-		log.Fatalf("Error decoding Bitcoin key for ECDSA: %v", err)
-		os.Exit(1)
-	}
-
-	_ = BitcoinPrivateKey
-	_ = BitcoinKeyCompressed
-
 	if ExternalAddress == "auto" {
-		ExternalAddress, err = DetermineIpAddress()
+		ExternalAddress, err = client.DetermineIpAddress()
 		if err != nil {
 			log.Fatalf("Error auto-determining IP address: %v", err)
 			os.Exit(1)
@@ -122,7 +87,7 @@ func main() {
 	log.Printf("External address: %v\n", ExternalAddress)
 	log.Printf("External port: %v\n", ExternalPort)
 	log.Printf("Internal port: %v\n", InternalPort)
-	log.Printf("Bitcoin address: %v\n", BitcoinAddress)
+	log.Printf("Bitcoin address: %v\n", BitcoinIdentity.GetAddress())
 
 	exit := make(chan error)
 	if InternalPort > 0 {
@@ -133,8 +98,9 @@ func main() {
 		go serveExternal(exit)
 	}
 
-	TestPlaceBid()
-	os.Exit(0)
+	//client.GetActivityManager().NewBuy("foobar")
+	//TestPlaceBid()
+	//os.Exit(0)
 
 	err = <-exit
 	if err != nil {
@@ -151,9 +117,8 @@ func serveInternal(exit chan<- error) {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello World!")
-	})
+	mux.HandleFunc("/buy/", handleBuy)
+	mux.HandleFunc("/file/", handleFile)
 	exit <- s.ListenAndServe()
 }
 
@@ -166,4 +131,115 @@ func serveExternal(exit chan<- error) {
 		WriteTimeout: 10 * time.Second,
 	}
 	exit <- s.ListenAndServe()
+}
+
+func handleFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var key *cafs.SKey
+	if k, err := cafs.ParseKey(r.URL.Path[6:]); err != nil {
+		http.NotFound(w, r)
+		log.Printf("Error parsing key from URL %v: %v", r.URL, err)
+		return
+	} else {
+		key = k
+	}
+
+	var reader io.ReadCloser
+	if f, err := client.GetActivityManager().GetStorage().Get(key); err != nil {
+		http.NotFound(w, r)
+		log.Printf("Error retrieving key %v: %v", key, err)
+		return
+	} else {
+		reader = f.Open()
+	}
+	defer func() {
+		if err := reader.Close(); err != nil {
+			log.Printf("Error closing file: %v", err)
+		}
+	}()
+
+	if _, err := io.Copy(w, reader); err != nil {
+		log.Printf("Error sending file contents to client: %v", err)
+	}
+}
+
+func handleBuy(w http.ResponseWriter, r *http.Request) {
+	article := r.URL.Path[5:]
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var buy *client.BuyActivity
+	if _buy, err := client.GetActivityManager().NewBuy(article); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Error creating buy activity: %v", err)
+		return
+	} else {
+		buy = _buy
+	}
+	defer buy.End()
+
+	workWriter := buy.WorkWriter()
+
+	if _, err := io.Copy(workWriter, r.Body); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Error receiving work data from client: %v", err)
+		return
+	} else {
+		r.Body.Close()
+		workWriter.Close()
+	}
+
+	var result cafs.File
+	if res, err := buy.GetResult(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Error receiving result from BitWrk network: %v", err)
+		return
+	} else {
+		result = res
+	}
+
+	http.Redirect(w, r, "/file/"+result.Key().String(), http.StatusSeeOther)
+}
+
+func TestPlaceBid() {
+	rawBid := &bitwrk.RawBid{
+		Type:    bitwrk.Buy,
+		Price:   money.MustParse("BTC 0.001"),
+		Article: "foobar",
+	}
+	randombyte := make([]byte, 1)
+	rand.Read(randombyte)
+	if randombyte[0] > 127 {
+		rawBid.Type = bitwrk.Sell
+	}
+	bidId, err := client.PlaceBid(rawBid, BitcoinIdentity)
+	if err != nil {
+		log.Fatalf("Place Bid failed: %v", err)
+		return
+	}
+	log.Printf("bidId: %v", bidId)
+
+	etag := ""
+	for i := 0; i < 30; i++ {
+		resp, err := client.GetJsonFromServer("bid/"+bidId, etag)
+		if err != nil {
+			panic(err)
+		}
+		log.Printf("Response: %v", resp)
+		if resp.StatusCode == http.StatusOK {
+			etag = resp.Header.Get("ETag")
+		} else if resp.StatusCode == http.StatusNotModified {
+			log.Printf("  Cache hit")
+		} else {
+			log.Fatalf("UNEXPECTED STATUS CODE %v", resp.StatusCode)
+		}
+		time.Sleep(5 * time.Second)
+	}
 }

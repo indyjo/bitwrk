@@ -96,6 +96,12 @@ type Bid struct {
 	Transaction         *string
 }
 
+type RawBid struct {
+	Type    BidType
+	Article ArticleId
+	Price   money.Money
+}
+
 func (bid *Bid) Verify() error {
 	if err := bitcoin.VerifySignatureBase64(bid.Document, bid.Participant, bid.Signature); err != nil {
 		return fmt.Errorf("Could not validate signature: %v", err)

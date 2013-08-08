@@ -14,10 +14,9 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package client
 
-//import "bitwrk/client"
+var BitwrkUserAgent string = "BitWrkGoClient/0.0.1"
+var BitwrkUrl string = "http://bitwrk.appspot.com/"
 
-func init() {
-	// client.BitwrkUrl = "http://localhost:8080/"
-}
+//var BitwrkUrl string = "http://localhost:8080/"

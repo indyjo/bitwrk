@@ -23,6 +23,11 @@ import (
 	"math/big"
 )
 
+const (
+	AddrVersionBitcoin byte = 0
+	AddrVersionTestnet byte = 0x6f
+)
+
 func EncodePublicKey(x, y *big.Int, compressed bool) ([]byte, error) {
 	var pubkey []byte
 	if compressed {
@@ -52,10 +57,10 @@ func EncodePublicKey(x, y *big.Int, compressed bool) ([]byte, error) {
 	return pubkey, nil
 }
 
-func PublicKeyToBitcoinAddress(networkId byte, pubkey []byte) string {
+func PublicKeyToBitcoinAddress(addrVersion byte, pubkey []byte) string {
 	digest := Digest160(pubkey)
 
-	bytes := append(make([]byte, 0, 21), networkId)
+	bytes := append(make([]byte, 0, 21), addrVersion)
 	bytes = append(bytes, digest...) // Prepend network id byte
 
 	check := Digest256(bytes)
@@ -63,7 +68,7 @@ func PublicKeyToBitcoinAddress(networkId byte, pubkey []byte) string {
 	return string(base58.EncodeBase58(append(bytes, check[0:4]...)))
 }
 
-func DecodeBitcoinAddress(address string) (networkId byte, pubkeyHash []byte, err error) {
+func DecodeBitcoinAddress(address string) (addrVersion byte, pubkeyHash []byte, err error) {
 	data := base58.DecodeBase58([]byte(address))
 	if data == nil {
 		return 0, nil, fmt.Errorf("Invalid base58-encoded bitcoin address: %#v", address)
@@ -74,7 +79,7 @@ func DecodeBitcoinAddress(address string) (networkId byte, pubkeyHash []byte, er
 
 	check := Digest256(data[0:21])
 
-	networkId = data[0]
+	addrVersion = data[0]
 	pubkeyHash = data[1:17]
 
 	if !bytes.Equal(check[0:4], data[21:25]) {
