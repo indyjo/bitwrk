@@ -41,8 +41,7 @@ News
   <pre>http://localhost:8081/file/&lt;sha256, hex-encoded&gt;</pre>
   To see what's going on, execute:
 <pre>
-curl -v -H "Content-Type: application/octet-stream" \
-  --data-binary @<some filename> -L http://localhost:8081/buy/foobar
+curl -v -F data=@&lt;some filename&gt; -L http://localhost:8081/buy/foobar
 </pre>
 
 Have fun!

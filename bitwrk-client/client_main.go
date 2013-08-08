@@ -187,12 +187,31 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 
 	workWriter := buy.WorkWriter()
 
-	if _, err := io.Copy(workWriter, r.Body); err != nil {
+	var reader io.Reader
+	if multipart, err := r.MultipartReader(); err != nil {
+	    // read directly from body
+	    reader = r.Body
+	} else {
+	    // Iterate through parts of multipart body, find the one called "data"
+	    for {
+	        if part, err := multipart.NextPart(); err != nil {
+                http.Error(w, err.Error(), http.StatusInternalServerError)
+                log.Printf("Error iterating through multipart content: %v", err)
+                return
+            } else {
+                if part.FormName() == "data" {
+                    reader = part
+                    break;
+                }
+            }
+        }
+    }
+    
+	if _, err := io.Copy(workWriter, reader); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("Error receiving work data from client: %v", err)
 		return
 	} else {
-		r.Body.Close()
 		workWriter.Close()
 	}
 
