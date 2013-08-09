@@ -20,11 +20,14 @@ import (
 	"bitwrk"
 	"bitwrk/bitcoin"
 	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 )
 
@@ -54,7 +57,7 @@ func getFromServer(relpath string) (*http.Response, error) {
 	return client.Do(req)
 }
 
-func GetJsonFromServer(relpath, etag string) (*http.Response, error) {
+func getJsonFromServer(relpath, etag string) (*http.Response, error) {
 	req, err := newServerRequest("GET", relpath, nil)
 	if err != nil {
 		return nil, err
@@ -66,12 +69,57 @@ func GetJsonFromServer(relpath, etag string) (*http.Response, error) {
 	return client.Do(req)
 }
 
+func FetchBid(bidId, etag string) (*bitwrk.Bid, string, error) {
+	var response *http.Response
+	if r, err := getJsonFromServer("/bid/"+bidId, etag); err != nil {
+		return nil, "", err
+	} else {
+		response = r
+	}
+
+	if response.StatusCode == http.StatusOK {
+		decoder := json.NewDecoder(response.Body)
+		var bid bitwrk.Bid
+		if err := decoder.Decode(&bid); err != nil {
+			return nil, "", err
+		}
+		return &bid, response.Header.Get("ETag"), nil
+	} else if response.StatusCode == http.StatusNotModified {
+		return nil, etag, nil
+	}
+
+	return nil, "", fmt.Errorf("Error fetching bid: %v", response.Status)
+}
+
+func FetchTx(txId, etag string) (*bitwrk.Transaction, string, error) {
+	var response *http.Response
+	if r, err := getJsonFromServer("/tx/"+txId, etag); err != nil {
+		return nil, "", err
+	} else {
+		response = r
+	}
+
+	if response.StatusCode == http.StatusOK {
+		decoder := json.NewDecoder(response.Body)
+		var tx bitwrk.Transaction
+		if err := decoder.Decode(&tx); err != nil {
+			return nil, "", err
+		}
+		return &tx, response.Header.Get("ETag"), nil
+	} else if response.StatusCode == http.StatusNotModified {
+		return nil, etag, nil
+	}
+
+	return nil, "", fmt.Errorf("Error fetching transaction: %v", response.Status)
+}
+
 func postFormToServer(relpath, query string) (*http.Response, error) {
 	req, err := newServerRequest("POST", relpath, strings.NewReader(query))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
 	return client.Do(req)
 }
 
@@ -131,6 +179,53 @@ func PlaceBid(bid *bitwrk.RawBid, identity *bitcoin.KeyPair) (bidId string, err 
 	}
 
 	return
+}
+
+func SendTxMessage(txId string, identity *bitcoin.KeyPair, arguments map[string]string) error {
+	arguments["txid"] = txId
+
+	keys := make([]string, len(arguments))
+	i := 0
+	for k, _ := range arguments {
+		keys[i] = k
+		i++
+	}
+	sort.Strings(keys)
+
+	// Prepare document for signature. Document consists of alphabetically sorted
+	// query arguments, plus "txid"
+	document := make([]byte, 0, 100)
+	for _, k := range keys {
+		if len(document) > 0 {
+			document = append(document, '&')
+		}
+		document = append(document, (k + "=" + normalize(arguments[k]))...)
+	}
+
+	signature := ""
+	if s, err := identity.SignMessage(string(document), rand.Reader); err != nil {
+		return err
+	} else {
+		signature = s
+	}
+
+	query := string(document) +
+		"&signature=" + url.QueryEscape(signature) +
+		"&address=" + url.QueryEscape(identity.GetAddress())
+	if r, err := postFormToServer("tx/"+txId, query); err != nil {
+		return err
+	} else if r.StatusCode != http.StatusSeeOther {
+		return fmt.Errorf("Unexpected status: %v", r.Status)
+	}
+
+	return nil
+}
+
+func SendTxMessageEstablishBuyer(txId string, identity *bitcoin.KeyPair, workHash, workSecretHash bitwrk.Thash) error {
+	arguments := make(map[string]string)
+	arguments["workhash"] = hex.EncodeToString(workHash[:])
+	arguments["worksecrethash"] = hex.EncodeToString(workSecretHash[:])
+	return SendTxMessage(txId, identity, arguments)
 }
 
 func normalize(s string) string {

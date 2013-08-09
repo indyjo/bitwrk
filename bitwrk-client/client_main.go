@@ -176,7 +176,7 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var buy *client.BuyActivity
-	if _buy, err := client.GetActivityManager().NewBuy(article); err != nil {
+	if _buy, err := client.GetActivityManager().NewBuy(bitwrk.ArticleId(article)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("Error creating buy activity: %v", err)
 		return
@@ -189,24 +189,24 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 
 	var reader io.Reader
 	if multipart, err := r.MultipartReader(); err != nil {
-	    // read directly from body
-	    reader = r.Body
+		// read directly from body
+		reader = r.Body
 	} else {
-	    // Iterate through parts of multipart body, find the one called "data"
-	    for {
-	        if part, err := multipart.NextPart(); err != nil {
-                http.Error(w, err.Error(), http.StatusInternalServerError)
-                log.Printf("Error iterating through multipart content: %v", err)
-                return
-            } else {
-                if part.FormName() == "data" {
-                    reader = part
-                    break;
-                }
-            }
-        }
-    }
-    
+		// Iterate through parts of multipart body, find the one called "data"
+		for {
+			if part, err := multipart.NextPart(); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Printf("Error iterating through multipart content: %v", err)
+				return
+			} else {
+				if part.FormName() == "data" {
+					reader = part
+					break
+				}
+			}
+		}
+	}
+
 	if _, err := io.Copy(workWriter, reader); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("Error receiving work data from client: %v", err)
@@ -214,6 +214,14 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 	} else {
 		workWriter.Close()
 	}
+
+	// Simulate user giving mandate
+	go func() {
+		time.Sleep(5 * time.Second)
+		req := <-client.GetActivityManager().GetMandateRequests()
+		req.Accept(BitcoinIdentity, money.MustParse("mBTC 0.1337"))
+		//req.Reject()
+	}()
 
 	var result cafs.File
 	if res, err := buy.GetResult(); err != nil {
@@ -225,40 +233,4 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/file/"+result.Key().String(), http.StatusSeeOther)
-}
-
-func TestPlaceBid() {
-	rawBid := &bitwrk.RawBid{
-		Type:    bitwrk.Buy,
-		Price:   money.MustParse("BTC 0.001"),
-		Article: "foobar",
-	}
-	randombyte := make([]byte, 1)
-	rand.Read(randombyte)
-	if randombyte[0] > 127 {
-		rawBid.Type = bitwrk.Sell
-	}
-	bidId, err := client.PlaceBid(rawBid, BitcoinIdentity)
-	if err != nil {
-		log.Fatalf("Place Bid failed: %v", err)
-		return
-	}
-	log.Printf("bidId: %v", bidId)
-
-	etag := ""
-	for i := 0; i < 30; i++ {
-		resp, err := client.GetJsonFromServer("bid/"+bidId, etag)
-		if err != nil {
-			panic(err)
-		}
-		log.Printf("Response: %v", resp)
-		if resp.StatusCode == http.StatusOK {
-			etag = resp.Header.Get("ETag")
-		} else if resp.StatusCode == http.StatusNotModified {
-			log.Printf("  Cache hit")
-		} else {
-			log.Fatalf("UNEXPECTED STATUS CODE %v", resp.StatusCode)
-		}
-		time.Sleep(5 * time.Second)
-	}
 }

@@ -17,18 +17,17 @@
 package client
 
 import (
-	"bitwrk"
-	"bitwrk/bitcoin"
 	"bitwrk/cafs"
-	"bitwrk/money"
 	"errors"
-	"io"
 	"log"
 	"sync"
 	"time"
 )
 
 var ErrNoMandate = errors.New("Mandate request rejected")
+var ErrBidExpired = errors.New("Bid expired without match")
+var ErrTxExpired = errors.New("Transaction no longer active")
+var ErrTxUnexpectedState = errors.New("Transaction in unexpected state")
 
 type ActivityKey int64
 
@@ -39,33 +38,13 @@ type Activity interface {
 	Act() bool
 }
 
-type BuyActivity struct {
-	condition           *sync.Cond
-	manager             *ActivityManager
-	key                 ActivityKey
-	started, lastUpdate time.Time
-	gotRejection        bool
-	gotMandate          bool
-	price               money.Money
-	secret              []byte
-	article             string
-	workTemporary       cafs.Temporary
-	workFile            cafs.File
-}
-
 type ActivityManager struct {
 	mutex           *sync.Mutex
 	activities      map[ActivityKey]Activity
 	nextKey         ActivityKey
 	workChan        *chan ActivityKey
 	storage         cafs.FileStorage
-	mandateRequests <-chan MandateRequest
-}
-
-type MandateRequest interface {
-	GetBid() bitwrk.RawBid
-	Accept(identity bitcoin.KeyPair)
-	Reject(reason string)
+	mandateRequests chan MandateRequest
 }
 
 var activityManager = ActivityManager{
@@ -83,6 +62,10 @@ func GetActivityManager() *ActivityManager {
 
 func (m *ActivityManager) GetStorage() cafs.FileStorage {
 	return m.storage
+}
+
+func (m *ActivityManager) GetMandateRequests() <-chan MandateRequest {
+	return m.mandateRequests
 }
 
 func (m *ActivityManager) newKey() ActivityKey {
@@ -152,99 +135,4 @@ func (m *ActivityManager) work(channel chan ActivityKey) {
 			}
 		}
 	}
-}
-
-func (m *ActivityManager) NewBuy(article string) (*BuyActivity, error) {
-	now := time.Now()
-	result := &BuyActivity{
-		condition:  sync.NewCond(new(sync.Mutex)),
-		manager:    m,
-		started:    now,
-		lastUpdate: now,
-		article:    article,
-	}
-	m.add(m.newKey(), result)
-	return result, nil
-}
-
-func (a *BuyActivity) Act() bool {
-	now := time.Now()
-	a.lastUpdate = now
-	repeat := a.started.Add(10 * time.Second).After(now)
-	if !repeat {
-		a.condition.L.Lock()
-		a.gotMandate = true
-		a.price = money.MustParse("BTC0.001337")
-		a.condition.Broadcast()
-		a.condition.L.Unlock()
-	}
-	return repeat
-}
-
-func (a *BuyActivity) WorkWriter() io.WriteCloser {
-	if a.workTemporary != nil {
-		panic("Temporary requested twice")
-	}
-	a.workTemporary = a.manager.storage.Create()
-	return buyWorkWriter{a}
-}
-
-type buyWorkWriter struct {
-	a *BuyActivity
-}
-
-func (w buyWorkWriter) Write(b []byte) (n int, err error) {
-	n, err = w.a.workTemporary.Write(b)
-	return
-}
-
-func (w buyWorkWriter) Close() error {
-	a := w.a
-	if err := a.workTemporary.Close(); err != nil {
-		return err
-	}
-
-	if file, err := a.workTemporary.File(); err != nil {
-		return err
-	} else {
-		a.workFile = file
-	}
-
-	return nil
-}
-
-func (a *BuyActivity) GetResult() (cafs.File, error) {
-	// wait for mandate or rejection
-
-	if a.awaitMandate() {
-		log.Printf("Got mandate. Price: %v", a.price)
-	} else {
-		return nil, ErrNoMandate
-	}
-
-	return a.workFile, nil
-}
-
-func (a *BuyActivity) awaitMandate() bool {
-	// wait for mandate or rejection
-	a.condition.L.Lock()
-	defer a.condition.L.Unlock()
-	for !a.gotMandate && !a.gotRejection {
-		log.Println("Waiting for mandate...")
-		a.condition.Wait()
-	}
-	return a.gotMandate
-}
-
-func (a *BuyActivity) End() {
-	a.condition.L.Lock()
-	defer a.condition.L.Unlock()
-	if a.workTemporary != nil {
-		a.workTemporary.Dispose()
-		a.workTemporary = nil
-	}
-	if !a.gotMandate && !a.gotRejection {
-		a.gotRejection = true
-	}
-	a.condition.Broadcast()
 }

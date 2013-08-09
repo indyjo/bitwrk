@@ -332,7 +332,7 @@ func updateTransaction(c appengine.Context, r *http.Request, txId string, txKey 
 	delete(values, "txid")
 
 	if err := db.UpdateTransaction(c, txKey, now, address, values, document, signature); err != nil {
-	    return err
+		return err
 	}
 
 	return nil

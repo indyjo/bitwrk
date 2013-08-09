@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -48,12 +49,36 @@ func (hash *Thash) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + hash.String() + "\""), nil
 }
 
+func unmarshalJSONHex(out, in []byte) error {
+	s := ""
+	if err := json.Unmarshal(in, &s); err != nil {
+		return err
+	}
+	if b, err := hex.DecodeString(s); err != nil {
+		return err
+	} else if len(b) != len(out) {
+		return fmt.Errorf("Length mismatch: %v != %v", len(b), len(out))
+	} else {
+		copy(out, b)
+	}
+
+	return nil
+}
+
+func (hash *Thash) UnmarshalJSON(b []byte) error {
+	return unmarshalJSONHex(hash[:], b)
+}
+
 func (sig *Tsignature) String() string {
 	return base64.StdEncoding.EncodeToString(sig[:])
 }
 
 func (sig *Tsignature) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + sig.String() + "\""), nil
+}
+
+func (sig *Tsignature) UnmarshalJSON(b []byte) error {
+	return unmarshalJSONHex(sig[:], b)
 }
 
 const (
@@ -130,8 +155,42 @@ func (phase TxPhase) String() string {
 	return fmt.Sprintf("<Unknown TxPhase %v>", int8(phase))
 }
 
+func (phase *TxPhase) Parse(s string) error {
+	switch s {
+	case "ESTABLISHING":
+		*phase = PhaseEstablishing
+	case "BUYER_ESTABLISHED":
+		*phase = PhaseBuyerEstablished
+	case "SELLER_ESTABLISHED":
+		*phase = PhaseSellerEstablished
+	case "TRANSMITTING":
+		*phase = PhaseTransmitting
+	case "WORKING":
+		*phase = PhaseWorking
+	case "UNVERIFIED":
+		*phase = PhaseUnverified
+	case "FINISHED":
+		*phase = PhaseFinished
+	case "WORK_DISPUTED":
+		*phase = PhaseWorkDisputed
+	case "RESULT_DISPUTED":
+		*phase = PhaseResultDisputed
+	default:
+		return fmt.Errorf("Invalid phase %#v", s)
+	}
+
+	return nil
+}
+
 func (phase TxPhase) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + phase.String() + "\""), nil
+}
+
+func (phase *TxPhase) UnmarshalJSON(b []byte) error {
+	if len(b) < 2 || b[0] != '"' || b[len(b)-1] != '"' {
+		return fmt.Errorf("Innvalid phase JSON: %#v", b)
+	}
+	return phase.Parse(string(b[1 : len(b)-1]))
 }
 
 type Transaction struct {
