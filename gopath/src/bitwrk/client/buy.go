@@ -151,7 +151,7 @@ func (a *BuyActivity) GetResult() (cafs.File, error) {
 	hash := sha256.New()
 	hash.Write(workHash[:])
 	hash.Write(a.secret[:])
-	hash.Sum(workSecretHash[:])
+	hash.Sum(workSecretHash[:0])
 
 	if err := SendTxMessageEstablishBuyer(a.txId, a.identity, workHash, workSecretHash); err != nil {
 		return nil, err
