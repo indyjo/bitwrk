@@ -340,7 +340,7 @@ func UpdateTransaction(c appengine.Context, txKey *datastore.Key,
         return err
     }
 
-    message := tx.SendMessage(address, values)
+    message := tx.SendMessage(now, address, values)
 
     if !message.Accepted {
         return fmt.Errorf("Message not accepted: %v", message.RejectMessage)

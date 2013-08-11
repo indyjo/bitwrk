@@ -356,11 +356,17 @@ func (tx *Transaction) Identify(address string) (from Origin) {
 // Sends a message to the transaction and modifies it accordingly.
 // Returns nil in case of success, an error otherwise.
 // If an error is returned, the state of tx is undefined.
-func (tx *Transaction) SendMessage(address string, arguments map[string]string) (result *Tmessage) {
+func (tx *Transaction) SendMessage(now time.Time, address string, arguments map[string]string) (result *Tmessage) {
 	result = new(Tmessage)
 	result.Accepted = false
 	result.PrePhase = tx.Phase
 	result.PostPhase = tx.Phase
+	
+	// Check if transaction is still active
+	if tx.State != StateActive || !tx.Timeout.After(now) {
+		result.RejectMessage = "Transaction no longer active"
+		return
+	}
 
 	rule := tx.findMatchingRule(address, arguments)
 	if rule == nil {
