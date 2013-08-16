@@ -19,12 +19,11 @@ package client
 import (
 	"bitwrk/cafs"
 	"errors"
-	"log"
 	"sync"
 	"time"
 )
 
-var ErrNoMandate = errors.New("Mandate request rejected")
+var ErrNoPermission = errors.New("Permission request rejected")
 var ErrBidExpired = errors.New("Bid expired without match")
 var ErrTxExpired = errors.New("Transaction no longer active")
 var ErrTxUnexpectedState = errors.New("Transaction in unexpected state")
@@ -44,7 +43,7 @@ type ActivityManager struct {
 	nextKey         ActivityKey
 	workChan        *chan ActivityKey
 	storage         cafs.FileStorage
-	mandateRequests chan MandateRequest
+	permissionRequests chan PermissionRequest
 }
 
 var activityManager = ActivityManager{
@@ -53,7 +52,7 @@ var activityManager = ActivityManager{
 	1,
 	nil,
 	cafs.NewRamStorage(),
-	make(chan MandateRequest),
+	make(chan PermissionRequest),
 }
 
 func GetActivityManager() *ActivityManager {
@@ -64,8 +63,8 @@ func (m *ActivityManager) GetStorage() cafs.FileStorage {
 	return m.storage
 }
 
-func (m *ActivityManager) GetMandateRequests() <-chan MandateRequest {
-	return m.mandateRequests
+func (m *ActivityManager) GetPermissionRequests() <-chan PermissionRequest {
+	return m.permissionRequests
 }
 
 func (m *ActivityManager) newKey() ActivityKey {
@@ -109,11 +108,6 @@ func (m *ActivityManager) done(key ActivityKey) {
 }
 
 func (m *ActivityManager) work(channel chan ActivityKey) {
-	log.Printf("Started working")
-	defer func() {
-		log.Printf("Stopped working")
-	}()
-
 	for {
 		if key, ok := <-channel; !ok {
 			// channel closed

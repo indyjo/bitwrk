@@ -29,6 +29,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -39,7 +40,7 @@ var BitcoinPrivateKeyEncoded string
 var BitcoinIdentity *bitcoin.KeyPair
 
 func main() {
-	flags := flag.NewFlagSet("", flag.ExitOnError)
+	flags := flag.NewFlagSet("bitwrk-client", flag.ExitOnError)
 	flags.StringVar(&ExternalAddress, "extaddr", "auto",
 		"IP address or name this host can be reached under from the internet")
 	flags.IntVar(&ExternalPort, "extport", -1, "Port that can be reached from the Internet")
@@ -102,6 +103,17 @@ func main() {
 	//TestPlaceBid()
 	//os.Exit(0)
 
+
+	// Simulate user giving permission to every request
+	go func() {
+	    for {
+            time.Sleep(5 * time.Second)
+            req := <-client.GetActivityManager().GetPermissionRequests()
+            req.Accept(BitcoinIdentity, money.MustParse("mBTC 0.1337"))
+            //req.Reject()
+		}
+	}()
+	
 	err = <-exit
 	if err != nil {
 		log.Fatalf("Exiting because of: %v", err)
@@ -130,6 +142,28 @@ func serveExternal(exit chan<- error) {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
+	
+	addr := ExternalAddress
+	if strings.Contains(addr, ":") {
+	    addr = "[" + addr + "]"
+	}
+	prefix := fmt.Sprintf("http://%v:%v/", addr, ExternalPort)
+	log.Printf("Receiving work data on %#v", prefix)
+	receiveManager := client.NewReceiveManager(prefix)
+	mux.Handle("/", receiveManager)
+	
+	// Fake worker
+	info := client.WorkerInfo{
+	    "worker-1",
+	    "foobar",
+	    "http-push",
+	    "http://httpbin.org/post",
+	}
+	workerManager := client.NewWorkerManager(client.GetActivityManager(), receiveManager)
+	workerManager.RegisterWorker(info)
+	time.Sleep(10*time.Second)
+	workerManager.UnregisterWorker("worker-1")
+	
 	exit <- s.ListenAndServe()
 }
 
@@ -214,14 +248,6 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 	} else {
 		workWriter.Close()
 	}
-
-	// Simulate user giving mandate
-	go func() {
-		time.Sleep(5 * time.Second)
-		req := <-client.GetActivityManager().GetMandateRequests()
-		req.Accept(BitcoinIdentity, money.MustParse("mBTC 0.1337"))
-		//req.Reject()
-	}()
 
 	var result cafs.File
 	if res, err := buy.GetResult(); err != nil {

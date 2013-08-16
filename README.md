@@ -22,17 +22,25 @@ weeks and currently consists of:
   and all communication is secured with Elliptic-Curve cryptographic
   signatures of the same kind than those that can be generated using
   the original Bitcoin client.
-- An even more rudimentary client, also written in Go, that currently
-  doesn't do anything more useful than simulate the client-side mimics
-  of a buy operation.
+- An rudimentary client, also written in go, that currently contains
+  enough logic to perform both sides of a transaction but is still
+  lacking a user interface and infrastructure to manage accounts and
+  workers.
   Some day, the client will act as a proxy, taking tasks from
-  local programs and dispatching them to the internet.
+  local programs and dispatching them to the internet. For sellers, it
+  will offer local worker programs to the BitWrk exchange and keep
+  them busy.
 
 There is no pretty UI and no actual money can be made or lost.
+
 
 News
 ----
 
+- 2013-08-16: The client is now able to perform a full transaction. Both
+  buyer and seller side are implemented. There is no mechanism to register
+  workers yet, so a dummy worker is registered: The work package is sent to
+  http://httpbin.org/post and the result is whatever that page returns.
 - 2013-08-08: The client no longer places a random bid on the server.
   Performing a POST to <pre>http://localhost:8081/buy/&lt;articleid&gt;</pre> simulates
   how a buy appears to clients, where the result is just a copy of the
@@ -44,6 +52,63 @@ News
 curl -v -F data=@&lt;some filename&gt; -L http://localhost:8081/buy/foobar
 </pre>
 
+
+Usage
+-----
+
+The server is a web application written for Google Appengine.
+Its purpose is to
+- accept bids from buyers and sellers
+- find matching bids and create transactions
+- listen for messages from clients updating the transactions
+- enforcing rules by which these transactions must be handled
+- do bookkeeping of the participants' accounts
+As a user of BitWrk, you shouldn't need to worry about the server. You need
+to trust it, though, especially if you decide to send money to it. As a
+trust-building measure, the server's source code is open-sourced.
+
+The client is a command-line tool. To find out about its usage, type:
+<pre>
+$ ./bitwrk-client --help
+Usage of bitwrk-client:
+  -bitcoinprivkey="random": The private key of the Bitcoin address to use for authentication
+  -extaddr="auto": IP address or name this host can be reached under from the internet
+  -extport=-1: Port that can be reached from the Internet
+  -intport=8081: Maintenance port for admin interface
+</pre>
+<dl>
+<dt><strong>-bitcoinprivkey</strong></dt>
+<dd>When placing a bid (regardless of whether it's a buy or a sell), the client
+must authenticate to the server. This is done by using the same kind of private
+keys that Bitcoin uses to authenticate a transaction. In fact, every participant
+of a Bitwrk transaction uses a Bitcoin address as his participant ID. Money
+earned by selling work on BitWrk will be transferred (via Bitcoin) back to this
+address.<br />
+By default, a random key is generated. In later versions, the key will be stored
+on disk permanently. It is also possible to pass a key in Wallet Interchange
+Format (WIF), the format used to export and import private keys from and into
+a Bitcoin wallet using <em>dumpprivkey</em> and <em>importprivkey</em> commands.</dd>
+<dt><strong>-extaddr, -extport</strong></dt>
+<dd>If you would like to sell on Bitwrk, the buyers must be able to connect to
+your computer. You need to provide them with your host's DNS name or IP address,
+and a port number. If you are behind a firewall, you must setup your router
+to forward the port given here to your computer. See your router's documentation
+on "port forwarding" on how to accomplish this.<br />
+If your IP address is dynamic, it is best to leave -extaddr set to "auto". The
+client will find out which IP address to use. If -extport is set to "-1", 
+selling on BitWrk is disabled.</dd>
+<dt><strong>-intport</strong></dt>
+<dd>The port number on which the client listens on for local connections. When left
+to the default value, the client's user interface will be reachable by opening
+<a href="http://localhost:8081/">http://localhost:8081/</a> in your web browser.
+Local programs will be able to dispatch work to the BitWrk network by doing a
+POST to http://localhost:8081/<em>&lt;article-id&gt;</em>, where <em>&lt;article-id</em>
+identifies the article to trade. It must be an article that is traded on the BitWrk
+server.
+</dl>
+
+If the client has started
+
 Have fun!
-2013-08-08, Jonas Eschenburg
+2013-08-16, Jonas Eschenburg
 

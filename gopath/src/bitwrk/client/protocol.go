@@ -40,13 +40,18 @@ var client = http.Client{
 	},
 }
 
-func newServerRequest(method, relpath string, body io.Reader) (r *http.Request, err error) {
-	r, err = http.NewRequest(method, BitwrkUrl+relpath, body)
-	if err != nil {
-		return
+func newRequest(method, url string, body io.Reader) (*http.Request, error) {
+	if r, err := http.NewRequest(method, url, body); err != nil {
+		return nil, err
+	} else {
+	    r.Header.Set("User-Agent", BitwrkUserAgent)
+	    return r, nil
 	}
-	r.Header.Set("User-Agent", BitwrkUserAgent)
-	return r, nil
+	return nil, nil // never reached
+}
+
+func newServerRequest(method, relpath string, body io.Reader) (r *http.Request, err error) {
+	return newRequest(method, BitwrkUrl+relpath, body)
 }
 
 func getFromServer(relpath string) (*http.Response, error) {
@@ -103,7 +108,7 @@ func FetchTx(txId, etag string) (*bitwrk.Transaction, string, error) {
 		decoder := json.NewDecoder(response.Body)
 		var tx bitwrk.Transaction
 		if err := decoder.Decode(&tx); err != nil {
-			return nil, "", err
+			return nil, "", fmt.Errorf("Error decoding transaction JSON: %v", err)
 		}
 		return &tx, response.Header.Get("ETag"), nil
 	} else if response.StatusCode == http.StatusNotModified {
@@ -225,6 +230,32 @@ func SendTxMessageEstablishBuyer(txId string, identity *bitcoin.KeyPair, workHas
 	arguments := make(map[string]string)
 	arguments["workhash"] = hex.EncodeToString(workHash[:])
 	arguments["worksecrethash"] = hex.EncodeToString(workSecretHash[:])
+	return SendTxMessage(txId, identity, arguments)
+}
+
+func SendTxMessageEstablishSeller(txId string, identity *bitcoin.KeyPair, workerURL string) error {
+	arguments := make(map[string]string)
+	arguments["workerurl"] = workerURL
+	return SendTxMessage(txId, identity, arguments)
+}
+
+func SendTxMessagePublishBuyerSecret(txId string, identity *bitcoin.KeyPair, buyerSecret *bitwrk.Thash) error {
+	arguments := make(map[string]string)
+	arguments["buyersecret"] = buyerSecret.String()
+	return SendTxMessage(txId, identity, arguments)
+}
+
+func SendTxMessageTransmitFinished(txId string, identity *bitcoin.KeyPair, encResultHash, encResultHashSig, encResultKey string) error {
+	arguments := make(map[string]string)
+	arguments["encresulthash"] = encResultHash
+	arguments["encresulthashsig"] = encResultHashSig
+	arguments["encresultkey"] = encResultKey
+	return SendTxMessage(txId, identity, arguments)
+}
+
+func SendTxMessageAcceptResult(txId string, identity *bitcoin.KeyPair) error {
+	arguments := make(map[string]string)
+	arguments["acceptresult"] = "on"
 	return SendTxMessage(txId, identity, arguments)
 }
 

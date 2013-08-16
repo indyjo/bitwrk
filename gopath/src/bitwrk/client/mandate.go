@@ -22,39 +22,39 @@ import (
 	"bitwrk/money"
 )
 
-type MandateRequest interface {
+type PermissionRequest interface {
 	Article() bitwrk.ArticleId
 	Type() bitwrk.BidType
 	Accept(identity *bitcoin.KeyPair, price money.Money)
 	Reject()
 }
 
-type buyMandateRequest struct {
-	a *BuyActivity
+type tradePermissionRequest struct {
+	t *Trade
 }
 
-func (r buyMandateRequest) Type() bitwrk.BidType {
+func (r tradePermissionRequest) Type() bitwrk.BidType {
 	return bitwrk.Buy
 }
 
-func (r buyMandateRequest) Article() bitwrk.ArticleId {
-	return r.a.article
+func (r tradePermissionRequest) Article() bitwrk.ArticleId {
+	return r.t.article
 }
 
-func (r buyMandateRequest) Accept(identity *bitcoin.KeyPair, price money.Money) {
-	a := r.a
-	a.condition.L.Lock()
-	a.identity = identity
-	a.price = price
-	a.gotMandate = true
-	a.condition.Broadcast()
-	a.condition.L.Unlock()
+func (r tradePermissionRequest) Accept(identity *bitcoin.KeyPair, price money.Money) {
+	t := r.t
+	t.condition.L.Lock()
+	t.identity = identity
+	t.price = price
+	t.accepted = true
+	t.condition.Broadcast()
+	t.condition.L.Unlock()
 }
 
-func (r buyMandateRequest) Reject() {
-	a := r.a
-	a.condition.L.Lock()
-	a.gotRejection = true
-	a.condition.Broadcast()
-	a.condition.L.Unlock()
+func (r tradePermissionRequest) Reject() {
+	t := r.t
+	t.condition.L.Lock()
+	t.rejected = true
+	t.condition.Broadcast()
+	t.condition.L.Unlock()
 }

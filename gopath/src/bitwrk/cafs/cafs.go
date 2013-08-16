@@ -189,13 +189,16 @@ func (t *ramTemporary) File() (File, error) {
 }
 
 func (t *ramTemporary) Dispose() {
+	var key SKey
+	t.hash.Sum(key[:0])
+	
 	t.valid = false
 	wasOpen := t.open
 	t.open = false
 	t.buffer = bytes.Buffer{}
 	if wasOpen {
-		log.Printf("Canceled temporary")
+		log.Printf("Canceled temporary: %v", key)
 	} else {
-		log.Printf("Temporary disposed")
+		log.Printf("Temporary disposed: %v", key)
 	}
 }
