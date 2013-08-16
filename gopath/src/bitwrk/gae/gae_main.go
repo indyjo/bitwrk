@@ -335,29 +335,37 @@ func UpdateTransaction(c appengine.Context, txKey *datastore.Key,
     values map[string]string,
     document, signature string) error {
     
-    tx, err := GetTransaction(c, txKey)
-    if err != nil {
-        return err
-    }
+    f := func(c appengine.Context) error {
+        tx, err := GetTransaction(c, txKey)
+        if err != nil {
+            return err
+        }
 
-    message := tx.SendMessage(now, address, values)
+        message := tx.SendMessage(now, address, values)
 
-    if !message.Accepted {
-        return fmt.Errorf("Message not accepted: %v", message.RejectMessage)
-    }
+        if !message.Accepted {
+            return fmt.Errorf("Message not accepted: %v", message.RejectMessage)
+        }
 
-    message.Received = now
-    message.Document = document
-    message.Signature = signature
+        message.Received = now
+        message.Document = document
+        message.Signature = signature
 
-    _, err = datastore.Put(c, datastore.NewIncompleteKey(c, "Tmessage", txKey), message)
-    if err != nil {
-        return err
+        _, err = datastore.Put(c, datastore.NewIncompleteKey(c, "Tmessage", txKey), message)
+        if err != nil {
+            return err
+        }
+    
+        if _, err := datastore.Put(c, txKey, txCodec{tx}); err != nil {
+            return err
+        }
+        
+        return nil
     }
     
-    if _, err := datastore.Put(c, txKey, txCodec{tx}); err != nil {
-        return err
-    }
-
+	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
+		return err
+	}
+	
     return nil
 }

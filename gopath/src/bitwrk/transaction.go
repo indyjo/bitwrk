@@ -45,8 +45,16 @@ func (hash *Thash) String() string {
 	return hex.EncodeToString(hash[:])
 }
 
+func (key *Tkey) String() string {
+	return hex.EncodeToString(key[:])
+}
+
 func (hash *Thash) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + hash.String() + "\""), nil
+}
+
+func (key *Tkey) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + key.String() + "\""), nil
 }
 
 func unmarshalJSONHex(out, in []byte) error {
@@ -69,6 +77,26 @@ func (hash *Thash) UnmarshalJSON(b []byte) error {
 	return unmarshalJSONHex(hash[:], b)
 }
 
+func (key *Tkey) UnmarshalJSON(b []byte) error {
+	return unmarshalJSONHex(key[:], b)
+}
+
+func unmarshalJSONBase64(out, in []byte) error {
+	s := ""
+	if err := json.Unmarshal(in, &s); err != nil {
+		return err
+	}
+	if b, err := base64.StdEncoding.DecodeString(s); err != nil {
+		return err
+	} else if len(b) != len(out) {
+		return fmt.Errorf("Length mismatch: %v != %v", len(b), len(out))
+	} else {
+		copy(out, b)
+	}
+
+	return nil
+}
+
 func (sig *Tsignature) String() string {
 	return base64.StdEncoding.EncodeToString(sig[:])
 }
@@ -78,7 +106,7 @@ func (sig *Tsignature) MarshalJSON() ([]byte, error) {
 }
 
 func (sig *Tsignature) UnmarshalJSON(b []byte) error {
-	return unmarshalJSONHex(sig[:], b)
+	return unmarshalJSONBase64(sig[:], b)
 }
 
 const (
@@ -442,8 +470,8 @@ func mustParseSignature(s string) *Tsignature {
 	if err != nil {
 		panic(fmt.Sprintf("Could not decode signature: %v", err))
 	}
-	if len(signature) != 64 {
-		panic(fmt.Sprintf("Signature must be 64 bytes long. Received: %v bytes", len(signature)))
+	if len(signature) != 65 {
+		panic(fmt.Sprintf("Signature must be 65 bytes long. Received: %v bytes", len(signature)))
 	}
 
 	var result Tsignature
