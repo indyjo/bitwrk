@@ -22,14 +22,15 @@ weeks and currently consists of:
   and all communication is secured with Elliptic-Curve cryptographic
   signatures of the same kind than those that can be generated using
   the original Bitcoin client.
-- An rudimentary client, also written in go, that currently contains
-  enough logic to perform both sides of a transaction but is still
-  lacking a user interface and infrastructure to manage accounts and
-  workers.
-  Some day, the client will act as a proxy, taking tasks from
+- An client, also written in Go, that currently contains enough logic
+  to perform both sides of a transaction. A browser-based user interface
+  is in the works, but still incomplete. There is very rudimentary
+  support for registering and unregistering workers and still no UI
+  for managing accounts.
+  The client is meant to act as a proxy, taking tasks from
   local programs and dispatching them to the internet. For sellers, it
-  will offer local worker programs to the BitWrk exchange and keep
-  them busy.
+  provides the service to offer local worker programs to the BitWrk
+  exchange and will keep them busy.
 
 There is no pretty UI and no actual money can be made or lost.
 
@@ -37,6 +38,10 @@ There is no pretty UI and no actual money can be made or lost.
 News
 ----
 
+- 2013-09-01: There is now a simple user interface that shows the account's
+  current balance, annd lists currently scheduled activities. It is possible to
+  cancel (forbid) activities interactively. There is now a REST API to register
+  and unregister workers.
 - 2013-08-16: The client is now able to perform a full transaction. Both
   buyer and seller side are implemented. There is no mechanism to register
   workers yet, so a dummy worker is registered: The work package is sent to
@@ -106,8 +111,6 @@ POST to http://localhost:8081/<em>&lt;article-id&gt;</em>, where <em>&lt;article
 identifies the article to trade. It must be an article that is traded on the BitWrk
 server.
 </dl>
-
-If the client has started
 
 Have fun!
 2013-08-16, Jonas Eschenburg

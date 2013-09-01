@@ -17,95 +17,95 @@
 package client
 
 import (
-    "bitwrk"
-    "log"
-    "sync"
-    "time"
+	"bitwrk"
+	"log"
+	"sync"
+	"time"
 )
 
 type WorkerManager struct {
-    mutex sync.Mutex
-    workers map[string]*WorkerState
-    activityManager *ActivityManager
-    receiveManager *ReceiveManager
+	mutex           sync.Mutex
+	workers         map[string]*WorkerState
+	activityManager *ActivityManager
+	receiveManager  *ReceiveManager
 }
 
 type WorkerState struct {
-    m *WorkerManager
-    Info WorkerInfo
-    stopOffering func()
+	m            *WorkerManager
+	Info         WorkerInfo
+	stopOffering func()
 }
 
 type WorkerInfo struct {
-    Id string
-    Article bitwrk.ArticleId
-    Method string
-    PushURL string
+	Id      string
+	Article bitwrk.ArticleId
+	Method  string
+	PushURL string
 }
 
 func NewWorkerManager(a *ActivityManager, r *ReceiveManager) *WorkerManager {
-    m := new(WorkerManager)
-    m.workers = make(map[string]*WorkerState)
-    m.activityManager = a
-    m.receiveManager = r
-    return m
+	m := new(WorkerManager)
+	m.workers = make(map[string]*WorkerState)
+	m.activityManager = a
+	m.receiveManager = r
+	return m
 }
 
 func (m *WorkerManager) RegisterWorker(info WorkerInfo) {
-    m.mutex.Lock()
-    defer m.mutex.Unlock()
-    if s, ok := m.workers[info.Id]; ok {
-        log.Printf("Changed worker %#v: %v -> %v", info.Id, s.Info, info)
-        s.Info = info
-    } else {
-        log.Printf("Registered worker: %v", info)
-        chStop := make(chan int, 1)
-        s = &WorkerState{
-            m: m,
-            Info: info,
-            stopOffering: func() {
-                // The value has no meaning
-                chStop <- 0
-            },
-        }
-        m.workers[info.Id] = s
-        go s.keepOffering(chStop)
-    }
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if s, ok := m.workers[info.Id]; ok {
+		log.Printf("Changed worker %#v: %v -> %v", info.Id, s.Info, info)
+		s.Info = info
+	} else {
+		log.Printf("Registered worker: %v", info)
+		chStop := make(chan int, 1)
+		s = &WorkerState{
+			m:    m,
+			Info: info,
+			stopOffering: func() {
+				// The value has no meaning
+				chStop <- 0
+			},
+		}
+		m.workers[info.Id] = s
+		go s.keepOffering(chStop)
+	}
 }
 
 func (m *WorkerManager) UnregisterWorker(id string) {
-    m.mutex.Lock()
-    s, ok := m.workers[id]
-    delete(m.workers, id)
-    m.mutex.Unlock()
-    
-    if ok {
-        s.stopOffering()
-    }
+	m.mutex.Lock()
+	s, ok := m.workers[id]
+	delete(m.workers, id)
+	m.mutex.Unlock()
+
+	if ok {
+		s.stopOffering()
+	}
 }
 
 func (s *WorkerState) keepOffering(chStop <-chan int) {
-    log.Printf("Start offering worker %#v", s.Info.Id)
-    defer log.Printf("Stopped offering worker %#v", s.Info.Id)
-    for {
-        select {
-        case _ = <-chStop:
-            return
-        default:
-            s.offer()
-        }
-    }
+	log.Printf("Start offering worker %#v", s.Info.Id)
+	defer log.Printf("Stopped offering worker %#v", s.Info.Id)
+	for {
+		select {
+		case _ = <-chStop:
+			return
+		default:
+			s.offer()
+		}
+	}
 }
 
 func (s *WorkerState) offer() {
-    log.Printf("Offering worker %#v", s.Info.Id)
-    if sell, err := s.m.activityManager.NewSell(&s.Info); err != nil {
-        log.Printf("Error creating sell: %v", err)
-    } else {
-        log.Printf("Performing sell")
-        if err = sell.Perform(s.m.receiveManager); err != nil {
-            log.Printf("Error performing sell: %v", err)
-        }
-    }
-    time.Sleep(20*time.Second)
+	log.Printf("Offering worker %#v", s.Info.Id)
+	if sell, err := s.m.activityManager.NewSell(&s.Info); err != nil {
+		log.Printf("Error creating sell: %v", err)
+	} else {
+		log.Printf("Performing sell")
+		if err = sell.Perform(s.m.receiveManager); err != nil {
+			log.Printf("Error performing sell: %v", err)
+		}
+	}
+	time.Sleep(20 * time.Second)
 }

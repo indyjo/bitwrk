@@ -31,21 +31,27 @@ import (
 	"strings"
 )
 
-var ErrRedirect = fmt.Errorf("Redirect encountered")
-
 // Disallow redirects (or explicitly handle them)
 var client = http.Client{
 	CheckRedirect: func(r *http.Request, _ []*http.Request) error {
-		return ErrRedirect
+		return fmt.Errorf("Redirect encountered in request %v", r)
 	},
+}
+
+func GetClient() *http.Client {
+	return &client
+}
+
+func NewRequest(method, url string, body io.Reader) (*http.Request, error) {
+	return newRequest(method, url, body)
 }
 
 func newRequest(method, url string, body io.Reader) (*http.Request, error) {
 	if r, err := http.NewRequest(method, url, body); err != nil {
 		return nil, err
 	} else {
-	    r.Header.Set("User-Agent", BitwrkUserAgent)
-	    return r, nil
+		r.Header.Set("User-Agent", BitwrkUserAgent)
+		return r, nil
 	}
 	return nil, nil // never reached
 }
@@ -65,7 +71,7 @@ func getFromServer(relpath string) (*http.Response, error) {
 func getJsonFromServer(relpath, etag string) (*http.Response, error) {
 	req, err := newServerRequest("GET", relpath, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("newServerRequest failed: %v", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	if etag != "" {
@@ -76,8 +82,8 @@ func getJsonFromServer(relpath, etag string) (*http.Response, error) {
 
 func FetchBid(bidId, etag string) (*bitwrk.Bid, string, error) {
 	var response *http.Response
-	if r, err := getJsonFromServer("/bid/"+bidId, etag); err != nil {
-		return nil, "", err
+	if r, err := getJsonFromServer("bid/"+bidId, etag); err != nil {
+		return nil, "", fmt.Errorf("getJsonFromServer (etag=%v) failed: %v", etag, err)
 	} else {
 		response = r
 	}
@@ -98,7 +104,7 @@ func FetchBid(bidId, etag string) (*bitwrk.Bid, string, error) {
 
 func FetchTx(txId, etag string) (*bitwrk.Transaction, string, error) {
 	var response *http.Response
-	if r, err := getJsonFromServer("/tx/"+txId, etag); err != nil {
+	if r, err := getJsonFromServer("tx/"+txId, etag); err != nil {
 		return nil, "", err
 	} else {
 		response = r
@@ -173,8 +179,9 @@ func PlaceBid(bid *bitwrk.RawBid, identity *bitcoin.KeyPair) (bidId string, err 
 	}
 
 	resp, err := postFormToServer("bid", document+"&signature="+url.QueryEscape(signature))
-	if err == nil && resp.StatusCode == http.StatusSeeOther && resp.Header.Get("X-Bid-Key") != "" {
+	if err == nil || resp.StatusCode == http.StatusSeeOther && resp.Header.Get("X-Bid-Key") != "" {
 		bidId = resp.Header.Get("X-Bid-Key")
+		err = nil
 	} else if err == nil {
 		var more []byte
 		if resp != nil {

@@ -34,32 +34,26 @@ import (
 )
 
 type BuyActivity struct {
-    Trade
-    
+	Trade
+
 	workTemporary cafs.Temporary
 }
 
 func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error) {
 	now := time.Now()
 	result := &BuyActivity{
-	    Trade: Trade{
-            condition:  sync.NewCond(new(sync.Mutex)),
-            manager:    m,
-            started:    now,
-            lastUpdate: now,
-            bidType:    bitwrk.Buy,
-            article:    article,
+		Trade: Trade{
+			condition:  sync.NewCond(new(sync.Mutex)),
+			manager:    m,
+			key:        m.newKey(),
+			started:    now,
+			lastUpdate: now,
+			bidType:    bitwrk.Buy,
+			article:    article,
 		},
 	}
-	m.add(m.newKey(), result)
+	m.register(result.key, result)
 	return result, nil
-}
-
-func (a *BuyActivity) Act() bool {
-	now := time.Now()
-	a.lastUpdate = now
-	repeat := a.started.Add(10 * time.Second).After(now)
-	return repeat
 }
 
 func (a *BuyActivity) WorkWriter() io.WriteCloser {
@@ -95,11 +89,11 @@ func (w buyWorkWriter) Close() error {
 }
 
 func (a *BuyActivity) GetResult() (cafs.File, error) {
+	defer a.manager.unregister(a.key)
 	// wait for grant or reject
 	log.Println("Waiting for permission")
 
-	// Request a permission for the buy
-	a.manager.permissionRequests <- tradePermissionRequest{&a.Trade}
+	// Get a permission for the buy
 	if err := a.awaitPermission(); err != nil {
 		return nil, err
 	}
@@ -149,32 +143,31 @@ func (a *BuyActivity) GetResult() (cafs.File, error) {
 	if err := a.awaitTransactionPhase(bitwrk.PhaseTransmitting, bitwrk.PhaseBuyerEstablished); err != nil {
 		return nil, err
 	}
-	
-    if err := a.transmitWorkAndReceiveEncryptedResult(); err != nil {
-        return nil, err
-    }
-	
-    if err := a.signReceipt(); err != nil {
-        return nil, err
-    }
-	
+
+	if err := a.transmitWorkAndReceiveEncryptedResult(); err != nil {
+		return nil, err
+	}
+
+	if err := a.signReceipt(); err != nil {
+		return nil, err
+	}
+
 	if err := a.awaitTransactionPhase(bitwrk.PhaseUnverified, bitwrk.PhaseTransmitting, bitwrk.PhaseWorking); err != nil {
 		return nil, err
 	}
-	
+
 	a.encResultKey = a.tx.ResultDecryptionKey
-	
+
 	if err := a.decryptResult(); err != nil {
-	    return nil, err
+		return nil, err
 	}
-	
+
 	if err := SendTxMessageAcceptResult(a.txId, a.identity); err != nil {
-	    return nil, fmt.Errorf("Failed to send 'accept result' message: %v", err)
+		return nil, fmt.Errorf("Failed to send 'accept result' message: %v", err)
 	}
-	
+
 	return a.resultFile, nil
 }
-
 
 func (a *BuyActivity) End() {
 	a.condition.L.Lock()
@@ -194,62 +187,62 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult() error {
 	pipeIn, pipeOut := io.Pipe()
 	mwriter := multipart.NewWriter(pipeOut)
 	go func() {
-	    part, err := mwriter.CreateFormFile("work", "workfile.bin")
-	    if err != nil {
-	        pipeOut.CloseWithError(err)
-	        return
-	    }
-	    work := a.workFile.Open()
-	    _, err = io.Copy(part, work)
-	    work.Close()
-	    if err != nil {
-	        pipeOut.CloseWithError(err)
-	        return
-	    }
-	    err = mwriter.WriteField("buyersecret", a.buyerSecret.String())
-	    if err != nil {
-	        pipeOut.CloseWithError(err)
-	        return
-	    } 
-	    err = mwriter.Close()
-	    if err != nil {
-	        pipeOut.CloseWithError(err)
-	        return
-	    } 
-	    pipeOut.Close()
-	} ()
-	
+		part, err := mwriter.CreateFormFile("work", "workfile.bin")
+		if err != nil {
+			pipeOut.CloseWithError(err)
+			return
+		}
+		work := a.workFile.Open()
+		_, err = io.Copy(part, work)
+		work.Close()
+		if err != nil {
+			pipeOut.CloseWithError(err)
+			return
+		}
+		err = mwriter.WriteField("buyersecret", a.buyerSecret.String())
+		if err != nil {
+			pipeOut.CloseWithError(err)
+			return
+		}
+		err = mwriter.Close()
+		if err != nil {
+			pipeOut.CloseWithError(err)
+			return
+		}
+		pipeOut.Close()
+	}()
+
 	var response io.ReadCloser
 	if req, err := newRequest("POST", *a.tx.WorkerURL, pipeIn); err != nil {
-	    return err
+		return err
 	} else {
-	    req.Header.Set("Content-Type", mwriter.FormDataContentType())
-	    if resp, err := client.Do(req); err != nil {
-	        return err
-	    } else {
-	        response = resp.Body
-	    }
+		req.Header.Set("Content-Type", mwriter.FormDataContentType())
+		if resp, err := client.Do(req); err != nil {
+			return err
+		} else {
+			response = resp.Body
+		}
 	}
-	
+
 	temp := a.manager.storage.Create()
 	defer temp.Dispose()
-	
+
 	if _, err := io.Copy(temp, response); err != nil {
-	    return err
+		return err
 	}
 	if err := response.Close(); err != nil {
-	    return err
+		return err
 	}
 	if err := temp.Close(); err != nil {
-	    return err
+		return err
 	}
-	
+
 	if f, err := temp.File(); err != nil {
-	    return err
+		return err
 	} else {
-	    a.encResultFile = f
+		a.encResultFile = f
 	}
-	
+
 	log.Printf("Got encrypted result: %v", a.encResultFile.Key())
 	return nil
 }
@@ -258,57 +251,57 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult() error {
 // prove that the result was transmitted correctly. In exchange, we get the
 // key to unlock the encrypted result.
 func (a *BuyActivity) signReceipt() error {
-    encresulthash := a.encResultFile.Key().String()
-    if sig, err := a.identity.SignMessage(encresulthash, rand.Reader); err != nil {
-        return err
-    } else {
-        a.encResultHashSig = sig
-    }
-	
+	encresulthash := a.encResultFile.Key().String()
+	if sig, err := a.identity.SignMessage(encresulthash, rand.Reader); err != nil {
+		return err
+	} else {
+		a.encResultHashSig = sig
+	}
+
 	formValues := url.Values{}
 	formValues.Set("encresulthash", encresulthash)
 	formValues.Set("encresulthashsig", a.encResultHashSig)
-	
+
 	if resp, err := client.PostForm(*a.tx.WorkerURL, formValues); err != nil {
-	    return err
+		return err
 	} else if resp.StatusCode != http.StatusOK {
-	    return fmt.Errorf("Error sending receipt for encrypted result: %v", resp.Status)
+		return fmt.Errorf("Error sending receipt for encrypted result: %v", resp.Status)
 	}
-	
+
 	return nil
 }
 
 func (a *BuyActivity) decryptResult() error {
-    block, err := aes.NewCipher(a.encResultKey[:])
-    if err != nil {
-        return err
-    }
-    
-    temp := a.manager.GetStorage().Create()
-    defer temp.Dispose()
-    
-    encrypted := a.encResultFile.Open()
-    defer encrypted.Close()
-    
-    // Create OFB stream with null initialization vector (ok for one-time key)
-    var iv [aes.BlockSize]byte
-    stream := cipher.NewOFB(block, iv[:])
-    
-    reader := &cipher.StreamReader{S: stream, R: encrypted}
-    _, err = io.Copy(temp, reader)
-    if err != nil {
-        return err
-    }
-    
-    if err := temp.Close(); err != nil {
-        return err
-    }
-    
-    if file, err := temp.File(); err != nil {
-        return err
-    } else {
-        a.resultFile = file
-    }
-    
-    return nil
+	block, err := aes.NewCipher(a.encResultKey[:])
+	if err != nil {
+		return err
+	}
+
+	temp := a.manager.GetStorage().Create()
+	defer temp.Dispose()
+
+	encrypted := a.encResultFile.Open()
+	defer encrypted.Close()
+
+	// Create OFB stream with null initialization vector (ok for one-time key)
+	var iv [aes.BlockSize]byte
+	stream := cipher.NewOFB(block, iv[:])
+
+	reader := &cipher.StreamReader{S: stream, R: encrypted}
+	_, err = io.Copy(temp, reader)
+	if err != nil {
+		return err
+	}
+
+	if err := temp.Close(); err != nil {
+		return err
+	}
+
+	if file, err := temp.File(); err != nil {
+		return err
+	} else {
+		a.resultFile = file
+	}
+
+	return nil
 }

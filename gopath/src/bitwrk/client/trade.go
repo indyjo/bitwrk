@@ -21,6 +21,7 @@ import (
 	"bitwrk/bitcoin"
 	"bitwrk/cafs"
 	"bitwrk/money"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -31,9 +32,9 @@ type Trade struct {
 	manager             *ActivityManager
 	key                 ActivityKey
 	started, lastUpdate time.Time
-	
-	bidType             bitwrk.BidType
-	article             bitwrk.ArticleId
+
+	bidType bitwrk.BidType
+	article bitwrk.ArticleId
 
 	rejected bool
 	accepted bool
@@ -46,13 +47,13 @@ type Trade struct {
 	txId, txETag string
 	tx           *bitwrk.Transaction
 
-	buyerSecret   *bitwrk.Thash
-	workFile      cafs.File
-	
+	buyerSecret *bitwrk.Thash
+	workFile    cafs.File
+
 	encResultFile    cafs.File
 	encResultKey     *bitwrk.Tkey
 	encResultHashSig string
-	
+
 	resultFile cafs.File
 }
 
@@ -87,7 +88,7 @@ func (t *Trade) awaitTransaction() error {
 	lastETag := ""
 	for count := 1; ; count++ {
 		if bid, etag, err := FetchBid(t.bidId, lastETag); err != nil {
-			return err
+			return fmt.Errorf("Error in FetchBid awaiting transaction: %v", err)
 		} else if etag != lastETag {
 			t.bid = bid
 			lastETag = etag
@@ -108,7 +109,7 @@ func (t *Trade) awaitTransaction() error {
 }
 
 func (t *Trade) awaitTransactionPhase(phase bitwrk.TxPhase, viaPhases ...bitwrk.TxPhase) error {
-    log.Printf("Awaiting transaction phase %v...", phase)
+	log.Printf("Awaiting transaction phase %v...", phase)
 	for count := 1; ; count++ {
 		if tx, etag, err := FetchTx(t.txId, ""); err != nil {
 			return err
@@ -147,14 +148,14 @@ func (t *Trade) awaitTransactionPhase(phase bitwrk.TxPhase, viaPhases ...bitwrk.
 }
 
 func (t *Trade) waitForTransactionPhase(phase bitwrk.TxPhase, viaPhases ...bitwrk.TxPhase) error {
-    log.Printf("Waiting for transaction phase %v...", phase)
+	log.Printf("Waiting for transaction phase %v...", phase)
 	for {
-	    t.condition.L.Lock()
-	    t.condition.Wait()
-	    currentPhase := t.tx.Phase
-	    currentState := t.tx.State
-	    t.condition.L.Unlock()
-	    
+		t.condition.L.Lock()
+		t.condition.Wait()
+		currentPhase := t.tx.Phase
+		currentState := t.tx.State
+		t.condition.L.Unlock()
+
 		if currentState != bitwrk.StateActive {
 			return ErrTxExpired
 		}
@@ -182,27 +183,27 @@ func (t *Trade) waitForTransactionPhase(phase bitwrk.TxPhase, viaPhases ...bitwr
 }
 
 func (t *Trade) waitWhile(f func() bool) {
-    t.condition.L.Lock()
-    defer t.condition.L.Unlock()
-    for {
-        stay := f()
-        if !stay {
-            return
-        }
-        t.condition.Wait()
-    }
+	t.condition.L.Lock()
+	defer t.condition.L.Unlock()
+	for {
+		stay := f()
+		if !stay {
+			return
+		}
+		t.condition.Wait()
+	}
 }
 
 // Polls the transaction state in a separate go-routine
 func (t *Trade) pollTransaction() {
-    
+
 	for count := 1; ; count++ {
-	    
+
 		if tx, etag, err := FetchTx(t.txId, ""); err != nil {
 			log.Printf("Error polling transaction: %v", err)
 			return
 		} else if etag != t.txETag {
-		    t.condition.L.Lock()
+			t.condition.L.Lock()
 			t.tx = tx
 			t.txETag = etag
 			expired := t.tx.State != bitwrk.StateActive
@@ -210,8 +211,8 @@ func (t *Trade) pollTransaction() {
 			t.condition.L.Unlock()
 			log.Printf("Tx-etag: %#v", etag)
 			if expired {
-			    log.Printf(" --> expired")
-			    return
+				log.Printf(" --> expired")
+				return
 			}
 		}
 
@@ -219,4 +220,52 @@ func (t *Trade) pollTransaction() {
 		time.Sleep(time.Duration(count) * 500 * time.Millisecond)
 	}
 
+}
+
+// Implement Activity
+func (t *Trade) GetKey() ActivityKey {
+	return t.key
+}
+
+func (t *Trade) GetState() *ActivityState {
+	t.condition.L.Lock()
+	defer t.condition.L.Unlock()
+
+	info := ""
+	if t.tx != nil {
+		info = "Tx phase: " + t.tx.Phase.String() + " timeout: " + t.tx.Timeout.String()
+	} else if t.bid != nil {
+		info = "Bid state: " + t.bid.State.String()
+	}
+	return &ActivityState{
+		Type:     t.bidType.String(),
+		Article:  t.article,
+		Accepted: t.accepted,
+		Amount:   t.price,
+		Info:     info,
+	}
+}
+
+func (t *Trade) Permit(identity *bitcoin.KeyPair, price money.Money) bool {
+	t.condition.L.Lock()
+	defer t.condition.L.Unlock()
+	if t.accepted || t.rejected {
+		return false
+	}
+	t.identity = identity
+	t.price = price
+	t.accepted = true
+	t.condition.Broadcast()
+	return true
+}
+
+func (t *Trade) Forbid() bool {
+	t.condition.L.Lock()
+	defer t.condition.L.Unlock()
+	if t.accepted || t.rejected {
+		return false
+	}
+	t.rejected = true
+	t.condition.Broadcast()
+	return true
 }

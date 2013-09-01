@@ -17,10 +17,14 @@
 package client
 
 import (
+	"bitwrk"
+	"bitwrk/bitcoin"
 	"bitwrk/cafs"
+	"bitwrk/money"
 	"errors"
+	"sort"
+	"strconv"
 	"sync"
-	"time"
 )
 
 var ErrNoPermission = errors.New("Permission request rejected")
@@ -31,28 +35,38 @@ var ErrTxUnexpectedState = errors.New("Transaction in unexpected state")
 type ActivityKey int64
 
 type Activity interface {
-	//Started() time.Time
-	//LastUpdate() time.Time
-	//Value() money.Money
-	Act() bool
+	GetKey() ActivityKey
+	GetState() *ActivityState
+
+	// Permit the activity.
+	// Returns true if the call caused the activity to be accepted.
+	Permit(identity *bitcoin.KeyPair, price money.Money) bool
+
+	// Forbid the activity.
+	// Returns true if the call caused the activity to be rejected.
+	Forbid() bool
+}
+
+type ActivityState struct {
+	Type     string
+	Article  bitwrk.ArticleId
+	Accepted bool
+	Amount   money.Money
+	Info     string
 }
 
 type ActivityManager struct {
-	mutex           *sync.Mutex
-	activities      map[ActivityKey]Activity
-	nextKey         ActivityKey
-	workChan        *chan ActivityKey
-	storage         cafs.FileStorage
-	permissionRequests chan PermissionRequest
+	mutex      *sync.Mutex
+	activities map[ActivityKey]Activity
+	nextKey    ActivityKey
+	storage    cafs.FileStorage
 }
 
 var activityManager = ActivityManager{
 	new(sync.Mutex),
 	make(map[ActivityKey]Activity),
 	1,
-	nil,
 	cafs.NewRamStorage(),
-	make(chan PermissionRequest),
 }
 
 func GetActivityManager() *ActivityManager {
@@ -63,8 +77,55 @@ func (m *ActivityManager) GetStorage() cafs.FileStorage {
 	return m.storage
 }
 
-func (m *ActivityManager) GetPermissionRequests() <-chan PermissionRequest {
-	return m.permissionRequests
+func (m *ActivityManager) GetActivities() []Activity {
+	result := make([]Activity, 0, 8)
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	for _, a := range m.activities {
+		result = append(result, a)
+	}
+
+	return result
+}
+
+func (k *ActivityKey) Parse(s string) error {
+	if v, err := strconv.ParseInt(s, 10, 64); err != nil {
+		return err
+	} else {
+		*k = ActivityKey(v)
+		return nil
+	}
+}
+
+// Returns the activity associated with the given key, or nil.
+func (m *ActivityManager) GetActivityByKey(k ActivityKey) Activity {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if a, ok := m.activities[k]; ok {
+		return a
+	} else {
+		return nil
+	}
+}
+
+type sorted []Activity
+
+func (s sorted) Len() int {
+	return len(s)
+}
+
+func (s sorted) Less(i, j int) bool {
+	return s[i].GetKey() < s[j].GetKey()
+}
+
+func (s sorted) Swap(i, j int) {
+	s[j], s[i] = s[i], s[j]
+}
+
+func (m *ActivityManager) GetActivitiesSorted() []Activity {
+	result := m.GetActivities()
+	sort.Sort(sorted(result))
+	return result
 }
 
 func (m *ActivityManager) newKey() ActivityKey {
@@ -76,57 +137,14 @@ func (m *ActivityManager) newKey() ActivityKey {
 	return result
 }
 
-func (m *ActivityManager) add(key ActivityKey, activity Activity) {
+func (m *ActivityManager) register(key ActivityKey, activity Activity) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-
 	m.activities[key] = activity
-	if m.workChan == nil {
-		ch := make(chan ActivityKey, 1024)
-		m.workChan = &ch
-		go func() {
-			m.work(ch)
-		}()
-	}
-	*m.workChan <- key
 }
 
-// Marks an activity as done and removes it from the list.
-// Additionally, terminates the worker goroutine if the
-// list of activities is now empty.
-func (m *ActivityManager) done(key ActivityKey) {
+func (m *ActivityManager) unregister(key ActivityKey) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-
-	wasEmpty := len(m.activities) == 0
 	delete(m.activities, key)
-	isEmpty := len(m.activities) == 0
-	if isEmpty && !wasEmpty {
-		close(*m.workChan)
-		m.workChan = nil
-	}
-}
-
-func (m *ActivityManager) work(channel chan ActivityKey) {
-	for {
-		if key, ok := <-channel; !ok {
-			// channel closed
-			m.mutex.Lock()
-			m.workChan = nil
-			m.mutex.Unlock()
-			break
-		} else {
-			m.mutex.Lock()
-			activity := m.activities[key]
-			m.mutex.Unlock()
-			if repeat := activity.Act(); repeat {
-				go func() {
-					time.Sleep(2 * time.Second)
-					channel <- key
-				}()
-			} else {
-				m.done(key)
-			}
-		}
-	}
 }

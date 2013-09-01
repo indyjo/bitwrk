@@ -389,7 +389,7 @@ func (tx *Transaction) SendMessage(now time.Time, address string, arguments map[
 	result.Accepted = false
 	result.PrePhase = tx.Phase
 	result.PostPhase = tx.Phase
-	
+
 	// Check if transaction is still active
 	if tx.State != StateActive || !tx.Timeout.After(now) {
 		result.RejectMessage = "Transaction no longer active"

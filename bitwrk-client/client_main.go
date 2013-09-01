@@ -21,14 +21,15 @@ import (
 	"bitwrk/bitcoin"
 	"bitwrk/cafs"
 	"bitwrk/client"
-	"bitwrk/money"
 	"crypto/rand"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 )
@@ -38,22 +39,42 @@ var ExternalPort int
 var InternalPort int
 var BitcoinPrivateKeyEncoded string
 var BitcoinIdentity *bitcoin.KeyPair
+var ResourceDir string
+var BitwrkUrl string
 
 func main() {
 	flags := flag.NewFlagSet("bitwrk-client", flag.ExitOnError)
 	flags.StringVar(&ExternalAddress, "extaddr", "auto",
 		"IP address or name this host can be reached under from the internet")
-	flags.IntVar(&ExternalPort, "extport", -1, "Port that can be reached from the Internet")
+	flags.IntVar(&ExternalPort, "extport", -1,
+		"Port that can be reached from the Internet (-1 disables incoming connections)")
 	flags.IntVar(&InternalPort, "intport", 8081, "Maintenance port for admin interface")
 	flags.StringVar(&BitcoinPrivateKeyEncoded, "bitcoinprivkey",
 		"random",
 		"The private key of the Bitcoin address to use for authentication")
+	flags.StringVar(&ResourceDir, "resourcedir",
+		"auto",
+		"Directory where the bitwrk client loads resources from")
+	flags.StringVar(&BitwrkUrl, "bitwrkurl", "http://bitwrk.appspot.com/",
+		"URL to contact the bitwrk service at")
 	err := flags.Parse(os.Args[1:])
 	if err == flag.ErrHelp {
 		flags.Usage()
 	} else if err != nil {
 		log.Fatalf("Error parsing command line: %v", err)
 		os.Exit(1)
+	}
+
+	if ResourceDir == "auto" {
+		if dir, err := AutoFindResourceDir("bitwrk-client", "0.0.1"); err != nil {
+			log.Fatalf("Error finding resource directory: %v", err)
+		} else {
+			ResourceDir = dir
+		}
+	} else {
+		if err := TestResourceDir(ResourceDir, "bitwrk-client", "0.0.1"); err != nil {
+			log.Fatalf("Directory [%v] is not a valid resource directory: %v", err)
+		}
 	}
 
 	if BitcoinPrivateKeyEncoded == "random" {
@@ -77,7 +98,14 @@ func main() {
 		}
 	}
 
-	if ExternalAddress == "auto" {
+	if !strings.HasSuffix(BitwrkUrl, "/") {
+		BitwrkUrl = BitwrkUrl + "/"
+	}
+
+	log.Printf("Bitwrk URL: %v", BitwrkUrl)
+	client.BitwrkUrl = BitwrkUrl
+
+	if ExternalAddress == "auto" && ExternalPort > 0 {
 		ExternalAddress, err = client.DetermineIpAddress()
 		if err != nil {
 			log.Fatalf("Error auto-determining IP address: %v", err)
@@ -85,35 +113,34 @@ func main() {
 		}
 	}
 
-	log.Printf("External address: %v\n", ExternalAddress)
-	log.Printf("External port: %v\n", ExternalPort)
+	log.Printf("Resource directory: %v\n", ResourceDir)
+	if ExternalPort <= 0 {
+		log.Printf("External port is %v. No connections will be accepted from other hosts.", ExternalPort)
+		log.Printf("Only buys can be performed.")
+	} else {
+		log.Printf("External address: %v\n", ExternalAddress)
+		log.Printf("External port: %v\n", ExternalPort)
+	}
 	log.Printf("Internal port: %v\n", InternalPort)
 	log.Printf("Bitcoin address: %v\n", BitcoinIdentity.GetAddress())
 
+	addr := ExternalAddress
+	if strings.Contains(addr, ":") {
+		addr = "[" + addr + "]"
+	}
+	prefix := fmt.Sprintf("http://%v:%v/", addr, ExternalPort)
+	receiveManager := client.NewReceiveManager(prefix)
+	workerManager := client.NewWorkerManager(client.GetActivityManager(), receiveManager)
+
 	exit := make(chan error)
 	if InternalPort > 0 {
-		go serveInternal(exit)
+		go serveInternal(workerManager, exit)
 	}
 
 	if ExternalPort > 0 {
-		go serveExternal(exit)
+		go serveExternal(receiveManager, exit)
 	}
 
-	//client.GetActivityManager().NewBuy("foobar")
-	//TestPlaceBid()
-	//os.Exit(0)
-
-
-	// Simulate user giving permission to every request
-	go func() {
-	    for {
-            time.Sleep(5 * time.Second)
-            req := <-client.GetActivityManager().GetPermissionRequests()
-            req.Accept(BitcoinIdentity, money.MustParse("mBTC 0.1337"))
-            //req.Reject()
-		}
-	}()
-	
 	err = <-exit
 	if err != nil {
 		log.Fatalf("Exiting because of: %v", err)
@@ -121,7 +148,7 @@ func main() {
 	}
 }
 
-func serveInternal(exit chan<- error) {
+func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux := http.NewServeMux()
 	s := &http.Server{
 		Addr:         fmt.Sprintf("localhost:%v", InternalPort),
@@ -129,12 +156,32 @@ func serveInternal(exit chan<- error) {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
+	relay := &HttpRelay{"/", client.BitwrkUrl}
+	mux.Handle("/account/", relay)
+	mux.Handle("/bid", relay)
+	mux.Handle("/bid/", relay)
+	mux.Handle("/tx/", relay)
+
+	resource := http.FileServer(http.Dir(path.Join(ResourceDir, "htroot")))
+	mux.Handle("/js/", resource)
+	mux.Handle("/css/", resource)
+	mux.Handle("/img/", resource)
+
 	mux.HandleFunc("/buy/", handleBuy)
 	mux.HandleFunc("/file/", handleFile)
+	mux.HandleFunc("/", handleHome)
+	mux.HandleFunc("/activities", handleActivities)
+	mux.HandleFunc("/registerworker", func(w http.ResponseWriter, r *http.Request) {
+		handleRegisterWorker(workerManager, w, r)
+	})
+	mux.HandleFunc("/unregisterworker", func(w http.ResponseWriter, r *http.Request) {
+		handleUnregisterWorker(workerManager, w, r)
+	})
+	mux.HandleFunc("/forbid", handleForbid)
 	exit <- s.ListenAndServe()
 }
 
-func serveExternal(exit chan<- error) {
+func serveExternal(receiveManager *client.ReceiveManager, exit chan<- error) {
 	mux := http.NewServeMux()
 	s := &http.Server{
 		Addr:         fmt.Sprintf(":%v", ExternalPort),
@@ -142,28 +189,9 @@ func serveExternal(exit chan<- error) {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
-	
-	addr := ExternalAddress
-	if strings.Contains(addr, ":") {
-	    addr = "[" + addr + "]"
-	}
-	prefix := fmt.Sprintf("http://%v:%v/", addr, ExternalPort)
-	log.Printf("Receiving work data on %#v", prefix)
-	receiveManager := client.NewReceiveManager(prefix)
+
 	mux.Handle("/", receiveManager)
-	
-	// Fake worker
-	info := client.WorkerInfo{
-	    "worker-1",
-	    "foobar",
-	    "http-push",
-	    "http://httpbin.org/post",
-	}
-	workerManager := client.NewWorkerManager(client.GetActivityManager(), receiveManager)
-	workerManager.RegisterWorker(info)
-	time.Sleep(10*time.Second)
-	workerManager.UnregisterWorker("worker-1")
-	
+
 	exit <- s.ListenAndServe()
 }
 
@@ -236,6 +264,8 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 				if part.FormName() == "data" {
 					reader = part
 					break
+				} else {
+					log.Printf("Skipping form part %v", part)
 				}
 			}
 		}
@@ -259,4 +289,39 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/file/"+result.Key().String(), http.StatusSeeOther)
+}
+
+var registerWorkerTemplate = template.Must(template.New("registerWorker").Parse(`
+<!doctype html>
+<html>
+<head>
+<title>Register Worker</title>
+<body>
+<form method="POST">
+<input type="text" name="id" value="{{if .Id}}{{.Id}}{{else}}worker-1{{end}}" /> Worker's ID<br/>
+<input type="text" name="article" value="{{if .Article}}{{.Article}}{{else}}foobar{{end}}" /> Worker's article<br/>
+<input type="text" name="pushurl" value="{{if .PushURL}}{{.PushURL}}{{else}}http://localhost:1234/{{end}}" /> URL the worker accepts work on<br/>
+<input type="submit" />
+</form>
+</body>
+</html>
+`))
+
+func handleRegisterWorker(workerManager *client.WorkerManager, w http.ResponseWriter, r *http.Request) {
+	info := client.WorkerInfo{
+		Id:      r.FormValue("id"),
+		Article: bitwrk.ArticleId(r.FormValue("article")),
+		Method:  "http-push",
+		PushURL: r.FormValue("pushurl"),
+	}
+
+	if r.Method != "POST" || info.Id == "" || info.PushURL == "" {
+		registerWorkerTemplate.Execute(w, info)
+	}
+
+	workerManager.RegisterWorker(info)
+}
+
+func handleUnregisterWorker(workerManager *client.WorkerManager, w http.ResponseWriter, r *http.Request) {
+	workerManager.UnregisterWorker(r.FormValue("id"))
 }
