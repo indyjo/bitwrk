@@ -48,6 +48,10 @@ func Test_Parse(t *testing.T) {
 		{"satoshi 0", 0},
 		{"satoshi 1", 1},
 		{"satoshi 10373476", 10373476},
+		{"BTC 0.1", 10000000},
+		{"BTC 0.01", 1000000},
+		{"BTC 0.001", 100000},
+		{"BTC 0.0001", 10000},
 		{"BTC0.00000001", 1},
 		{"mBTC0.00001", 1},
 		{"uBTC0.01", 1},
@@ -112,6 +116,10 @@ func Test_String(t *testing.T) {
 		{"BTC 0.00000000", "BTC 0"},
 		{"mBTC 0", "BTC 0"},
 		{"uBTC 0", "BTC 0"},
+		{"BTC 0.1", "mBTC 100"},
+		{"BTC 0.01", "mBTC 10"},
+		{"BTC 0.001", "mBTC 1"},
+		{"BTC 0.0001", "uBTC 100"},
 		{"satoshi 0", "BTC 0"},
 	} {
 		m := new(Money)
@@ -152,3 +160,29 @@ func Test_JSON(t *testing.T) {
 		}
 	}
 }
+
+func Test_formatAmount(t *testing.T) {
+    type testCase struct {
+        v, f int64
+        r string
+    }
+    
+    for _, c := range []testCase {
+        {1, 1, "1"},
+        {10, 1, "10"},
+        {100, 1, "100"},
+        {1000, 1, "1000"},
+        {1, 1000, "0.001"},
+        {10, 1000, "0.01"},
+        {100, 1000, "0.1"},
+        {1000, 1000, "1"},
+    } {
+        r := formatAmount(c.v, c.f)
+        if r == c.r {
+            t.Logf("formatAmount(%v, %v) correctly returned %#v", c.v, c.f, c.r)
+        } else {
+            t.Errorf("formatAmount(%v, %v) returned %#v instead of %#v.", c.v, c.f, r, c.r)
+        }
+    }
+}
+

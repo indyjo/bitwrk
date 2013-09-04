@@ -177,30 +177,26 @@ func (m Money) String() string {
 	panic("Shouldn't reach this")
 }
 
-// Formats a nonzero value
+// Formats a positive value
 func formatAmount(v, f int64) string {
 	result := make([]byte, 0, 64)
 
-	skipping := true
-	digitseen := false
-	for b := int64(1); v > 0; b *= 10 {
-		if b == f && digitseen {
-			skipping = false
-			result = append(result, '.')
-		}
-		digit := v % 10
-		v = v / 10
-		if digit > 0 || !skipping {
-			skipping = false
-			result = append(result, byte('0'+digit))
-			digitseen = true
-		}
+	intPart := v / f
+	fracPart := v - intPart * f
+	
+	result = append(result, fmt.Sprintf("%v", intPart)...)
+	if fracPart == 0 {
+	    return string(result)
+	}
+	
+	result = append(result, '.')
+	
+	for b := f / 10; b > 0 && fracPart > 0; b /= 10 {
+		digit := fracPart / b
+        result = append(result, byte('0'+digit))
+        fracPart -= digit * b
 	}
 
-	// reverse the result
-	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
-		result[i], result[j] = result[j], result[i]
-	}
 	return string(result)
 }
 
