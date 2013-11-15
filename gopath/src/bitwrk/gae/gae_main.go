@@ -252,16 +252,16 @@ func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, *T
 
 				bid.Transaction = &txKeyEncoded
 			}
-			
+
 			var buyerBid *Bid
 			if bid.Type == Buy {
-			    buyerBid = bid
+				buyerBid = bid
 			} else {
-			    buyerBid = otherBid
+				buyerBid = otherBid
 			}
-			
+
 			if err := tx.Book(dao, buyerBid); err != nil {
-			    return err
+				return err
 			}
 		}
 
@@ -318,7 +318,6 @@ func GetTransaction(c appengine.Context, key *datastore.Key) (*Transaction, erro
 	return &tx, nil
 }
 
-
 func GetTransactionMessages(c appengine.Context, key *datastore.Key) ([]Tmessage, error) {
 	query := datastore.NewQuery("Tmessage").Ancestor(key).Limit(101).Order("Received")
 	messages := make([]Tmessage, 0, 101)
@@ -330,42 +329,42 @@ func GetTransactionMessages(c appengine.Context, key *datastore.Key) ([]Tmessage
 }
 
 func UpdateTransaction(c appengine.Context, txKey *datastore.Key,
-    now time.Time,
-    address string,
-    values map[string]string,
-    document, signature string) error {
-    
-    f := func(c appengine.Context) error {
-        tx, err := GetTransaction(c, txKey)
-        if err != nil {
-            return err
-        }
+	now time.Time,
+	address string,
+	values map[string]string,
+	document, signature string) error {
 
-        message := tx.SendMessage(now, address, values)
+	f := func(c appengine.Context) error {
+		tx, err := GetTransaction(c, txKey)
+		if err != nil {
+			return err
+		}
 
-        if !message.Accepted {
-            return fmt.Errorf("Message not accepted: %v", message.RejectMessage)
-        }
+		message := tx.SendMessage(now, address, values)
 
-        message.Received = now
-        message.Document = document
-        message.Signature = signature
+		if !message.Accepted {
+			return fmt.Errorf("Message not accepted: %v", message.RejectMessage)
+		}
 
-        _, err = datastore.Put(c, datastore.NewIncompleteKey(c, "Tmessage", txKey), message)
-        if err != nil {
-            return err
-        }
-    
-        if _, err := datastore.Put(c, txKey, txCodec{tx}); err != nil {
-            return err
-        }
-        
-        return nil
-    }
-    
+		message.Received = now
+		message.Document = document
+		message.Signature = signature
+
+		_, err = datastore.Put(c, datastore.NewIncompleteKey(c, "Tmessage", txKey), message)
+		if err != nil {
+			return err
+		}
+
+		if _, err := datastore.Put(c, txKey, txCodec{tx}); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
 		return err
 	}
-	
-    return nil
+
+	return nil
 }

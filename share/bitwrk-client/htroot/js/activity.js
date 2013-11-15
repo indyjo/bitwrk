@@ -11,13 +11,6 @@ function setActivities(node, activitiesjson) {
         item.setAttribute("class", "activity");
         node.appendChild(item);
         
-        var elem = document.createElement("input");
-        elem.setAttribute("class", "accepted");
-        elem.setAttribute("type", "checkbox");
-        elem.disabled = activity["Info"]["Accepted"];
-        elem.checked = activity["Info"]["Accepted"];
-        item.appendChild(elem);
-
         var elem = document.createElement("div");
         elem.setAttribute("class", "type");
         elem.innerHTML = activity["Info"]["Type"];
@@ -29,10 +22,22 @@ function setActivities(node, activitiesjson) {
             elem.innerHTML = activity["Info"]["Amount"];
             item.appendChild(elem);
         } else {
+            // accept button
             var elem = document.createElement("input");
             elem.setAttribute("type", "button");
-            elem.setAttribute("class", "closebtn");
-            elem.value = "\u00d7";
+            elem.setAttribute("class", "closebtn btn btn-primary btn-xs");
+            elem.value = "Permit";
+            var info = activity["Info"]
+            elem.onclick = function() {
+                showMandateDialog(info["Type"], info["Article"]);
+            };
+            item.appendChild(elem);
+        
+            // close button
+            var elem = document.createElement("input");
+            elem.setAttribute("type", "button");
+            elem.setAttribute("class", "closebtn btn btn-default btn-xs");
+            elem.value = "Cancel";
             var key = activity["Key"]
             elem.onclick = function() {
                 forbidActivityAsync(key);

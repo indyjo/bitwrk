@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 )
 
 var ErrNoPermission = errors.New("Permission request rejected")
@@ -32,6 +33,8 @@ var ErrBidExpired = errors.New("Bid expired without match")
 var ErrTxExpired = errors.New("Transaction no longer active")
 var ErrTxUnexpectedState = errors.New("Transaction in unexpected state")
 
+// Activity keys identify activities (trades), as well as mandates within
+// the activity manager. Name spaces may overlap.
 type ActivityKey int64
 
 type Activity interface {
@@ -45,6 +48,9 @@ type Activity interface {
 	// Forbid the activity.
 	// Returns true if the call caused the activity to be rejected.
 	Forbid() bool
+
+	// If the activity is a trade, returns the trade information
+	GetTrade() *Trade
 }
 
 type ActivityState struct {
@@ -58,6 +64,7 @@ type ActivityState struct {
 type ActivityManager struct {
 	mutex      *sync.Mutex
 	activities map[ActivityKey]Activity
+	mandates   map[ActivityKey]*Mandate
 	nextKey    ActivityKey
 	storage    cafs.FileStorage
 }
@@ -65,6 +72,7 @@ type ActivityManager struct {
 var activityManager = ActivityManager{
 	new(sync.Mutex),
 	make(map[ActivityKey]Activity),
+	make(map[ActivityKey]*Mandate),
 	1,
 	cafs.NewRamStorage(),
 }
@@ -128,7 +136,7 @@ func (m *ActivityManager) GetActivitiesSorted() []Activity {
 	return result
 }
 
-func (m *ActivityManager) newKey() ActivityKey {
+func (m *ActivityManager) NewKey() ActivityKey {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -138,13 +146,54 @@ func (m *ActivityManager) newKey() ActivityKey {
 }
 
 func (m *ActivityManager) register(key ActivityKey, activity Activity) {
+	now := time.Now()
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.activities[key] = activity
+	// Try to apply all known mandates to the new activity, until a matching mandate
+	// was applied successfully.
+	for mandateKey, mandate := range m.mandates {
+		applied := mandate.Apply(activity, now)
+		if mandate.Expired() {
+			delete(m.mandates, mandateKey)
+		}
+		if applied {
+			break
+		}
+	}
 }
 
 func (m *ActivityManager) unregister(key ActivityKey) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	delete(m.activities, key)
+}
+
+// Registers the mandate (using an activity key for identification)
+func (m *ActivityManager) RegisterMandate(key ActivityKey, mandate *Mandate) {
+	m.mutex.Lock()
+	m.mandates[key] = mandate
+	m.mutex.Unlock()
+	m.applyMandate(m.GetActivities(), mandate, key)
+}
+
+func (m *ActivityManager) UnregisterMandate(key ActivityKey) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	delete(m.mandates, key)
+}
+
+func (m *ActivityManager) applyMandate(activities []Activity, mandate *Mandate, mandateKey ActivityKey) {
+	now := time.Now()
+	// Iterate over activities and try to apply the mandate to each.
+	// If the mandate expires, remove it.
+	for _, a := range activities {
+		state := a.GetState()
+		if !state.Accepted {
+			mandate.Apply(a, now)
+			if mandate.Expired() {
+				m.UnregisterMandate(mandateKey)
+			}
+		}
+	}
 }

@@ -269,3 +269,7 @@ func (t *Trade) Forbid() bool {
 	t.condition.Broadcast()
 	return true
 }
+
+func (t *Trade) GetTrade() *Trade {
+	return t
+}

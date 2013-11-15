@@ -162,27 +162,26 @@ func Test_JSON(t *testing.T) {
 }
 
 func Test_formatAmount(t *testing.T) {
-    type testCase struct {
-        v, f int64
-        r string
-    }
-    
-    for _, c := range []testCase {
-        {1, 1, "1"},
-        {10, 1, "10"},
-        {100, 1, "100"},
-        {1000, 1, "1000"},
-        {1, 1000, "0.001"},
-        {10, 1000, "0.01"},
-        {100, 1000, "0.1"},
-        {1000, 1000, "1"},
-    } {
-        r := formatAmount(c.v, c.f)
-        if r == c.r {
-            t.Logf("formatAmount(%v, %v) correctly returned %#v", c.v, c.f, c.r)
-        } else {
-            t.Errorf("formatAmount(%v, %v) returned %#v instead of %#v.", c.v, c.f, r, c.r)
-        }
-    }
-}
+	type testCase struct {
+		v, f int64
+		r    string
+	}
 
+	for _, c := range []testCase{
+		{1, 1, "1"},
+		{10, 1, "10"},
+		{100, 1, "100"},
+		{1000, 1, "1000"},
+		{1, 1000, "0.001"},
+		{10, 1000, "0.01"},
+		{100, 1000, "0.1"},
+		{1000, 1000, "1"},
+	} {
+		r := formatAmount(c.v, c.f)
+		if r == c.r {
+			t.Logf("formatAmount(%v, %v) correctly returned %#v", c.v, c.f, c.r)
+		} else {
+			t.Errorf("formatAmount(%v, %v) returned %#v instead of %#v.", c.v, c.f, r, c.r)
+		}
+	}
+}

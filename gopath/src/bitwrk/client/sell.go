@@ -48,7 +48,7 @@ func (m *ActivityManager) NewSell(info *WorkerInfo) (*SellActivity, error) {
 		Trade: Trade{
 			condition:    sync.NewCond(new(sync.Mutex)),
 			manager:      m,
-			key:          m.newKey(),
+			key:          m.NewKey(),
 			started:      now,
 			lastUpdate:   now,
 			bidType:      bitwrk.Sell,

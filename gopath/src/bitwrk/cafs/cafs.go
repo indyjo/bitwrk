@@ -191,7 +191,7 @@ func (t *ramTemporary) File() (File, error) {
 func (t *ramTemporary) Dispose() {
 	var key SKey
 	t.hash.Sum(key[:0])
-	
+
 	t.valid = false
 	wasOpen := t.open
 	t.open = false

@@ -182,19 +182,19 @@ func formatAmount(v, f int64) string {
 	result := make([]byte, 0, 64)
 
 	intPart := v / f
-	fracPart := v - intPart * f
-	
+	fracPart := v - intPart*f
+
 	result = append(result, fmt.Sprintf("%v", intPart)...)
 	if fracPart == 0 {
-	    return string(result)
+		return string(result)
 	}
-	
+
 	result = append(result, '.')
-	
+
 	for b := f / 10; b > 0 && fracPart > 0; b /= 10 {
 		digit := fracPart / b
-        result = append(result, byte('0'+digit))
-        fracPart -= digit * b
+		result = append(result, byte('0'+digit))
+		fracPart -= digit * b
 	}
 
 	return string(result)

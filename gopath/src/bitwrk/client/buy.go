@@ -45,7 +45,7 @@ func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error)
 		Trade: Trade{
 			condition:  sync.NewCond(new(sync.Mutex)),
 			manager:    m,
-			key:        m.newKey(),
+			key:        m.NewKey(),
 			started:    now,
 			lastUpdate: now,
 			bidType:    bitwrk.Buy,
