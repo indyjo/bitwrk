@@ -74,7 +74,7 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 
 	// Get a permission for the sell
 	if err := a.awaitPermission(); err != nil {
-		return err
+		return fmt.Errorf("Error awaiting permission: %v", err)
 	}
 	log.Printf("Got permission. Price: %v", a.price)
 
@@ -82,12 +82,12 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 	defer endpoint.Dispose()
 
 	if err := a.awaitBid(); err != nil {
-		return err
+		return fmt.Errorf("Error awaiting bid: %v", err)
 	}
 	log.Printf("Got bid id: %v", a.bidId)
 
 	if err := a.awaitTransaction(); err != nil {
-		return err
+		return fmt.Errorf("Error awaiting transaction: %v", err)
 	}
 	log.Printf("Got transaction id: %v", a.txId)
 
@@ -104,11 +104,12 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 	// Start polling for state changes in background
 	go func() {
 		a.pollTransaction()
+		log.Printf("Transaction polling has stopped.")
 	}()
 
 	var backchannel *backchannel
 	if b, err := a.receiveWorkData(endpoint); err != nil {
-		return err
+		return fmt.Errorf("Error receiving work data: %v", err)
 	} else {
 		backchannel = b
 	}
@@ -116,7 +117,7 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 	log.Println("Got work data. Publishing buyer's secret.")
 	if err := SendTxMessagePublishBuyerSecret(a.txId, a.identity, a.buyerSecret); err != nil {
 		backchannel.release <- 0
-		return err
+		return fmt.Errorf("Error publishing buyer's secret: %v", err)
 	}
 
 	log.Println("Awaiting receipt...")
@@ -126,7 +127,7 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 
 	if err := a.dispatchWorkAndSaveEncryptedResult(backchannel.workFile); err != nil {
 		backchannel.release <- 0
-		return err
+		return fmt.Errorf("Error dispatching work and saving encrypted result: %v", err)
 	}
 
 	// Getting the result has possibly taken too long
@@ -138,9 +139,10 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 		return errors.New("Transaction expired before sending back encrypted result")
 	}
 
+	log.Println("Transmitting encrypted result back to buyer")
 	if err := a.transmitEncryptedResultBackToBuyer(backchannel.w); err != nil {
 		backchannel.release <- 0
-		return err
+		return fmt.Errorf("Error transmitting encrypted result back to buyer: %v", err)
 	}
 
 	backchannel.release <- 0
@@ -202,8 +204,8 @@ func (a *SellActivity) transmitEncryptedResultBackToBuyer(writer io.Writer) erro
 	reader := a.encResultFile.Open()
 	defer reader.Close()
 
-	if _, err := io.Copy(writer, reader); err != nil {
-		return err
+	if n, err := io.Copy(writer, reader); err != nil {
+		return fmt.Errorf("Error copying to backchannel after %v bytes: %v", n, err)
 	}
 
 	return nil
@@ -262,6 +264,8 @@ func (a *SellActivity) handleRequest(w http.ResponseWriter, r *http.Request, bac
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	log.Printf("Handling request from %v on %v", r.RemoteAddr, r.URL)
+	defer log.Printf("Done handling request from %v on %v", r.RemoteAddr, r.URL)
 
 	var mreader *multipart.Reader
 	if _reader, err := r.MultipartReader(); err != nil {
@@ -283,6 +287,7 @@ func (a *SellActivity) handleRequest(w http.ResponseWriter, r *http.Request, bac
 	for {
 		part, err := mreader.NextPart()
 		if err == io.EOF {
+			log.Printf("End of stream reached")
 			break
 		} else if err != nil {
 			log.Printf("Error reading part: %v", err)
@@ -290,6 +295,7 @@ func (a *SellActivity) handleRequest(w http.ResponseWriter, r *http.Request, bac
 			return
 		}
 		formName := part.FormName()
+		log.Printf("Handling part: %v", formName)
 		switch formName {
 		case "buyersecret":
 			b := make([]byte, 64)
@@ -385,6 +391,7 @@ func (a *SellActivity) handleRequest(w http.ResponseWriter, r *http.Request, bac
 	a.Trade.condition.L.Unlock()
 
 	// Let the main goroutine do the job
+	log.Println("Waiting for backchannel to be released")
 	<-backchannel.release
 }
 

@@ -137,29 +137,29 @@ func (a *BuyActivity) GetResult() (cafs.File, error) {
 	hash.Sum(workSecretHash[:0])
 
 	if err := SendTxMessageEstablishBuyer(a.txId, a.identity, workHash, workSecretHash); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error establishing buyer: %v", err)
 	}
 
 	if err := a.awaitTransactionPhase(bitwrk.PhaseTransmitting, bitwrk.PhaseBuyerEstablished); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error awaiting TRANSMITTING phase: %v", err)
 	}
 
 	if err := a.transmitWorkAndReceiveEncryptedResult(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error transmitting work and receiving encrypted result: %v", err)
 	}
 
 	if err := a.signReceipt(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error signing receipt for encrypted result: %v", err)
 	}
 
 	if err := a.awaitTransactionPhase(bitwrk.PhaseUnverified, bitwrk.PhaseTransmitting, bitwrk.PhaseWorking); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error awaiting UNVERIFIED phase: %v", err)
 	}
 
 	a.encResultKey = a.tx.ResultDecryptionKey
 
 	if err := a.decryptResult(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error decrypting result: %v", err)
 	}
 
 	if err := SendTxMessageAcceptResult(a.txId, a.identity); err != nil {
@@ -209,16 +209,21 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult() error {
 			pipeOut.CloseWithError(err)
 			return
 		}
-		pipeOut.Close()
+		err = pipeOut.Close()
+		if err != nil {
+			pipeOut.CloseWithError(err)
+			return
+		}
+		log.Printf("Work transmitted successfully.")
 	}()
 
 	var response io.ReadCloser
 	if req, err := newRequest("POST", *a.tx.WorkerURL, pipeIn); err != nil {
-		return err
+		return fmt.Errorf("Error creating transmit request: %v", err)
 	} else {
 		req.Header.Set("Content-Type", mwriter.FormDataContentType())
 		if resp, err := client.Do(req); err != nil {
-			return err
+			return fmt.Errorf("Error fetching request %v: %v", req, err)
 		} else {
 			response = resp.Body
 		}

@@ -81,7 +81,7 @@ type UserId string
 type BidId string
 
 func (a ArticleId) FormString() string {
-	return string(a)
+	return url.QueryEscape(string(a))
 }
 
 type Bid struct {

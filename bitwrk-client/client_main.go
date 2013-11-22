@@ -153,8 +153,8 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	s := &http.Server{
 		Addr:         fmt.Sprintf("localhost:%v", InternalPort),
 		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  300 * time.Second,
+		WriteTimeout: 300 * time.Second,
 	}
 	relay := &HttpRelay{"/", client.BitwrkUrl}
 	mux.Handle("/account/", relay)
@@ -186,8 +186,8 @@ func serveExternal(receiveManager *client.ReceiveManager, exit chan<- error) {
 	s := &http.Server{
 		Addr:         fmt.Sprintf(":%v", ExternalPort),
 		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  300 * time.Second,
+		WriteTimeout: 300 * time.Second,
 	}
 
 	mux.Handle("/", receiveManager)
@@ -231,6 +231,8 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 
 func handleBuy(w http.ResponseWriter, r *http.Request) {
 	article := r.URL.Path[5:]
+
+	log.Printf("Handling buy for %#v from %v", article, r.RemoteAddr)
 
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
