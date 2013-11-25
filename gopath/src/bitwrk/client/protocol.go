@@ -86,6 +86,7 @@ func FetchBid(bidId, etag string) (*bitwrk.Bid, string, error) {
 		return nil, "", fmt.Errorf("getJsonFromServer (etag=%v) failed: %v", etag, err)
 	} else {
 		response = r
+		defer response.Body.Close()
 	}
 
 	if response.StatusCode == http.StatusOK {
@@ -108,6 +109,7 @@ func FetchTx(txId, etag string) (*bitwrk.Transaction, string, error) {
 		return nil, "", err
 	} else {
 		response = r
+		defer response.Body.Close()
 	}
 
 	if response.StatusCode == http.StatusOK {
@@ -179,14 +181,11 @@ func PlaceBid(bid *bitwrk.RawBid, identity *bitcoin.KeyPair) (bidId string, err 
 	}
 
 	resp, err := postFormToServer("bid", document+"&signature="+url.QueryEscape(signature))
-	if err == nil || resp.StatusCode == http.StatusSeeOther && resp.Header.Get("X-Bid-Key") != "" {
+	if resp != nil && resp.StatusCode == http.StatusSeeOther && resp.Header.Get("X-Bid-Key") != "" {
 		bidId = resp.Header.Get("X-Bid-Key")
-		err = nil
-	} else if err == nil {
-		var more []byte
-		if resp != nil {
-			more, _ = ioutil.ReadAll(resp.Body)
-		}
+		err = resp.Body.Close()
+	} else if resp != nil {
+		more, _ := ioutil.ReadAll(resp.Body)
 		err = fmt.Errorf("Got status: %#v\nResponse: %v", resp.Status, string(more))
 	}
 
