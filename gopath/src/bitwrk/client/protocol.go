@@ -33,8 +33,8 @@ import (
 
 // Disallow redirects (or explicitly handle them)
 var client = http.Client{
-	CheckRedirect: func(r *http.Request, path []*http.Request) error {
-		return fmt.Errorf("Redirect encountered in request %v coming from %v", r, *(path[0]))
+	CheckRedirect: func(r *http.Request, _ []*http.Request) error {
+		return fmt.Errorf("Redirect encountered in request %v", r)
 	},
 }
 
@@ -223,10 +223,15 @@ func SendTxMessage(txId string, identity *bitcoin.KeyPair, arguments map[string]
 	query := string(document) +
 		"&signature=" + url.QueryEscape(signature) +
 		"&address=" + url.QueryEscape(identity.GetAddress())
-	if r, err := postFormToServer("tx/"+txId, query); err != nil {
+	if r, err := postFormToServer("tx/"+txId, query); r != nil {
+		defer r.Body.Close()
+		if r.StatusCode == http.StatusSeeOther {
+			// Success! Do nothing.
+		} else {
+			return fmt.Errorf("Unexpected reply status posting form to server: %v (%v)", r.StatusCode, r.Status)
+		}
+	} else {
 		return fmt.Errorf("Error posting form to server: %v", err)
-	} else if r.StatusCode != http.StatusOK {
-		return fmt.Errorf("Unexpected status: %v", r.Status)
 	}
 
 	return nil

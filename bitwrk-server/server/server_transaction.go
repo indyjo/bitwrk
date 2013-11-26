@@ -201,7 +201,7 @@ func handleTx(w http.ResponseWriter, r *http.Request) {
 			message := fmt.Sprintf("Couldn't update transaction %#v: %v", txId, err)
 			c.Warningf("%v", message)
 			http.Error(w, message, http.StatusInternalServerError)
-		} else if contentType == "text/html" {
+		} else {
 			redirectToTransaction(txId, w, r)
 		}
 		return
