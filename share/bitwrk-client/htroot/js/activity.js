@@ -28,9 +28,11 @@ function setActivities(node, activitiesjson) {
             elem.setAttribute("class", "closebtn btn btn-primary btn-xs");
             elem.value = "Permit";
             var info = activity["Info"]
-            elem.onclick = function() {
-                showMandateDialog(info["Type"], info["Article"]);
-            };
+            elem.onclick = function(info) {
+                return function() {
+                    showMandateDialog(info["Type"], info["Article"]);
+                };
+            }(info);
             item.appendChild(elem);
         
             // close button
@@ -39,9 +41,11 @@ function setActivities(node, activitiesjson) {
             elem.setAttribute("class", "closebtn btn btn-default btn-xs");
             elem.value = "Cancel";
             var key = activity["Key"]
-            elem.onclick = function() {
-                forbidActivityAsync(key);
-            };
+            elem.onclick = function(key) {
+                return function() {
+                    forbidActivityAsync(key);
+                };
+            }(key);
             item.appendChild(elem);
         }
         
