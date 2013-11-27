@@ -62,7 +62,7 @@ Not yet implemented.</p>
 <div id="mandateModal" class="modal fade">
 <div class="modal-dialog">
 <div class="modal-content">
-<form>
+<form method="POST">
 <input type="hidden" name="action" value="permit" />
 <input type="hidden" name="type" />
 <input type="hidden" name="articleid" />
