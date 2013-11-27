@@ -12,6 +12,33 @@ If generating this enormous amount of work for nothing more than a
 simple cryptographic lottery can be lucrative, there must be demand
 for tasks more useful. Let's find out!
 
+Idea
+----
+BitWrk aims to be a marketplace for computing power. Rather than providing
+computing resources itself (like "cloud" service providers do),
+it is a marketplace where buyers and sellers meet.
+
+In its core, BitWrk works like a stock exchange. The difference is that
+it's not stocks that are traded, but computing tasks. There are different
+kinds of computing tasks on BitWrk, just like there are different stocks
+traded on a stock exchange.
+
+Buyers are people who wish to get some computing tasks done (as quickly as
+possible, and as cheap as possible). They profit from BitWrk because they
+get on-demand access to enormous computing resources, from their desktop
+computers.
+
+Sellers are people who provide the service of handling those tasks to the
+public. They profit directly from the money earned in exchange.
+
+Prices are determined by the rules of supply and demand. Participants may
+range from hobbyists to companies (both buyers, and sellers).
+
+The use of [Bitcoin](http://bitcoin.org) as BitWrk's preferred currency
+guarantees a low entry barrier, especially for potential buyers, provided
+that the success of Bitcoin continues. It also enables registration-less,
+anonymous participation.
+
 Status
 ------
 This project has been under heavy development for the last couple of
@@ -24,21 +51,23 @@ months and currently consists of:
   the original Bitcoin client.
 - A client, also written in Go, that currently contains enough logic
   to perform both sides of a transaction. A browser-based user interface
-  is in the works, but still incomplete. There is very rudimentary
-  support for registering and unregistering workers and still no UI
-  for managing accounts.
+  is in the works, but still incomplete. Workers can register and
+  unregister themselves, but there is no UI for managing user accounts yet.
   The client is meant to act as a proxy, taking tasks from
-  local programs and dispatching them to the internet. For sellers, it
+  local programs and dispatching them to the BitWrk service. For sellers, it
   provides the service to offer local worker programs to the BitWrk
   exchange and to keep them busy.
 
 In the current phase of development, there is no way to transfer money into
-or out of the BitWrk service. Thus, no actual money can be made or lost.
+or out of the BitWrk service. Thus, <strong>no actual money can be made or lost.</strong>
 
 
 News
 ----
 
+- 2013-11-27: Some progress has been made, mainly on the client side.
+  A sample application has been adapted to use BitWrk: See
+  https://github.com/indyjo/rays for the Rays raytracer project.
 - 2013-11-15: After a break of two months, development has continued.
   The client now has the ability to not only list activities, but
   also to ask the user for a permission (valid up to a specified number of
@@ -66,19 +95,14 @@ curl -v -F data=@&lt;some filename&gt; -L http://localhost:8081/buy/foobar
 Usage
 -----
 
-The server is a web application written for Google Appengine.
-Its purpose is to
-- accept bids from buyers and sellers
-- find matching bids and create transactions
-- listen for messages from clients updating the transactions
-- enforcing rules by which these transactions must be handled
-- do bookkeeping of the participants' accounts
-As a user of BitWrk, you shouldn't need to worry about the server. You need
-to trust it, though, especially if you decide to send money to it (which as
-of now is not possible, but will be). As a trust-building measure, the
-server's source code is open-sourced too.
+The client software provides a graphical web frontend that presents the
+user with a view of everything going on between the local machine and
+the BitWrk service.
 
-The client is a command-line tool. To find out about its usage, type:
+Running the client is very straightforward: Just run <pre>bitwrk-client</pre>
+and navigate your Web browser to http://localhost:8081/.
+
+There are also some command-line options:
 <pre>
 $ ./bitwrk-client --help
 Usage of bitwrk-client:
@@ -123,6 +147,22 @@ identifies the article to trade. It must be an article that is traded on the Bit
 server.
 </dl>
 
+
+Server
+------
+
+The server is a web application written for Google Appengine.
+Its purpose is to
+- accept bids from buyers and sellers
+- find matching bids and create transactions
+- listen for messages from clients updating the transactions
+- enforcing rules by which these transactions must be handled
+- do bookkeeping of the participants' accounts
+As a user of BitWrk, you shouldn't need to worry about the server. You need
+to trust it, though, especially if you decide to send money to it (which as
+of now is not possible, but will be). As a trust-building measure, the
+server's source code is open-sourced, too.
+
 Have fun!
-2013-11-15, Jonas Eschenburg
+2013-11-27, Jonas Eschenburg
 
