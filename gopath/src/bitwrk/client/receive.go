@@ -45,6 +45,18 @@ func NewReceiveManager(urlPrefix string) *ReceiveManager {
 	return &m
 }
 
+func (m *ReceiveManager) GetUrlPrefix() string {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.urlPrefix
+}
+
+func (m *ReceiveManager) SetUrlPrefix(newPrefix string) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.urlPrefix = newPrefix
+}
+
 func (m *ReceiveManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Got HTTP %v on %v.", r.Method, r.URL)
 	var key string
@@ -96,8 +108,9 @@ func (e *Endpoint) SetHandler(handle func(http.ResponseWriter, *http.Request)) {
 }
 
 func (e *Endpoint) URL() string {
-	if strings.HasSuffix(e.m.urlPrefix, "/") {
-		return e.m.urlPrefix + e.key
+	prefix := e.m.GetUrlPrefix()
+	if strings.HasSuffix(prefix, "/") {
+		return prefix + e.key
 	}
-	return e.m.urlPrefix + "/" + e.key
+	return prefix + "/" + e.key
 }

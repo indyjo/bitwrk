@@ -105,31 +105,13 @@ func main() {
 	log.Printf("Bitwrk URL: %v", BitwrkUrl)
 	client.BitwrkUrl = BitwrkUrl
 
-	if ExternalAddress == "auto" && ExternalPort > 0 {
-		ExternalAddress, err = client.DetermineIpAddress()
-		if err != nil {
-			log.Fatalf("Error auto-determining IP address: %v", err)
-			os.Exit(1)
-		}
-	}
-
 	log.Printf("Resource directory: %v\n", ResourceDir)
-	if ExternalPort <= 0 {
-		log.Printf("External port is %v. No connections will be accepted from other hosts.", ExternalPort)
-		log.Printf("Only buys can be performed.")
-	} else {
-		log.Printf("External address: %v\n", ExternalAddress)
-		log.Printf("External port: %v\n", ExternalPort)
-	}
+
+	receiveManager := startReceiveManager()
+
 	log.Printf("Internal port: %v\n", InternalPort)
 	log.Printf("Bitcoin address: %v\n", BitcoinIdentity.GetAddress())
 
-	addr := ExternalAddress
-	if strings.Contains(addr, ":") {
-		addr = "[" + addr + "]"
-	}
-	prefix := fmt.Sprintf("http://%v:%v/", addr, ExternalPort)
-	receiveManager := client.NewReceiveManager(prefix)
 	workerManager := client.NewWorkerManager(client.GetActivityManager(), receiveManager)
 
 	exit := make(chan error)
@@ -146,6 +128,58 @@ func main() {
 		log.Fatalf("Exiting because of: %v", err)
 		os.Exit(1)
 	}
+}
+
+func getReceiveManagerPrefix(addr string) (prefix string) {
+	if strings.Contains(addr, ":") {
+		addr = "[" + addr + "]"
+	}
+	prefix = fmt.Sprintf("http://%v:%v/", addr, ExternalPort)
+	return
+}
+
+func startReceiveManager() (receiveManager *client.ReceiveManager) {
+	receiveManager = client.NewReceiveManager("")
+	if ExternalPort <= 0 {
+		log.Printf("External port is %v. No connections will be accepted from other hosts.", ExternalPort)
+		log.Printf("Only buys can be performed.")
+		return
+	}
+
+	actualExternalAddress := ""
+	if ExternalAddress == "auto" {
+		if addr, err := client.DetermineIpAddress(); err != nil {
+			log.Fatalf("Error auto-determining IP address: %v", err)
+			os.Exit(1)
+		} else {
+			actualExternalAddress = addr
+		}
+
+		// periodically update the address from now on
+		ticker := time.NewTicker(15 * time.Minute)
+		go func() {
+			for {
+				<-ticker.C
+				if addr, err := client.DetermineIpAddress(); err != nil {
+					log.Printf("Ignoring failure to determine IP address: %v", err)
+				} else if addr == actualExternalAddress {
+					log.Printf("Client IP address still %v", addr)
+				} else {
+					log.Printf("New IP address: %v", addr)
+					receiveManager.SetUrlPrefix(getReceiveManagerPrefix(addr))
+					actualExternalAddress = addr
+				}
+			}
+		}()
+	} else {
+		actualExternalAddress = ExternalAddress
+	}
+
+	receiveManager.SetUrlPrefix(getReceiveManagerPrefix(actualExternalAddress))
+	log.Printf("External address: %v\n", actualExternalAddress)
+	log.Printf("External port: %v\n", ExternalPort)
+
+	return
 }
 
 func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
