@@ -232,16 +232,18 @@ func (t *Trade) GetState() *ActivityState {
 	defer t.condition.L.Unlock()
 
 	info := ""
+	price := t.price
 	if t.tx != nil {
-		info = "Tx phase: " + t.tx.Phase.String() + " timeout: " + t.tx.Timeout.String()
+		info = fmt.Sprintf("Tx %v %v %v", t.txId, t.tx.Phase, t.tx.Timeout)
+		price = t.tx.Price
 	} else if t.bid != nil {
-		info = "Bid state: " + t.bid.State.String()
+		info = fmt.Sprintf("Bid %v %v", t.bidId, t.bid.State)
 	}
 	return &ActivityState{
 		Type:     t.bidType.String(),
 		Article:  t.article,
 		Accepted: t.accepted,
-		Amount:   t.price,
+		Amount:   price,
 		Info:     info,
 	}
 }
