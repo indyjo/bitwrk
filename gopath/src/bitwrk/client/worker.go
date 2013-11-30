@@ -105,7 +105,7 @@ func (s *WorkerState) offer() {
 		log.Printf("Performing sell")
 		if err = sell.Perform(s.m.receiveManager); err != nil {
 			log.Printf("Error performing sell: %v", err)
+			time.Sleep(20 * time.Second)
 		}
 	}
-	time.Sleep(20 * time.Second)
 }
