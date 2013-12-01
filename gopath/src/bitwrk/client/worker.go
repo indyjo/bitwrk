@@ -51,6 +51,16 @@ func NewWorkerManager(a *ActivityManager, r *ReceiveManager) *WorkerManager {
 	return m
 }
 
+func (m *WorkerManager) ListWorkers() (result []WorkerState) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	result = make([]WorkerState, 0, len(m.workers))
+	for _, workerState := range m.workers {
+		result = append(result, *workerState)
+	}
+	return
+}
+
 func (m *WorkerManager) RegisterWorker(info WorkerInfo) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()

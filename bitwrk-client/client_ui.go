@@ -47,13 +47,12 @@ var homeTemplate = template.Must(template.New("home").Parse(`
 <script src="/js/accountinfo.js" ></script>
 <script src="/js/mandate-dialog.js" ></script>
 <script src="/js/activity.js" ></script>
+<script src="/js/workers.js" ></script>
 <div class="col-sm-4">
 <h3>Activities</h3>
 <div id="activities"></div>
 </div>
-<div class="col-sm-4"><h3>Workers</h3>
-<p class="text-muted">This will give an overview of workers currently registered.
-Not yet implemented.</p>
+<div id="workers" class="col-sm-4"><h3>Workers</h3>
 </div>
 <div class="col-sm-4"><h3>Permissions</h3>
 <p class="text-muted">This will show a list of buy and sell mandates granted.
@@ -111,6 +110,8 @@ setInterval(updateAccountInfo, 30000);
 updateAccountInfo();
 setInterval(updateActivities, 500);
 updateActivities();
+setInterval(updateWorkers, 500);
+updateWorkers();
 </script></body>
 </html>
 `))
@@ -206,4 +207,12 @@ func handleGrantMandate(r *http.Request) error {
 	key := client.GetActivityManager().NewKey()
 	client.GetActivityManager().RegisterMandate(key, &mandate)
 	return nil
+}
+
+func handleWorkers(workerManager *client.WorkerManager, w http.ResponseWriter, r *http.Request) {
+	workerStates := workerManager.ListWorkers()
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(workerStates); err != nil {
+		panic(err)
+	}
 }

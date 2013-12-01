@@ -212,6 +212,9 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 		handleUnregisterWorker(workerManager, w, r)
 	})
 	mux.HandleFunc("/forbid", handleForbid)
+	mux.HandleFunc("/workers", func(w http.ResponseWriter, r *http.Request) {
+		handleWorkers(workerManager, w, r)
+	})
 	exit <- s.ListenAndServe()
 }
 
