@@ -18,9 +18,11 @@ might be shortcuts for some users (like installing Go using the system's
 package manager).
 - **Step 1:** Download and install Google's Go SDK to be able to compile BitWrk:
   http://golang.org/doc/install
+  
   From a command prompt, you should be able to run the "go" tools.
 - **Step 2:** Download the Bitwrk client, compile and start it:
   https://github.com/indyjo/bitwrk/archive/master.zip
+
         cd bitwrk-master
         # Linux/Mac OS X users:
         . env-vars.sh # To set the GOPATH for compilation
@@ -30,11 +32,12 @@ package manager).
         go build
         # Port 8082 needs to be reachable for selling to work
         ./bitwrk-client -extport 8082
+
   Now navigate your web browser to http://localhost:8081/ and keep it open.
-  You should see BitWrk's user interface, your account number (which has been
-  randomly chosen) and your current balance of **BTC 1**.
+  You should see  your account number (which has been randomly chosen) and your current balance of **BTC 1**.
 - **Step 3:** Download the sample application, compile and start it:
   https://github.com/indyjo/rays/archive/master.zip
+
         cd rays-master
         cd gorays
         go build
