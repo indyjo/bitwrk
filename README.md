@@ -5,12 +5,43 @@ This is going to be a proof-of-concept implementation of a marketplace
 for computing services, an idea I had in 2011 when I saw the enormous
 amounts of computing capacity dedicated to mining Bitcoin.
 
-Since then, the work needed to mine a single Bitcoin has increased by
-at least a factor of 50! (See http://blockchain.info/charts/hash-rate)
-
 If generating this enormous amount of work for nothing more than a
 simple cryptographic lottery can be lucrative, there must be demand
 for tasks more useful. Let's find out!
+
+Quick Start Instructions
+------------------------
+For the impatient, this will get you running within 5 minutes.
+
+These steps apply to users of Windows, Mac OS X and Linux, although there
+might be shortcuts for some users (like installing Go using the system's
+package manager).
+- **Step 1:** Download and install Google's Go SDK to be able to compile BitWrk:
+  http://golang.org/doc/install
+  From a command prompt, you should be able to run the "go" tools.
+- **Step 2:** Download the Bitwrk client, compile and start it:
+  https://github.com/indyjo/bitwrk/archive/master.zip
+        cd bitwrk-master
+        # Linux/Mac OS X users:
+        . env-vars.sh # To set the GOPATH for compilation
+        # Windows users:
+        set GOPATH=C:/Path/To/bitwrk-master/gopath
+        cd bitwrk-client
+        go build
+        # Port 8082 needs to be reachable for selling to work
+        ./bitwrk-client -extport 8082
+  Now navigate your web browser to http://localhost:8081/ and keep it open.
+  You should see BitWrk's user interface, your account number (which has been
+  randomly chosen) and your current balance of **BTC 1**.
+- **Step 3:** Download the sample application, compile and start it:
+  https://github.com/indyjo/rays/archive/master.zip
+        cd rays-master
+        cd gorays
+        go build
+        # For buying:
+        ./gorays -bitwrk-master -a ../ART
+        # For selling:
+        ./gorays -bitwrk-slave
 
 Idea
 ----
@@ -57,9 +88,13 @@ months and currently consists of:
   local programs and dispatching them to the BitWrk service. For sellers, it
   provides the service to offer local worker programs to the BitWrk
   exchange and to keep them busy.
+- "gorays", a sample application. It's a simple raytracer demonstrating
+  how to *use* BitWrk, and also how to *extend* an existing application to
+  leverage the BitWrk service.
 
 In the current phase of development, there is no way to transfer money into
 or out of the BitWrk service. Thus, <strong>no actual money can be made or lost.</strong>
+Every new client account starts with **1 BTC virtual starting capital**.
 
 
 News
@@ -164,5 +199,5 @@ of now is not possible, but will be). As a trust-building measure, the
 server's source code is open-sourced, too.
 
 Have fun!
-2013-11-27, Jonas Eschenburg
+2013-12-01, Jonas Eschenburg
 
