@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -120,9 +119,12 @@ type clientContext struct {
 func handleHome(w http.ResponseWriter, r *http.Request) {
 	if action := r.FormValue("action"); action == "permit" {
 		if err := handleGrantMandate(r); err != nil {
-			// TODO: Better error handling
-			log.Printf("Error processing mandate: %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		} else {
+			// Success! Send back to home page
+			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 		}
+		return
 	}
 
 	homeTemplate.Execute(w, &clientContext{
