@@ -37,11 +37,38 @@ type Mandate struct {
 	Until         time.Time
 }
 
+// Shown to user
+type MandateInfo struct {
+	Type          bitwrk.BidType // Buy or Sell
+	Article       bitwrk.ArticleId
+	Price         money.Money
+	UseTradesLeft bool
+	TradesLeft    int
+	UseUntil      bool
+	Until         time.Time
+}
+
 func (m *Mandate) Expired() bool {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	return m.expired
+}
+
+// Extract user-visible information, assigns the id as passed.
+// Returns a new MandateInfo.
+func (m *Mandate) GetInfo() *MandateInfo {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	return &MandateInfo{
+		m.BidType,
+		m.Article,
+		m.Price,
+		m.UseTradesLeft,
+		m.TradesLeft,
+		m.UseUntil,
+		m.Until}
 }
 
 // Applies the mandate to the given activity and returns whether the

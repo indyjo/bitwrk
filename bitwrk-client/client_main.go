@@ -215,6 +215,14 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux.HandleFunc("/workers", func(w http.ResponseWriter, r *http.Request) {
 		handleWorkers(workerManager, w, r)
 	})
+	mux.HandleFunc("/mandates", func(w http.ResponseWriter, r *http.Request) {
+		handleMandates(client.GetActivityManager(), w, r)
+	})
+	mux.HandleFunc("/revokemandate", func(w http.ResponseWriter, r *http.Request) {
+		if err := handleRevokeMandate(r); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
 	exit <- s.ListenAndServe()
 }
 

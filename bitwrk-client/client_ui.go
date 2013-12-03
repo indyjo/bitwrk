@@ -44,20 +44,15 @@ var homeTemplate = template.Must(template.New("home").Parse(`
 </header>
 <script src="/js/jquery-1.10.2.js" ></script>
 <script src="/js/bootstrap.min.js" ></script>
+<script src="/js/js-iso8601.js" ></script>
 <script src="/js/accountinfo.js" ></script>
 <script src="/js/mandate-dialog.js" ></script>
 <script src="/js/activity.js" ></script>
 <script src="/js/workers.js" ></script>
-<div class="col-sm-4">
-<h3>Activities</h3>
-<div id="activities"></div>
-</div>
-<div id="workers" class="col-sm-4"><h3>Workers</h3>
-</div>
-<div class="col-sm-4"><h3>Permissions</h3>
-<p class="text-muted">This will show a list of buy and sell mandates granted.
-Not yet implemented.</p>
-</div>
+<script src="/js/mandates.js" ></script>
+<div class="col-sm-4"><h3>Activities</h3><div id="activities"></div></div>
+<div class="col-sm-4"><h3>Workers</h3><div id="workers"></div></div>
+<div class="col-sm-4"><h3>Mandates</h3><div id="mandates"></div></div>
 <div id="mandateModal" class="modal fade">
 <div class="modal-dialog">
 <div class="modal-content">
@@ -112,6 +107,8 @@ setInterval(updateActivities, 500);
 updateActivities();
 setInterval(updateWorkers, 500);
 updateWorkers();
+setInterval(updateMandates, 500);
+updateMandates();
 </script></body>
 </html>
 `))
@@ -209,10 +206,38 @@ func handleGrantMandate(r *http.Request) error {
 	return nil
 }
 
+func handleRevokeMandate(r *http.Request) error {
+	if key, err := strconv.ParseInt(r.FormValue("key"), 10, 64); err != nil {
+		return err
+	} else {
+		client.GetActivityManager().UnregisterMandate(client.ActivityKey(key))
+	}
+	return nil
+}
+
 func handleWorkers(workerManager *client.WorkerManager, w http.ResponseWriter, r *http.Request) {
 	workerStates := workerManager.ListWorkers()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(workerStates); err != nil {
+		panic(err)
+	}
+}
+
+type keyedMandateInfo struct {
+	Key  client.ActivityKey
+	Info *client.MandateInfo
+}
+
+func handleMandates(activityManager *client.ActivityManager, w http.ResponseWriter, r *http.Request) {
+	mandates := activityManager.GetMandates()
+	keyedInfos := make([]keyedMandateInfo, 0, len(mandates))
+	for k, v := range mandates {
+		keyedInfos = append(keyedInfos, keyedMandateInfo{
+			k,
+			v.GetInfo()})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(keyedInfos); err != nil {
 		panic(err)
 	}
 }

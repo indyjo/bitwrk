@@ -96,6 +96,16 @@ func (m *ActivityManager) GetActivities() []Activity {
 	return result
 }
 
+func (m *ActivityManager) GetMandates() map[ActivityKey]*Mandate {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	result := make(map[ActivityKey]*Mandate)
+	for k, v := range m.mandates {
+		result[k] = v
+	}
+	return result
+}
+
 func (k *ActivityKey) Parse(s string) error {
 	if v, err := strconv.ParseInt(s, 10, 64); err != nil {
 		return err

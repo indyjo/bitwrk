@@ -1,3 +1,5 @@
+/* Color style: http://colorschemedesigner.com/#3951YckGrp9Iu */
+
 header {
     background-color: #222;
     color: #888;
@@ -9,7 +11,7 @@ header {
 }
 
 #account-info .available {
-    color: #2d2;
+    color: #ffd7c0;
     float: right;
 }
 
@@ -17,7 +19,7 @@ header {
     font-size: 75%;
 }
 
-div.activity, div.worker {
+div.activity, div.worker, div.mandate {
     border: 1px solid #777;
     border-radius: .3em;
     margin-bottom: 4px;
@@ -26,24 +28,35 @@ div.activity, div.worker {
     overflow: hidden;
 }
 
+.activity .info, .mandate .validuntil, .mandate .tradesleft {
+    font-size: 75%;
+    margin-left: 1em;
+}
+
 div.activity {
-    background-color: #9da;
+    background-color: #d1dcef;
 }
 
 div.worker {
-    background-color: #eee;
+    background-color: #ceefe6;
 }
 
-.activity .type, .key {
+div.mandate {
+    background-color: #e6fad7;
+}
+
+.activity .type, .mandate .type, .key, .tradesleft, .validuntil {
     float: left;
 }
 
 .article {
     text-align: center;
     text-shadow: 0px 1px 2px #fff;
+    margin-left: 1em;
+    margin-right: 1em;
 }
 
-.activity .price {
+.activity .price, .mandate .price {
     float: right;
 }
 
@@ -54,4 +67,8 @@ div.worker {
 
 .closebtn {
     float: right;
+}
+
+.mandate .closebtn {
+    margin-left: 1em;
 }
