@@ -66,16 +66,26 @@ func TestResourceDir(dir, name, version string) error {
 
 func AutoFindResourceDir(name, version string) (string, error) {
 	cmdDir := path.Dir(os.Args[0])
-	for _, dir := range []string{
+	candidates := []string{
+		path.Join(cmdDir, "share/", name),
 		path.Join(cmdDir, "../share/", name),
-		path.Join(cmdDir, "rsc"),
+		path.Join(cmdDir, "rsc/"),
+		path.Join(cmdDir, "resources/"),
 		cmdDir,
-	} {
+	}
+	errors := make([]error, len(candidates))
+
+	for i, dir := range candidates {
 		if err := TestResourceDir(dir, name, version); err != nil {
-			log.Printf("Dismissing resource directory location [%v]: %v", dir, err)
+			errors[i] = err
 		} else {
+			log.Printf("Found resource directory [%v]", dir)
 			return dir, nil
 		}
+	}
+
+	for i, dir := range candidates {
+		log.Printf("No resource directory at location [%v]: %v", dir, errors[i])
 	}
 	return "", ErrNotFoundInSearchPath
 }
