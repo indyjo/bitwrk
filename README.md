@@ -7,7 +7,8 @@ amounts of computing capacity dedicated to mining Bitcoin.
 
 If generating this enormous amount of work for nothing more than a
 simple cryptographic lottery can be lucrative, there must be demand
-for tasks more useful. Let's find out!
+for tasks more useful. Tasks that people are actually willing to pay for.
+Let's find out!
 
 Quick Start Instructions
 ------------------------
@@ -83,42 +84,47 @@ months and currently consists of:
   and all communication is secured with Elliptic-Curve cryptographic
   signatures of the same kind than those that can be generated using
   the original Bitcoin client.
-- A client, also written in Go, that currently contains enough logic
+- A client, also written in Go, that contains all necessary logic
   to perform both sides of a transaction. A browser-based user interface
-  is in the works, but still incomplete. Workers can register and
-  unregister themselves, but there is no UI for managing user accounts yet.
+  enables control of ongoing trades, registered workers and automatic
+  trading mandates.
   The client is meant to act as a proxy, taking tasks from
   local programs and dispatching them to the BitWrk service. For sellers, it
   provides the service to offer local worker programs to the BitWrk
   exchange and to keep them busy.
 - "gorays", a sample application. It's a simple raytracer demonstrating
-  how to *use* BitWrk, and also how to *extend* an existing application to
-  leverage the BitWrk service.
+  how to *use* BitWrk, and also, for developers,  how to *extend* an
+  existing application to leverage the BitWrk service.
 
 In the current phase of development, there is no way to transfer money into
-or out of the BitWrk service. Thus, <strong>no actual money can be made or lost.</strong>
+or out of the BitWrk service. Thus, **no actual money can be made or lost.**
 Every new client account starts with **1 BTC virtual starting capital**.
 
 
 News
 ----
 
-- 2013-11-27: Some progress has been made, mainly on the client side.
+- **2013-12-04:** A lot of progress has been made on the client side. Basic
+  management functionality is now available for trades, workers and mandates.
+  The client identity is no longer randomly generated every time the client
+  is started, but saved on disk. This is a necessary precondition for later
+  being able to link Bitcoin transactions to the account
+- **2013-11-27:** Some progress has been made, mainly on the client side.
   A sample application has been adapted to use BitWrk: See
   https://github.com/indyjo/rays for the Rays raytracer project.
-- 2013-11-15: After a break of two months, development has continued.
+- **2013-11-15:** After a break of two months, development has continued.
   The client now has the ability to not only list activities, but
   also to ask the user for a permission (valid up to a specified number of
   trades or minutes) or to cancel not yet granted activities.
-- 2013-09-01: There is now a simple user interface that shows the account's
+- **2013-09-01:** There is now a simple user interface that shows the account's
   current balance, annd lists currently scheduled activities. It is possible to
   cancel (forbid) activities interactively. There is now a REST API to register
   and unregister workers.
-- 2013-08-16: The client is now able to perform a full transaction. Both
+- **2013-08-16:** The client is now able to perform a full transaction. Both
   buyer and seller side are implemented. There is no mechanism to register
   workers yet, so a dummy worker is registered: The work package is sent to
   http://httpbin.org/post and the result is whatever that page returns.
-- 2013-08-08: The client no longer places a random bid on the server.
+- **2013-08-08:** The client no longer places a random bid on the server.
   Performing a POST to <pre>http://localhost:8081/buy/&lt;articleid&gt;</pre> simulates
   how a buy appears to clients, where the result is just a copy of the
   work data.  A rudimentary in-memory content-addressable file storage
@@ -144,7 +150,6 @@ There are also some command-line options:
 <pre>
 $ ./bitwrk-client --help
 Usage of bitwrk-client:
-  -bitcoinprivkey="random": The private key of the Bitcoin address to use for authentication
   -bitwrkurl="http://bitwrk.appspot.com/": URL to contact the bitwrk service at
   -extaddr="auto": IP address or name this host can be reached under from the internet
   -extport=-1: Port that can be reached from the Internet (-1 disables incoming connections)
@@ -152,17 +157,6 @@ Usage of bitwrk-client:
   -resourcedir="auto": Directory where the bitwrk client loads resources from
 </pre>
 <dl>
-<dt><strong>-bitcoinprivkey</strong></dt>
-<dd>When placing a bid (regardless of whether it's a buy or a sell), the client
-must authenticate to the server. This is done by using the same kind of private
-keys that Bitcoin uses to authenticate a transaction. In fact, every participant
-of a Bitwrk transaction uses a Bitcoin address as his participant ID. Money
-earned by selling work on BitWrk will be transferred (via Bitcoin) back to this
-address.<br />
-By default, a random key is generated. In later versions, the key will be stored
-on disk permanently. It is also possible to pass a key in Wallet Interchange
-Format (WIF), the format used to export and import private keys from and into
-a Bitcoin wallet using <em>dumpprivkey</em> and <em>importprivkey</em> commands.</dd>
 <dt><strong>-bitwrkurl</strong></dt>
 <dd>The URL the client used to connect to the server. This is useful for testing
 locally or for using alternative BitWrk service providers.</dd>
@@ -185,6 +179,36 @@ identifies the article to trade. It must be an article that is traded on the Bit
 server.
 </dl>
 
+Identity Management
+-------------------
+
+Every participant on the BitWrk service is identified by a unique and seemingly random
+combination of numbers and letters, called account id, something like
+**1JtLbmh74Tcb5CZk7eZZBH8z4zg4sjey1i**
+
+This ID serves two distinct purposes:
+ - It is a unique user ID for participants of the BitWrk service.
+ - It is also a valid address for receiving money in the Bitcoin (BTC) currency.
+
+When communicating with the BitWrk service, such as when placing a bid, the client must
+authenticate, i.e. prove that it really *is* the the owner address it *claims* to have.
+
+Then, after some time of selling work on BitWrk, the Money earned will be transferred
+(via Bitcoin) back to this address.
+
+In order to be able to prove the ownership of its account ID, the BitWrk client must
+keep a secret file, called the private key.
+
+On first start, a random private key (and a corresponding BitWrk account ID/Bitcoin address) is
+generated and stored on disk permanently (in a file only readable to the user running the
+BitWrk client: *~/.bitwrk-client/privatekey.wif*). As the key is stored in a format called
+Wallet Interchange Format (WIF), it can be imported into a Bitcoin wallet using the
+*importprivkey* command. This gives the Bitcoin client access to the money sent to that
+Bitcoin address.
+
+**It is very important to have the private key file backed up in some safe place.**
+**It is also very important that neither the private key file, nor the backup be visible
+to others.**
 
 Server
 ------
@@ -202,5 +226,5 @@ of now is not possible, but will be). As a trust-building measure, the
 server's source code is open-sourced, too.
 
 Have fun!
-2013-12-01, Jonas Eschenburg
+2013-12-04, Jonas Eschenburg
 

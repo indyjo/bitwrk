@@ -69,10 +69,10 @@ func (k *KeyPair) GetAddress() string {
 	return k.address
 }
 
-func (k *KeyPair) IsCompressed() string {
-	return k.address
-}
-
 func (k *KeyPair) SignMessage(message string, rand io.Reader) (string, error) {
 	return SignMessage(message, k.ecdsakey, k.compressed, rand)
+}
+
+func (k *KeyPair) GetPrivateKeyWIF() (string, error) {
+	return EncodePrivateKeyWIF(k.privKey, k.compressed)
 }

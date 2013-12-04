@@ -21,7 +21,6 @@ import (
 	"bitwrk/bitcoin"
 	"bitwrk/cafs"
 	"bitwrk/client"
-	"crypto/rand"
 	"flag"
 	"fmt"
 	"html/template"
@@ -37,7 +36,6 @@ import (
 var ExternalAddress string
 var ExternalPort int
 var InternalPort int
-var BitcoinPrivateKeyEncoded string
 var BitcoinIdentity *bitcoin.KeyPair
 var ResourceDir string
 var BitwrkUrl string
@@ -49,9 +47,6 @@ func main() {
 	flags.IntVar(&ExternalPort, "extport", -1,
 		"Port that can be reached from the Internet (-1 disables incoming connections)")
 	flags.IntVar(&InternalPort, "intport", 8081, "Maintenance port for admin interface")
-	flags.StringVar(&BitcoinPrivateKeyEncoded, "bitcoinprivkey",
-		"random",
-		"The private key of the Bitcoin address to use for authentication")
 	flags.StringVar(&ResourceDir, "resourcedir",
 		"auto",
 		"Directory where the bitwrk client loads resources from")
@@ -77,26 +72,7 @@ func main() {
 		}
 	}
 
-	if BitcoinPrivateKeyEncoded == "random" {
-		data := make([]byte, 32)
-		if _, err := rand.Reader.Read(data); err != nil {
-			log.Fatalf("Error generating random key: %v", err)
-			os.Exit(1)
-		}
-		if key, err := bitcoin.FromPrivateKeyRaw(data, true, bitcoin.AddrVersionBitcoin); err != nil {
-			log.Fatalf("Error creating key: %v", err)
-			os.Exit(1)
-		} else {
-			BitcoinIdentity = key
-		}
-	} else {
-		if key, err := bitcoin.FromPrivateKeyWIF(BitcoinPrivateKeyEncoded, bitcoin.AddrVersionBitcoin); err != nil {
-			log.Fatalf("Error creating key: %v", err)
-			os.Exit(1)
-		} else {
-			BitcoinIdentity = key
-		}
-	}
+	BitcoinIdentity = LoadOrCreateIdentity("bitwrk-client", bitcoin.AddrVersionBitcoin)
 
 	if !strings.HasSuffix(BitwrkUrl, "/") {
 		BitwrkUrl = BitwrkUrl + "/"
