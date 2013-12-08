@@ -1,3 +1,6 @@
+**BitWrk on YouTube:** *(2013-12-08)* Stephen Sprinkle from morningbit.com plugged BitWrk on YouTube: Have a look at 
+http://youtu.be/UHY_Y20Fl4E
+
 Bitwrk - A Bitcoin-friendly, anonymous marketplace for computing power
 ======================================================================
 
