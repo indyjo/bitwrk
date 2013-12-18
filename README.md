@@ -74,6 +74,8 @@ guarantees a low entry barrier, especially for potential buyers, provided
 that the success of Bitcoin continues. It also enables registration-less,
 anonymous participation.
 
+If, on the other hand, Bitcoin turns out _not_ to be a good choice, that's not going to be a problem. BitWrk itself does not _depend_ on it. Other currencies and payment methods can be integrated later on.
+
 Status
 ------
 This project has been under heavy development for the last couple of
@@ -220,6 +222,7 @@ Its purpose is to
 - listen for messages from clients updating the transactions
 - enforcing rules by which these transactions must be handled
 - do bookkeeping of the participants' accounts
+
 As a user of BitWrk, you shouldn't need to worry about the server. You need
 to trust it, though, especially if you decide to send money to it (which as
 of now is not possible, but will be). As a trust-building measure, the
