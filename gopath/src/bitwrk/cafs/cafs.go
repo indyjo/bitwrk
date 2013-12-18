@@ -36,7 +36,10 @@ var ErrInvalidState = errors.New("Invalid temporary state")
 type SKey [32]byte
 
 type FileStorage interface {
-	Create() Temporary
+	// Creates a new temporary that can be written into. The info string will stick
+	// with the temporary and also with the file, should it be created, and serves only
+	// informational purposes.
+	Create(info string) Temporary
 	Get(key *SKey) (File, error)
 }
 
@@ -74,6 +77,7 @@ type ramReader struct {
 
 type ramTemporary struct {
 	storage *ramStorage
+	info    string
 	buffer  bytes.Buffer
 	hash    hash.Hash
 	valid   bool
@@ -117,9 +121,10 @@ func (s *ramStorage) Get(key *SKey) (File, error) {
 	return nil, nil // never reached
 }
 
-func (s *ramStorage) Create() Temporary {
+func (s *ramStorage) Create(info string) Temporary {
 	return &ramTemporary{
 		storage: s,
+		info:    info,
 		hash:    sha256.New(),
 		valid:   true,
 		open:    true,
@@ -170,7 +175,7 @@ func (t *ramTemporary) Close() error {
 	t.storage.mutex.Lock()
 	t.storage.files[key] = t.buffer.Bytes()
 	t.storage.mutex.Unlock()
-	log.Printf("Stored key: %v", &key)
+	log.Printf("[%#v] Stored key: %v", t.info, &key)
 	return nil
 }
 
@@ -197,8 +202,8 @@ func (t *ramTemporary) Dispose() {
 	t.open = false
 	t.buffer = bytes.Buffer{}
 	if wasOpen {
-		log.Printf("Canceled temporary: %v", key)
+		log.Printf("[%#v] Canceled", t.info)
 	} else {
-		log.Printf("Temporary disposed: %v", key)
+		log.Printf("[%#v] Disposed", t.info)
 	}
 }

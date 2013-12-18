@@ -95,25 +95,24 @@ func (m *WorkerManager) UnregisterWorker(id string) {
 }
 
 func (s *WorkerState) keepOffering(chStop <-chan int) {
-	log.Printf("Start offering worker %#v", s.Info.Id)
-	defer log.Printf("Stopped offering worker %#v", s.Info.Id)
+	log := bitwrk.Root().Newf("Worker %#v", s.Info.Id)
+	log.Println("Start offering...")
+	defer log.Println("Stopped offering.")
 	for {
 		select {
 		case _ = <-chStop:
 			return
 		default:
-			s.offer()
+			s.offer(log)
 		}
 	}
 }
 
-func (s *WorkerState) offer() {
-	log.Printf("Offering worker %#v", s.Info.Id)
+func (s *WorkerState) offer(log bitwrk.Logger) {
 	if sell, err := s.m.activityManager.NewSell(&s.Info); err != nil {
 		log.Printf("Error creating sell: %v", err)
 	} else {
-		log.Printf("Performing sell")
-		if err = sell.Perform(s.m.receiveManager); err != nil {
+		if err = sell.PerformSell(log.Newf("Sell #%v", sell.GetKey()), s.m.receiveManager); err != nil {
 			log.Printf("Error performing sell: %v", err)
 			time.Sleep(20 * time.Second)
 		}

@@ -307,7 +307,7 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result cafs.File
-	if res, err := buy.GetResult(); err != nil {
+	if res, err := buy.PerformBuy(bitwrk.Root().Newf("Buy #%v", buy.GetKey())); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("Error receiving result from BitWrk network: %v", err)
 		return

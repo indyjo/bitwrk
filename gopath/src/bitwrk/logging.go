@@ -23,12 +23,6 @@ import (
 )
 
 type Logger interface {
-	Fatal(v ...interface{})
-	Fatalf(format string, v ...interface{})
-	Fatalln(v ...interface{})
-	Panic(v ...interface{})
-	Panicf(format string, v ...interface{})
-	Panicln(v ...interface{})
 	Print(v ...interface{})
 	Printf(format string, v ...interface{})
 	Println(v ...interface{})
@@ -38,31 +32,52 @@ type Logger interface {
 
 type logger struct {
 	*log.Logger
+	context string
+}
+
+func (l logger) log(s string) {
+	if l.context == "" {
+		l.Output(3, s)
+	} else {
+		l.Output(3, fmt.Sprint("[", l.context, "] ", s))
+	}
+}
+
+func (l logger) Print(v ...interface{}) {
+	l.log(fmt.Sprint(v...))
+}
+
+func (l logger) Printf(format string, v ...interface{}) {
+	l.log(fmt.Sprintf(format, v...))
+}
+
+func (l logger) Println(v ...interface{}) {
+	l.log(fmt.Sprintln(v...))
 }
 
 func (l logger) New(v ...interface{}) Logger {
 	flags := l.Flags()
-	prefix := l.Prefix()
-	if prefix == "" {
-		prefix = fmt.Sprint(v...)
+	context := l.context
+	if context == "" {
+		context = fmt.Sprint(v...)
 	} else {
-		prefix = fmt.Sprint(prefix, "/", fmt.Sprint(v...))
+		context = fmt.Sprint(context, "/", fmt.Sprint(v...))
 	}
-	return logger{log.New(os.Stdout, prefix, flags)}
+	return logger{log.New(os.Stdout, l.Prefix(), flags), context}
 }
 
 func (l logger) Newf(format string, v ...interface{}) Logger {
 	flags := l.Flags()
-	prefix := l.Prefix()
-	if prefix == "" {
-		prefix = fmt.Sprintf(format, v...)
+	context := l.context
+	if context == "" {
+		context = fmt.Sprintf(format, v...)
 	} else {
-		prefix = fmt.Sprint(prefix, "/", fmt.Sprintf(format, v...))
+		context = fmt.Sprint(context, "/", fmt.Sprintf(format, v...))
 	}
-	return logger{log.New(os.Stdout, prefix, flags)}
+	return logger{log.New(os.Stdout, l.Prefix(), flags), context}
 }
 
-var defaultLogger = logger{log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)}
+var defaultLogger = logger{log.New(os.Stdout, "", log.LstdFlags), ""}
 
 func Root() Logger {
 	return defaultLogger

@@ -22,7 +22,6 @@ import (
 	"bitwrk/cafs"
 	"bitwrk/money"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -84,7 +83,7 @@ func (t *Trade) awaitBid() error {
 	return nil
 }
 
-func (t *Trade) awaitTransaction() error {
+func (t *Trade) awaitTransaction(log bitwrk.Logger) error {
 	lastETag := ""
 	for count := 1; ; count++ {
 		if bid, etag, err := FetchBid(t.bidId, lastETag); err != nil {
@@ -108,7 +107,7 @@ func (t *Trade) awaitTransaction() error {
 	return nil
 }
 
-func (t *Trade) awaitTransactionPhase(phase bitwrk.TxPhase, viaPhases ...bitwrk.TxPhase) error {
+func (t *Trade) awaitTransactionPhase(log bitwrk.Logger, phase bitwrk.TxPhase, viaPhases ...bitwrk.TxPhase) error {
 	log.Printf("Awaiting transaction phase %v...", phase)
 	for count := 1; ; count++ {
 		if tx, etag, err := FetchTx(t.txId, ""); err != nil {
@@ -147,7 +146,7 @@ func (t *Trade) awaitTransactionPhase(phase bitwrk.TxPhase, viaPhases ...bitwrk.
 	return nil
 }
 
-func (t *Trade) waitForTransactionPhase(phase bitwrk.TxPhase, viaPhases ...bitwrk.TxPhase) error {
+func (t *Trade) waitForTransactionPhase(log bitwrk.Logger, phase bitwrk.TxPhase, viaPhases ...bitwrk.TxPhase) error {
 	log.Printf("Waiting for transaction phase %v...", phase)
 	for {
 		t.condition.L.Lock()
@@ -195,7 +194,7 @@ func (t *Trade) waitWhile(f func() bool) {
 }
 
 // Polls the transaction state in a separate go-routine
-func (t *Trade) pollTransaction() {
+func (t *Trade) pollTransaction(log bitwrk.Logger) {
 
 	for count := 1; ; count++ {
 

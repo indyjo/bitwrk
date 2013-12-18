@@ -17,12 +17,14 @@
 package bitwrk
 
 import (
-    "testing"
+	"testing"
 )
 
 func Test_Logger(t *testing.T) {
-    logger := Root()
-    logger.Printf("Test")
-    logger.New("Context").Printf("Test2")
+	logger := Root()
+	logger.Printf("Test")
+	logger2 := logger.New("Context")
+	logger2.Printf("Test2")
+	logger3 := logger2.New("Another Context")
+	logger3.Printf("Test3")
 }
-

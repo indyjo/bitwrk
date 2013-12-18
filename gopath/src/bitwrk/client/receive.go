@@ -34,6 +34,7 @@ type ReceiveManager struct {
 type Endpoint struct {
 	m      *ReceiveManager
 	key    string
+	info   string
 	handle func(http.ResponseWriter, *http.Request)
 }
 
@@ -80,22 +81,22 @@ func (m *ReceiveManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	endpoint.handle(w, r)
 }
 
-func (m *ReceiveManager) NewEndpoint() *Endpoint {
+func (m *ReceiveManager) NewEndpoint(info string) *Endpoint {
 	r := make([]byte, 4)
 	if _, err := rand.Reader.Read(r); err != nil {
 		panic(err)
 	}
 	key := hex.EncodeToString(r)
-	e := &Endpoint{m, key, nil}
+	e := &Endpoint{m, key, info, nil}
 	m.mutex.Lock()
 	m.endpoints[key] = e
 	m.mutex.Unlock()
-	log.Printf("New endpoint: %v", key)
+	log.Printf("[%#v] New endpoint: %v", info, key)
 	return e
 }
 
 func (e *Endpoint) Dispose() {
-	log.Printf("Disposing endpoint: %v", e.key)
+	log.Printf("[%#v] Disposing endpoint: %v", e.info, e.key)
 	e.m.mutex.Lock()
 	delete(e.m.endpoints, e.key)
 	e.m.mutex.Unlock()

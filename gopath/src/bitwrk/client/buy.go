@@ -25,7 +25,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -60,7 +59,7 @@ func (a *BuyActivity) WorkWriter() io.WriteCloser {
 	if a.workTemporary != nil {
 		panic("Temporary requested twice")
 	}
-	a.workTemporary = a.manager.storage.Create()
+	a.workTemporary = a.manager.storage.Create(fmt.Sprintf("Buy #%v: work", a.GetKey()))
 	return buyWorkWriter{a}
 }
 
@@ -88,7 +87,8 @@ func (w buyWorkWriter) Close() error {
 	return nil
 }
 
-func (a *BuyActivity) GetResult() (cafs.File, error) {
+// Manages the complete lifecycle of a buy
+func (a *BuyActivity) PerformBuy(log bitwrk.Logger) (cafs.File, error) {
 	defer a.manager.unregister(a.key)
 	// wait for grant or reject
 	log.Println("Waiting for permission")
@@ -104,7 +104,7 @@ func (a *BuyActivity) GetResult() (cafs.File, error) {
 	}
 	log.Printf("Got bid id: %v", a.bidId)
 
-	if err := a.awaitTransaction(); err != nil {
+	if err := a.awaitTransaction(log); err != nil {
 		return nil, err
 	}
 	log.Printf("Got transaction id: %v", a.txId)
@@ -140,11 +140,11 @@ func (a *BuyActivity) GetResult() (cafs.File, error) {
 		return nil, fmt.Errorf("Error establishing buyer: %v", err)
 	}
 
-	if err := a.awaitTransactionPhase(bitwrk.PhaseTransmitting, bitwrk.PhaseBuyerEstablished); err != nil {
+	if err := a.awaitTransactionPhase(log.New("establishing"), bitwrk.PhaseTransmitting, bitwrk.PhaseBuyerEstablished); err != nil {
 		return nil, fmt.Errorf("Error awaiting TRANSMITTING phase: %v", err)
 	}
 
-	if err := a.transmitWorkAndReceiveEncryptedResult(); err != nil {
+	if err := a.transmitWorkAndReceiveEncryptedResult(log.New("transmitting")); err != nil {
 		return nil, fmt.Errorf("Error transmitting work and receiving encrypted result: %v", err)
 	}
 
@@ -152,7 +152,7 @@ func (a *BuyActivity) GetResult() (cafs.File, error) {
 		return nil, fmt.Errorf("Error signing receipt for encrypted result: %v", err)
 	}
 
-	if err := a.awaitTransactionPhase(bitwrk.PhaseUnverified, bitwrk.PhaseTransmitting, bitwrk.PhaseWorking); err != nil {
+	if err := a.awaitTransactionPhase(log, bitwrk.PhaseUnverified, bitwrk.PhaseTransmitting, bitwrk.PhaseWorking); err != nil {
 		return nil, fmt.Errorf("Error awaiting UNVERIFIED phase: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func (a *BuyActivity) End() {
 	a.condition.Broadcast()
 }
 
-func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult() error {
+func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult(log bitwrk.Logger) error {
 	// Send work to client
 	pipeIn, pipeOut := io.Pipe()
 	mwriter := multipart.NewWriter(pipeOut)
@@ -229,7 +229,7 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult() error {
 		}
 	}
 
-	temp := a.manager.storage.Create()
+	temp := a.manager.storage.Create(fmt.Sprintf("Buy #%v: encrypted result", a.GetKey()))
 	defer temp.Dispose()
 
 	if _, err := io.Copy(temp, response); err != nil {
@@ -248,7 +248,6 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult() error {
 		a.encResultFile = f
 	}
 
-	log.Printf("Got encrypted result: %v", a.encResultFile.Key())
 	return nil
 }
 
@@ -282,7 +281,7 @@ func (a *BuyActivity) decryptResult() error {
 		return err
 	}
 
-	temp := a.manager.GetStorage().Create()
+	temp := a.manager.GetStorage().Create(fmt.Sprintf("Buy #%v: result", a.GetKey()))
 	defer temp.Dispose()
 
 	encrypted := a.encResultFile.Open()

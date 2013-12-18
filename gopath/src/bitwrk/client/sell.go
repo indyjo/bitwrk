@@ -28,7 +28,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"sync"
@@ -67,7 +66,8 @@ func (m *ActivityManager) NewSell(info *WorkerInfo) (*SellActivity, error) {
 	return result, nil
 }
 
-func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
+// Manages the complete lifecycle of a sell
+func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveManager) error {
 	defer a.manager.unregister(a.key)
 	// wait for grant or reject
 	log.Println("Waiting for permission")
@@ -78,7 +78,7 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 	}
 	log.Printf("Got permission. Price: %v", a.price)
 
-	endpoint := receiveManager.NewEndpoint()
+	endpoint := receiveManager.NewEndpoint(fmt.Sprintf("Sell #%v", a.GetKey()))
 	defer endpoint.Dispose()
 
 	if err := a.awaitBid(); err != nil {
@@ -86,7 +86,7 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 	}
 	log.Printf("Got bid id: %v", a.bidId)
 
-	if err := a.awaitTransaction(); err != nil {
+	if err := a.awaitTransaction(log); err != nil {
 		return fmt.Errorf("Error awaiting transaction: %v", err)
 	}
 	log.Printf("Got transaction id: %v", a.txId)
@@ -103,12 +103,12 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 
 	// Start polling for state changes in background
 	go func() {
-		a.pollTransaction()
+		a.pollTransaction(log)
 		log.Printf("Transaction polling has stopped.")
 	}()
 
 	var backchannel *backchannel
-	if b, err := a.receiveWorkData(endpoint); err != nil {
+	if b, err := a.receiveWorkData(log.New("receiveWorkData"), endpoint); err != nil {
 		return fmt.Errorf("Error receiving work data: %v", err)
 	} else {
 		backchannel = b
@@ -122,7 +122,7 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 
 	log.Println("Awaiting receipt...")
 	endpoint.SetHandler(func(w http.ResponseWriter, r *http.Request) {
-		a.handleReceipt(w, r)
+		a.handleReceipt(log.New("handleReceipt"), w, r)
 	})
 
 	if err := a.dispatchWorkAndSaveEncryptedResult(backchannel.workFile); err != nil {
@@ -147,7 +147,7 @@ func (a *SellActivity) Perform(receiveManager *ReceiveManager) error {
 
 	backchannel.release <- 0
 
-	a.waitForTransactionPhase(bitwrk.PhaseFinished, bitwrk.PhaseWorking, bitwrk.PhaseUnverified)
+	a.waitForTransactionPhase(log, bitwrk.PhaseFinished, bitwrk.PhaseWorking, bitwrk.PhaseUnverified)
 	return nil
 }
 
@@ -164,7 +164,7 @@ func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(workFile cafs.File) er
 		return fmt.Errorf("Worker returned status: %v", resp.Status)
 	}
 
-	temp := a.manager.storage.Create()
+	temp := a.manager.storage.Create(fmt.Sprintf("Sell #%v: work", a.GetKey()))
 	defer temp.Dispose()
 
 	// Use AES-256 to encrypt the result
@@ -220,13 +220,13 @@ type backchannel struct {
 
 // Blocks until work data has been received. Returns a back channel to the
 // buyer. The back channel must be released by the caller.
-func (a *SellActivity) receiveWorkData(endpoint *Endpoint) (*backchannel, error) {
+func (a *SellActivity) receiveWorkData(log bitwrk.Logger, endpoint *Endpoint) (*backchannel, error) {
 	result := backchannel{
 		ready:   false,
 		release: make(chan int),
 	}
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		a.handleRequest(w, r, &result)
+		a.handleRequest(log, w, r, &result)
 	}
 
 	endpoint.SetHandler(handler)
@@ -259,7 +259,7 @@ func (a *SellActivity) receiveWorkData(endpoint *Endpoint) (*backchannel, error)
 // Handles the incoming work request, up to the point where the work package
 // has been identified as legit. Then, the controlling goroutine takes over
 // while the request handler waits for the back-channel to be released.
-func (a *SellActivity) handleRequest(w http.ResponseWriter, r *http.Request, backchannel *backchannel) {
+func (a *SellActivity) handleRequest(log bitwrk.Logger, w http.ResponseWriter, r *http.Request, backchannel *backchannel) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -276,7 +276,7 @@ func (a *SellActivity) handleRequest(w http.ResponseWriter, r *http.Request, bac
 		mreader = _reader
 	}
 
-	temp := a.manager.GetStorage().Create()
+	temp := a.manager.GetStorage().Create(fmt.Sprintf("Sell #%v: work", a.GetKey()))
 	defer temp.Dispose()
 
 	var workFile cafs.File
@@ -395,7 +395,7 @@ func (a *SellActivity) handleRequest(w http.ResponseWriter, r *http.Request, bac
 	<-backchannel.release
 }
 
-func (a *SellActivity) handleReceipt(w http.ResponseWriter, r *http.Request) {
+func (a *SellActivity) handleReceipt(log bitwrk.Logger, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
