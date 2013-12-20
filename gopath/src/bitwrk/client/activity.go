@@ -74,7 +74,7 @@ var activityManager = ActivityManager{
 	make(map[ActivityKey]Activity),
 	make(map[ActivityKey]*Mandate),
 	1,
-	cafs.NewRamStorage(),
+	cafs.NewRamStorage(64*1024*1024), // 64 MByte
 }
 
 func GetActivityManager() *ActivityManager {

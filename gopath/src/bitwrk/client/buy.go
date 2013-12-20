@@ -34,8 +34,6 @@ import (
 
 type BuyActivity struct {
 	Trade
-
-	workTemporary cafs.Temporary
 }
 
 func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error) {
@@ -56,32 +54,36 @@ func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error)
 }
 
 func (a *BuyActivity) WorkWriter() io.WriteCloser {
-	if a.workTemporary != nil {
-		panic("Temporary requested twice")
+	return buyWorkWriter{
+		a,
+		a.manager.storage.Create(fmt.Sprintf("Buy #%v: work", a.GetKey())),
 	}
-	a.workTemporary = a.manager.storage.Create(fmt.Sprintf("Buy #%v: work", a.GetKey()))
-	return buyWorkWriter{a}
 }
 
 type buyWorkWriter struct {
-	a *BuyActivity
+	a             *BuyActivity
+	workTemporary cafs.Temporary
 }
 
 func (w buyWorkWriter) Write(b []byte) (n int, err error) {
-	n, err = w.a.workTemporary.Write(b)
+	n, err = w.workTemporary.Write(b)
 	return
 }
 
 func (w buyWorkWriter) Close() error {
-	a := w.a
-	if err := a.workTemporary.Close(); err != nil {
+	defer w.workTemporary.Dispose()
+	if err := w.workTemporary.Close(); err != nil {
 		return err
 	}
 
-	if file, err := a.workTemporary.File(); err != nil {
+	if w.a.workFile != nil {
+		panic("Work file already received")
+	}
+	
+	if file, err := w.workTemporary.File(); err != nil {
 		return err
 	} else {
-		a.workFile = file
+		w.a.workFile = file
 	}
 
 	return nil
@@ -172,10 +174,6 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger) (cafs.File, error) {
 func (a *BuyActivity) End() {
 	a.condition.L.Lock()
 	defer a.condition.L.Unlock()
-	if a.workTemporary != nil {
-		a.workTemporary.Dispose()
-		a.workTemporary = nil
-	}
 	if !a.accepted && !a.rejected {
 		a.rejected = true
 	}

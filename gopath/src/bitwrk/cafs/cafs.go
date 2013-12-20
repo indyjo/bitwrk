@@ -32,6 +32,7 @@ import (
 var ErrNotFound = errors.New("Not found")
 var ErrStillOpen = errors.New("Temporary still open")
 var ErrInvalidState = errors.New("Invalid temporary state")
+var ErrNotEnoughSpace = errors.New("Not enough space")
 
 type SKey [32]byte
 
@@ -46,6 +47,7 @@ type FileStorage interface {
 type File interface {
 	Key() SKey
 	Open() io.ReadCloser
+	Size() int64
 }
 
 type Temporary interface {
@@ -60,14 +62,23 @@ type Temporary interface {
 }
 
 type ramStorage struct {
-	mutex sync.RWMutex
-	files map[SKey][]byte
+	mutex               sync.Mutex
+	entries             map[SKey]*ramEntry
+	bytesUsed, bytesMax int64
+	youngest, oldest    SKey
 }
 
 type ramFile struct {
 	storage *ramStorage
 	key     SKey
-	data    []byte
+	entry   *ramEntry
+}
+
+type ramEntry struct {
+	// Keys to the next older and next younger entry
+	younger, older SKey
+	info           string
+	data           []byte
 }
 
 type ramReader struct {
@@ -84,9 +95,10 @@ type ramTemporary struct {
 	open    bool
 }
 
-func NewRamStorage() FileStorage {
+func NewRamStorage(maxBytes int64) FileStorage {
 	return &ramStorage{
-		files: make(map[SKey][]byte),
+		entries:  make(map[SKey]*ramEntry),
+		bytesMax: maxBytes,
 	}
 }
 
@@ -110,11 +122,15 @@ func ParseKey(s string) (*SKey, error) {
 }
 
 func (s *ramStorage) Get(key *SKey) (File, error) {
-	s.mutex.RLock()
-	data, ok := s.files[*key]
-	s.mutex.RUnlock()
+	s.mutex.Lock()
+	entry, ok := s.entries[*key]
 	if ok {
-		return &ramFile{s, *key, data}, nil
+		s.removeFromChain(key, entry)
+		s.insertIntoChain(key, entry)
+	}
+	s.mutex.Unlock()
+	if ok {
+		return &ramFile{s, *key, entry}, nil
 	} else {
 		return nil, ErrNotFound
 	}
@@ -131,12 +147,67 @@ func (s *ramStorage) Create(info string) Temporary {
 	}
 }
 
+func (s *ramStorage) reserveBytes(info string, numBytes int64) error {
+	if numBytes > s.bytesMax {
+		return ErrNotEnoughSpace
+	}
+	bytesFree := s.bytesMax - s.bytesUsed
+	if bytesFree < numBytes {
+		log.Printf("[%v] Need to free %v more bytes of CAFS space to store object of size %v", info, numBytes-bytesFree, numBytes)
+	}
+	for bytesFree < numBytes {
+		oldestKey := s.oldest
+		oldestEntry := s.entries[s.oldest]
+		if oldestEntry == nil {
+			log.Panic("No more elements left while freeing CAFS space")
+		}
+		delete(s.entries, s.oldest)
+		s.removeFromChain(&s.oldest, oldestEntry)
+		oldestSize := int64(len(oldestEntry.data))
+		s.bytesUsed -= oldestSize
+		bytesFree += oldestSize
+		log.Printf("[%v]   Deleted object of size %v bytes: [%v] %v", info, oldestSize, oldestEntry.info, oldestKey)
+	}
+	return nil
+}
+
+func (s *ramStorage) removeFromChain(key *SKey, entry *ramEntry) {
+	if youngerEntry := s.entries[entry.younger]; youngerEntry != nil {
+		youngerEntry.older = entry.older
+	} else if s.youngest == *key {
+		s.youngest = entry.older
+	}
+	if olderEntry := s.entries[entry.older]; olderEntry != nil {
+		olderEntry.younger = entry.younger
+	} else if s.oldest == *key {
+		s.oldest = entry.younger
+	}
+	// clear outgoing links
+	entry.younger, entry.older = SKey{}, SKey{}
+}
+
+func (s *ramStorage) insertIntoChain(key *SKey, entry *ramEntry) {
+	entry.older = s.youngest
+	if youngestEntry := s.entries[s.youngest]; youngestEntry != nil {
+		// chain former youngest entry to new one
+		youngestEntry.younger = *key
+	} else {
+		// empty map, new entry will also be oldest
+		s.oldest = *key
+	}
+	s.youngest = *key
+}
+
 func (f *ramFile) Key() SKey {
 	return f.key
 }
 
 func (f *ramFile) Open() io.ReadCloser {
-	return &ramReader{f.data, 0}
+	return &ramReader{f.entry.data, 0}
+}
+
+func (f *ramFile) Size() int64 {
+	return int64(len(f.entry.data))
 }
 
 func (r *ramReader) Read(b []byte) (n int, err error) {
@@ -173,9 +244,32 @@ func (t *ramTemporary) Close() error {
 	t.hash.Sum(key[:0])
 
 	t.storage.mutex.Lock()
-	t.storage.files[key] = t.buffer.Bytes()
-	t.storage.mutex.Unlock()
-	log.Printf("[%#v] Stored key: %v", t.info, &key)
+	{
+		defer t.storage.mutex.Unlock()
+
+		// Reserve the necessary space for storing the object
+		if err := t.storage.reserveBytes(t.info, int64(t.buffer.Len())); err != nil {
+			return err
+		}
+
+		// Detect if we're re-writing the same data (or even handle a hash collision)
+		var newEntry *ramEntry
+		if oldEntry := t.storage.entries[key]; oldEntry != nil {
+			log.Printf("[%v] Overwriting key: %v [%v]", t.info, &key, oldEntry.info)
+			t.storage.removeFromChain(&key, oldEntry)
+			t.storage.bytesUsed -= int64(len(oldEntry.data))
+			// re-use old entry
+			newEntry = oldEntry
+		} else {
+			newEntry = new(ramEntry)
+			t.storage.entries[key] = newEntry
+		}
+		newEntry.data = t.buffer.Bytes()
+		newEntry.info = t.info
+		t.storage.bytesUsed += int64(len(newEntry.data))
+		t.storage.insertIntoChain(&key, newEntry)
+	}
+	log.Printf("[%v] Stored key: %v", t.info, &key)
 	return nil
 }
 
@@ -202,8 +296,8 @@ func (t *ramTemporary) Dispose() {
 	t.open = false
 	t.buffer = bytes.Buffer{}
 	if wasOpen {
-		log.Printf("[%#v] Canceled", t.info)
+		log.Printf("[%v] Temporary canceled", t.info)
 	} else {
-		log.Printf("[%#v] Disposed", t.info)
+		log.Printf("[%v] Temporary disposed", t.info)
 	}
 }
