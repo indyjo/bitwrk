@@ -331,8 +331,10 @@ func updateTransaction(c appengine.Context, r *http.Request, txId string, txKey 
 	// no need for txid in values anymore
 	delete(values, "txid")
 
-	if err := db.UpdateTransaction(c, txKey, now, address, values, document, signature); err != nil {
+	if tx, err := db.UpdateTransaction(c, txKey, now, address, values, document, signature); err != nil {
 		return err
+	} else {
+		addRetireTransactionTask(c, txId, tx)
 	}
 
 	return nil

@@ -69,7 +69,11 @@ func handleRetireTransaction(w http.ResponseWriter, r *http.Request) {
 	keyString := r.FormValue("tx")
 	key := mustDecodeKey(keyString)
 	c.Infof("Retiring transaction %v (%v)", keyString, key)
-	if err := db.RetireTransaction(c, key); err != nil {
+	if err := db.RetireTransaction(c, key); err == db.ErrTransactionTooYoung {
+		c.Infof("Transaction is too young to be retired")
+	} else if err == db.ErrTransactionAlreadyRetired {
+		c.Infof("Transaction has already been retired")
+	} else if err != nil {
 		c.Warningf("Error retiring transaction: %v", err)
 		http.Error(w, "Error retiring transaction", http.StatusInternalServerError)
 	}
@@ -96,10 +100,11 @@ func addRetireTransactionTask(c appengine.Context, key string, tx *bitwrk.Transa
 		"tx": {key},
 	})
 	task.ETA = tx.Timeout
-	task.Name = "retire-tx-" + key
+	task.Name = fmt.Sprintf("retire-tx-%v-%v", key, tx.Phase)
 	task, err := taskqueue.Add(c, task, getQueue(string(tx.Article)))
-	c.Infof("Scheduled: %v - %v", task.Name, task.ETA)
-	if err != nil {
+	if err == nil {
+		c.Infof("Scheduled: %v - %v", task.Name, task.ETA)
+	} else {
 		c.Warningf(" -> %v", err)
 	}
 }

@@ -338,6 +338,32 @@ var phaseTransitionRules = []phaseTransitionRule{
 			{PhaseUnverified, PhaseFinished}}},
 }
 
+// Function that is executed on a transaction upon arrival at a specific phase.
+// No error is returned, as this function is executed after the phase has been reached.
+// It may not fail.
+type phaseArrivalFunc func(tx *Transaction, now time.Time)
+
+// Returns an arrival function that grants a specific amount of time
+func grantTime(t time.Duration) phaseArrivalFunc {
+	return func(tx *Transaction, _ time.Time) {
+		tx.Timeout = tx.Timeout.Add(t)
+	}
+}
+
+func retireNow(tx *Transaction, now time.Time) {
+	tx.Timeout = now
+}
+
+// What to do on arrival at specific transaction phases
+var phaseArrivalFuncs = map[TxPhase]phaseArrivalFunc{
+	PhaseTransmitting:   grantTime(2 * time.Minute),
+	PhaseWorking:        grantTime(5 * time.Minute),
+	PhaseUnverified:     grantTime(5 * time.Minute),
+	PhaseFinished:       retireNow,
+	PhaseWorkDisputed:   grantTime(1 * time.Hour),
+	PhaseResultDisputed: grantTime(1 * time.Hour),
+}
+
 func (tx *Transaction) findMatchingRule(address string, arguments map[string]string) *phaseTransitionRule {
 rules:
 	for _, rule := range phaseTransitionRules {
@@ -417,9 +443,17 @@ func (tx *Transaction) SendMessage(now time.Time, address string, arguments map[
 		return
 	}
 
-	result.Accepted = true
 	tx.Phase = transition.postPhase
 	tx.Revision += 1
+	result.Accepted = true
+
+	// Call the phase arrival function, if any
+	if result.PostPhase != result.PrePhase {
+		arrivalFunc := phaseArrivalFuncs[result.PostPhase]
+		if arrivalFunc != nil {
+			arrivalFunc(tx, now)
+		}
+	}
 
 	return
 }
@@ -531,7 +565,7 @@ func NewTransaction(now time.Time, newKey, oldKey string, newBid, oldBid *Bid) *
 		Price:   oldBid.Price,
 		Article: oldBid.Article,
 		Matched: now,
-		Timeout: now.Add(300 * time.Second),
+		Timeout: now.Add(60 * time.Second),
 		State:   StateActive,
 	}
 
@@ -580,12 +614,22 @@ func (tx *Transaction) Book(dao CachedAccountingDao, buyerBid *Bid) error {
 		money.Money{Currency: tx.Price.Currency, Amount: 0})
 }
 
+var ErrTooYoung = fmt.Errorf("This transaction is too young to be retired")
+var ErrAlreadyRetired = fmt.Errorf("Thid transaction has already been retired")
+
+// Retires the transaction and performs the necessary accounting steps.
+// Returns ErrTooYoung if the transaction is too young for retirement.
+// Returns ErrAlreadyRetired if the transaction has already been retired.
 func (tx *Transaction) Retire(dao AccountingDao, now time.Time) error {
-	if tx.State != StateActive {
-		panic("Wrong transaction state")
-	}
 	if tx.Price.Currency != tx.Fee.Currency {
 		panic("Inconsistent currencies")
+	}
+
+	if tx.State != StateActive {
+		return ErrAlreadyRetired
+	}
+	if tx.Timeout.After(now) {
+		return ErrTooYoung
 	}
 
 	var err error

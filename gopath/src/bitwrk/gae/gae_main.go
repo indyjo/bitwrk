@@ -78,6 +78,8 @@ func GetBid(c appengine.Context, bidId string) (bid *Bid, err error) {
 
 var ErrLimitReached = fmt.Errorf("Limit of objects reached")
 var ErrElementsSkipped = fmt.Errorf("Some elements were skipped")
+var ErrTransactionTooYoung = fmt.Errorf("Transcation is too young to be retired")
+var ErrTransactionAlreadyRetired = fmt.Errorf("Transaction has already been retired")
 
 // Transactional function to enqueue a bid, while keeping accounts in balance
 func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
@@ -166,6 +168,10 @@ func RetireBid(c appengine.Context, key *datastore.Key) error {
 // Transactions in phase FINISHED will cause the price to be credited on the seller's
 // account, and the fee to be deducted.
 // All other phases will lead to price and fee being reimbursed to the buyer.
+// Returns ErrTransactionTooYoung if the transaction has not passed its timout at the
+// time of the call.
+// Returns ErrTransactionAlreadyRetired if the transaction has already been retired at
+// the time of the call.
 func RetireTransaction(c appengine.Context, key *datastore.Key) error {
 	f := func(c appengine.Context) error {
 		now := time.Now()
@@ -175,7 +181,11 @@ func RetireTransaction(c appengine.Context, key *datastore.Key) error {
 			return err
 		}
 
-		if err := tx.Retire(dao, now); err != nil {
+		if err := tx.Retire(dao, now); err == ErrTooYoung {
+			return ErrTransactionTooYoung
+		} else if err == ErrAlreadyRetired {
+			return ErrTransactionAlreadyRetired
+		} else if err != nil {
 			return err
 		}
 
@@ -186,11 +196,7 @@ func RetireTransaction(c appengine.Context, key *datastore.Key) error {
 		return dao.Flush()
 	}
 
-	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
-		return err
-	}
-
-	return nil
+	return datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true})
 }
 
 // Transactional function called by queue handler.
@@ -328,17 +334,23 @@ func GetTransactionMessages(c appengine.Context, key *datastore.Key) ([]Tmessage
 	return messages, nil
 }
 
+// Sends a message (defined by its argument values) to the transaction and performs
+// the corresponding changes atomically.
+// Returns the updated transaction on success.
 func UpdateTransaction(c appengine.Context, txKey *datastore.Key,
 	now time.Time,
 	address string,
 	values map[string]string,
-	document, signature string) error {
+	document, signature string) (*Transaction, error) {
+
+	var txResult *Transaction
 
 	f := func(c appengine.Context) error {
 		tx, err := GetTransaction(c, txKey)
 		if err != nil {
 			return err
 		}
+		txResult = tx
 
 		message := tx.SendMessage(now, address, values)
 
@@ -363,8 +375,8 @@ func UpdateTransaction(c appengine.Context, txKey *datastore.Key,
 	}
 
 	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return txResult, nil
 }
