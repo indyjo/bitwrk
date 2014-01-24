@@ -79,7 +79,7 @@ func (w buyWorkWriter) Close() error {
 	if w.a.workFile != nil {
 		panic("Work file already received")
 	}
-	
+
 	if file, err := w.workTemporary.File(); err != nil {
 		return err
 	} else {
@@ -127,6 +127,7 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger) (cafs.File, error) {
 		return nil, err
 	}
 	a.buyerSecret = &secret
+	log.Printf("Computed buyer's secret.")
 
 	// Get work hash
 	var workHash, workSecretHash bitwrk.Thash
@@ -191,12 +192,14 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult(log bitwrk.Logger) e
 			return
 		}
 		work := a.workFile.Open()
+		log.Printf("Sending work data to seller [%v].", a.tx.WorkerURL)
 		_, err = io.Copy(part, work)
 		work.Close()
 		if err != nil {
 			pipeOut.CloseWithError(err)
 			return
 		}
+		log.Printf("Sending buyer's secret to seller.")
 		err = mwriter.WriteField("buyersecret", a.buyerSecret.String())
 		if err != nil {
 			pipeOut.CloseWithError(err)
