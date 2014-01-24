@@ -69,7 +69,14 @@ func (t *Trade) awaitPermission() error {
 	return ErrNoPermission
 }
 
+var bidMutex sync.Mutex
+
 func (t *Trade) awaitBid() error {
+	bidMutex.Lock()
+	defer func() {
+		bidMutex.Unlock()
+	}()
+
 	rawBid := bitwrk.RawBid{
 		t.bidType,
 		t.article,
