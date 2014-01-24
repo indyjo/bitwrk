@@ -18,17 +18,36 @@ bl_info = {
     "name": "BitWrk Distributed Rendering",
     "description": "Support for distributed rendering using BitWrk, a marketplace for computing power",
     "author": "Jonas Eschenburg",
-    "version": (0, 0, 0),
+    "version": (0, 0, 1),
     "blender": (2, 69, 0),
     "category": "Render",
 }
 
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory)
 
-import bpy, os, http.client, struct, tempfile, urllib.request
-from bpy.props import StringProperty, IntProperty, PointerProperty
+import bpy, os, sys, http.client, select, struct, tempfile, urllib.request, colorsys, math
+from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty
+
+# used by BitWrkSettings PropertyGroup
+def set_complexity(self, value):
+    self['complexity'] = value
+    self['article_id'] = "net.bitwrk/blender/0/2.69/{}".format(['2G','8G','32G'][value])
+    
+def get_max_cost(settings):
+    if settings.complexity == '2G':
+        return  2*1024*1024*1024
+    elif settings.complexity == '8G':
+        return  8*1024*1024*1024
+    elif settings.complexity == '32G':
+        return  32*1024*1024*1024
+    else:
+        print(dir(settings), settings)
+        print(settings.complexity)
+        raise RuntimeError()
+
 
 class BitWrkSettings(bpy.types.PropertyGroup):
+    
     @classmethod
     def register(settings):
         settings.bitwrk_client_host = StringProperty(
@@ -45,13 +64,29 @@ class BitWrkSettings(bpy.types.PropertyGroup):
         settings.article_id = StringProperty(
             name="Article Id",
             description="Identifies Blender jobs on the BitWrk service",
-            default="foobar")
+            default="net.bitwrk/blender/0/2.69/8G")
+        settings.complexity = EnumProperty(
+            name="Complexity",
+            description="Defines the maximum allowed computation complexity for each rendered tile",
+            items=[
+                ('2G',  " 2 Giga-rays", ""),
+                ('8G',  " 8 Giga-rays", ""),
+                ('32G', "32 Giga-rays", "")],
+            default='8G',
+            set=set_complexity,
+            get=lambda value: value['complexity'])
+        settings.concurrency = IntProperty(
+            name="Concurrency",
+            description="Maximum number of BitWrk trades active in parallel",
+            default=4,
+            min=1,
+            max=256)
         
         bpy.types.Scene.bitwrk_settings = PointerProperty(type=BitWrkSettings, name="BitWrk Settings", description="Settings for using the BitWrk service")
 
     @classmethod
     def unregister(cls):
-        del bpy.types.Scene.network_render
+        del bpy.types.Scene.bitwrk_settings
 
 
 class RENDER_PT_bitwrk_settings(bpy.types.Panel):
@@ -73,9 +108,12 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
         row.prop(settings, "bitwrk_client_host", text="")
         row.prop(settings, "bitwrk_client_port", text="")
         
+        self.layout.prop(settings, "complexity")
         row = self.layout.row()
         row.prop(settings, "article_id")
         row.enabled = False
+        
+        self.layout.prop(settings, "concurrency")
 
 class Chunked:
     """Wraps individual write()s into http chunked encoding."""
@@ -133,6 +171,103 @@ class Tagged:
     def writeInt(self, tag, value):
         self.writeData(tag, struct.pack(">i", value))
         
+class Tile:
+    def __init__(self, frame, minx, miny, resx, resy, color):
+        self.conn = None
+        self.result = None
+        self.frame = frame
+        self.minx = minx
+        self.miny = miny
+        self.resx = resx
+        self.resy = resy
+        self.color = color
+        self.success = False
+        
+    def dispatch(self, settings, filename, engine):
+        # draw rect in preview color
+        tile = engine.begin_result(self.minx, self.miny, self.resx, self.resy)
+        tile.layers[0].rect = [self.color] * (self.resx*self.resy)
+        engine.end_result(tile)
+        
+        self.result = engine.begin_result(self.minx, self.miny, self.resx, self.resy)
+        self.conn = http.client.HTTPConnection(
+            settings.bitwrk_client_host, settings.bitwrk_client_port,
+            strict=True, timeout=600)
+        try:
+            self.conn.putrequest("POST", "/buy/" + settings.article_id)
+            self.conn.putheader('Transfer-Encoding', 'chunked')
+            self.conn.endheaders()
+            chunked = Chunked(self.conn)
+            try:
+                tagged = Tagged(chunked)
+                tagged.writeInt('xmin', self.minx)
+                tagged.writeInt('ymin', self.miny)
+                tagged.writeInt('xmax', self.minx+self.resx-1)
+                tagged.writeInt('ymax', self.miny+self.resy-1)
+                tagged.writeInt('fram', self.frame)
+                with open(filename, "rb") as file:
+                    tagged.writeFile('blen', file)
+            finally:
+                chunked.close()
+        except:
+            print("Exception in dispatch:", sys.exc_info())
+            engine.report({'ERROR'}, "Exception in dispatch: {}".format(sys.exc_info()))
+            self.conn.close()
+            self.conn = None
+            self.result.layers[0].rect = [[1,0,0,1]] * (self.resx*self.resy)
+            engine.end_result(self.result)
+            self.result = None
+        
+    def collect(self, settings, engine):
+        if self.conn is None:
+            return
+        try:
+            resp = self.conn.getresponse()
+            try:
+                if resp.status == 303:
+                    print("Fetching result from", resp.getheader("Location"))
+                    location = resp.getheader("Location")
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        filename = os.path.join(tmpdir, "result.exr")
+                        with open(filename, "wb") as tmpfile,\
+                            urllib.request.urlopen("http://{}:{}{}".format(
+                                settings.bitwrk_client_host,
+                                settings.bitwrk_client_port,
+                                location)) as response:
+                            data = response.read(32768)
+                            while len(data) > 0:
+                                tmpfile.write(data)
+                                data = response.read(32768)
+                        self.result.layers[0].load_from_file(filename)
+                        self.success = True
+                else:
+                    message = resp.read(1024).decode('ascii')
+                    raise RuntimeError("Response status is {}, message was: {}".format(resp.status, message))
+            finally:
+                resp.close()
+            engine.end_result(self.result)
+        except:
+            print("Exception in collect:", sys.exc_info())
+            engine.report({'WARNING'}, "Exception in collect: {}".format(sys.exc_info()))
+            self.result.layers[0].rect = [[1,0,0,1]] * (self.resx*self.resy)
+            engine.end_result(self.result)
+            self.result = None
+        finally:
+            self.conn.close()
+            self.conn = None
+            
+    def fileno(self):
+        return self.conn.sock.fileno()
+        
+    def cancel(self):
+        try:
+            if self.conn is not None:
+                self.conn.close()
+        except:
+            pass
+        finally:
+            self.conn = None
+
 
 class BitWrkRenderEngine(bpy.types.RenderEngine):
     """BitWrk Rendering Engine"""
@@ -149,52 +284,79 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
             raise RuntimeError("Current file path not defined\nSave your file before sending a job")
         bpy.ops.wm.save_mainfile(filepath=filename, check_existing=False)
         
+        settings = scene.bitwrk_settings
         percentage = max(1, min(100, scene.render.resolution_percentage))
         resx = int(scene.render.resolution_x * percentage / 100)
         resy = int(scene.render.resolution_y * percentage / 100)
-        result = self.begin_result(0,0,resx,resy)
-        settings = scene.bitwrk_settings
+        cost_per_pixel = scene.cycles.max_bounces * scene.cycles.samples
         
-        conn = http.client.HTTPConnection(settings.bitwrk_client_host, settings.bitwrk_client_port, strict=True, timeout=600)
-        try:
-            conn.putrequest("POST", "/buy/" + settings.article_id)
-            conn.putheader('Transfer-Encoding', 'chunked')
-            conn.endheaders()
-            chunked = Chunked(conn)
-            try:
-                tagged = Tagged(chunked)
-                tagged.writeInt('xmin', 0)
-                tagged.writeInt('ymin', 0)
-                tagged.writeInt('xmax', resx-1)
-                tagged.writeInt('ymax', resy-1)
-                tagged.writeInt('fram', scene.frame_current)
-                with open(filename, "rb") as file:
-                    tagged.writeFile('blen', file)
-            finally:
-                chunked.close()
+        max_pixels_per_tile = int(math.floor(get_max_cost(settings) / cost_per_pixel))
+        tiles = self._makeTiles(settings, scene.frame_current, 0, 0, resx, resy, max_pixels_per_tile)
+        
+        num_active = 0
+        while not self.test_break():        
+        
+            remaining = filter(lambda tile: not tile.success, tiles)
+            if not remaining:
+                self.report({'INFO'}, "Successfully rendered {} tiles on BitWrk.".format(len(tiles)))
+                break
+                
+            # Dispatch some unfinished tiless
+            for tile in remaining:
+                if tile.conn is None and num_active < settings.concurrency:
+                    tile.dispatch(settings, filename, self)
+                    num_active += 1
             
-            print("Request sent")
-            resp = conn.getresponse()
-            if resp.status == 303:
-                print("Fetching result from", resp.getheader("Location"))
-                location = resp.getheader("Location")
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    filename = os.path.join(tmpdir, "result.exr")
-                    with open(filename, "wb") as tmpfile,\
-                        urllib.request.urlopen("http://{}:{}{}".format(
-                            settings.bitwrk_client_host,
-                            settings.bitwrk_client_port,
-                            location)) as response:
-                        data = response.read(32768)
-                        while len(data) > 0:
-                            tmpfile.write(data)
-                            data = response.read(32768)
-                    result.layers[0].load_from_file(filename)
-        finally:
-            conn.close()
-           
-        self.end_result(result)
+            # Poll from all tiles currently active
+            active = filter(lambda tile: tile.conn is not None, tiles)
+            rlist, wlist, xlist = select.select(active, [], active, 2.0)
+            
+            # Collect from all tiles where data has arrived
+            for list in rlist, xlist:
+                for tile in list:
+                    if tile.conn is not None:
+                        tile.collect(settings, self)
+                        # collect has either failed or not. In any case, the tile is
+                        # no longer active.
+                        num_active -= 1
+            
+            # Report status
+            successful = 0
+            for tile in tiles:
+                if tile.success:
+                    successful += 1
+            self.update_progress(successful / len(tiles))
+        if self.test_break():
+            for tile in filter(lambda tile: tile.conn is not None, tiles):
+                tile.cancel()
     
+    angle = 0.0
+    @classmethod
+    def _getcolor(cls):
+        cls.angle += 0.61803399
+        if cls.angle >= 1:
+            cls.angle -= 1
+        return colorsys.hsv_to_rgb(cls.angle, 0.5, 0.2)
+        
+        
+    
+    def _makeTiles(self, settings, frame, minx, miny, resx, resy, max_pixels):
+        #print("make tiles:", minx, miny, resx, resy, max_pixels)
+        pixels = resx*resy
+        if pixels <= max_pixels:
+            c = BitWrkRenderEngine._getcolor()
+            tile = Tile(frame, minx, miny, resx, resy, [c[0], c[1], c[2], 1])
+            return [tile]
+        elif resx >= resy:
+            left = resx // 2
+            result = self._makeTiles(settings, frame, minx, miny, left, resy, max_pixels)
+            result.extend(self._makeTiles(settings, frame, minx+left, miny, resx-left, resy, max_pixels))
+            return result
+        else:
+            top = resy // 2
+            result = self._makeTiles(settings, frame, minx, miny, resx, top, max_pixels)
+            result.extend(self._makeTiles(settings, frame, minx, miny+top, resx, resy-top, max_pixels))
+            return result
 
 def register():
     print("Registered BitWrk renderer")
