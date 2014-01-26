@@ -47,6 +47,37 @@ package manager).
         # For selling:
         ./gorays -bitwrk-slave
 
+
+Blender Integration
+-------------------
+Starting with the 20140124 release, BitWrk supports everybody's darling 3D rendering
+software, Blender (http://blender.org/), as a proof-of-concept project.
+
+If you are a **Blender artist** and you would like to try out the
+new Blender integration:
+- Perform steps 1 and 2 from the previous section.
+- Start Blender 2.69. Select a scene you like. Verify that it looks good when rendered
+  with the "Cycles" rendering engine. Also make sure that "Path Tracing" is selected
+  on the "Sampling" rendering properties panel ("Branched Path Tracing" is not supported
+  yet).
+- Go to **User Preferences -> Addons -> Install From File**
+- Select **render_bitwrk.py**. You find it in BitWrk's **bitwrk-blender** folder.
+- Now search for the new plugin by entering "bitwrk" in the add-on search field.
+  Render: BitWrk Distributed Rendering should be the only selectable add-on now.
+- Activate the add-on by pressing the checkbox next to the running man icon.
+- Back in the main window, you can now select "BitWrk distributed rendering" as the
+  active rendering engine.
+- You should see a new panel, "BitWrk Settings Panel". Everything can be left as is.
+- Next time you hit render, the task is dispatched to the BitWrk service as several
+  small tiles. You should control the BitWrk client's web UI (on http://localhost:8081)
+  to see the client's interaction with the BitWrk service.
+  
+If you would like to **sell Blender rendering** on BitWrk, run the provided script
+"blender-slave.py" the following way (you need to have Python > 3.2 installed, see
+http://www.python.org):
+
+    python3 blender-slave.py --blender /Path/To/Blender/blender
+
 Idea
 ----
 BitWrk aims to be a marketplace for computing power. Rather than providing
@@ -94,6 +125,9 @@ months and currently consists of:
   local programs and dispatching them to the BitWrk service. For sellers, it
   provides the service to offer local worker programs to the BitWrk
   exchange and to keep them busy.
+- "bitwrk-blender", an experimental integration into the Blender graphics
+  software, consisting of *render_bitwrk.py*, a Python addon which registers
+  a new rendering engine, and *blender-slave.py*, a script for sellers.
 - "gorays", a sample application. It's a simple raytracer demonstrating
   how to *use* BitWrk, and also, for developers,  how to *extend* an
   existing application to leverage the BitWrk service.
@@ -106,6 +140,7 @@ Every new client account starts with **1 BTC virtual starting capital**.
 News
 ----
 
+- **2014-01-25:** Experimental Blender integration is now available.
 - **2013-12-04:** A lot of progress has been made on the client side. Basic
   management functionality is now available for trades, workers and mandates.
   The client identity is no longer randomly generated every time the client
@@ -229,5 +264,5 @@ of now is not possible, but will be). As a trust-building measure, the
 server's source code is open-sourced, too.
 
 Have fun!
-2013-12-04, Jonas Eschenburg
+2014-01-26, Jonas Eschenburg
 
