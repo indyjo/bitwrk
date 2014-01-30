@@ -372,20 +372,19 @@ def register():
     bpy.utils.register_class(BitWrkRenderEngine)
     bpy.utils.register_class(RENDER_PT_bitwrk_settings)
     bpy.utils.register_class(BitWrkSettings)
-    from bl_ui import properties_render as pr
-    from bl_ui import properties_material as pm
-    panels = [
-        pr.RENDER_PT_antialiasing,
-        pr.RENDER_PT_dimensions,
-        pr.RENDER_PT_performance,
-        pr.RENDER_PT_post_processing,
-        pr.RENDER_PT_render,
-        pr.RENDER_PT_shading,
-        pr.RENDER_PT_stamp,
-        pm.MATERIAL_PT_preview,
-        ]
-    for panel in panels:
-        panel.COMPAT_ENGINES.add('BITWRK_RENDER')
+    for name in dir(bpy.types):
+        klass = getattr(bpy.types, name)
+        if 'COMPAT_ENGINES' not in dir(klass):
+            continue
+        if 'CYCLES' not in klass.COMPAT_ENGINES:
+            continue
+        if 'BITWRK_RENDER' not in klass.COMPAT_ENGINES:
+            klass.COMPAT_ENGINES.add('BITWRK_RENDER')
+            print("Adding BITWRK_RENDER support to",name)
+        else:
+            print("Type",name,"already supports BITWRK_BLENDER")
+        
+        
     
 def unregister():
     bpy.utils.unregister_class(BitWrkSettings)
