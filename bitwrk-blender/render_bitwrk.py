@@ -217,6 +217,9 @@ class Tile:
             self.result.layers[0].rect = [[1,0,0,1]] * (self.resx*self.resy)
             engine.end_result(self.result)
             self.result = None
+            return False
+        else:
+            return True
         
     def collect(self, settings, engine):
         if self.conn is None:
@@ -276,6 +279,12 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
     bl_description = "Performs distributed rendering using the BitWrk marketplace for compute power"
     
     def render(self, scene):
+        try:
+            self._doRender(scene)
+        except:
+            self.report({'ERROR'}, "Exception while rendering: {}".format(sys.exc_info()))
+            
+    def _doRender(self, scene):
         # Make sure the .blend file has been saved
         filename = bpy.data.filepath
         if scene.cycles.progressive != 'PATH':
@@ -296,7 +305,7 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         num_active = 0
         while not self.test_break():        
         
-            remaining = filter(lambda tile: not tile.success, tiles)
+            remaining = [t for t in tiles if not t.success]
             if not remaining:
                 self.report({'INFO'}, "Successfully rendered {} tiles on BitWrk.".format(len(tiles)))
                 break
@@ -304,8 +313,8 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
             # Dispatch some unfinished tiless
             for tile in remaining:
                 if tile.conn is None and num_active < settings.concurrency:
-                    tile.dispatch(settings, filename, self)
-                    num_active += 1
+                    if tile.dispatch(settings, filename, self):
+                        num_active += 1
             
             # Poll from all tiles currently active
             active = filter(lambda tile: tile.conn is not None, tiles)
