@@ -74,7 +74,7 @@ class BitWrkSettings(bpy.types.PropertyGroup):
                 ('2G',  " 2 Giga-rays", ""),
                 ('8G',  " 8 Giga-rays", ""),
                 ('32G', "32 Giga-rays", ""),
-                ('512M', "512 Mega-rays", ""],
+                ('512M', "512 Mega-rays", "")],
             default='8G',
             set=set_complexity,
             get=lambda value: value['complexity'])
