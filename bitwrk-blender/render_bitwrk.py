@@ -31,10 +31,12 @@ from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty
 # used by BitWrkSettings PropertyGroup
 def set_complexity(self, value):
     self['complexity'] = value
-    self['article_id'] = "net.bitwrk/blender/0/2.69/{}".format(['2G','8G','32G'][value])
+    self['article_id'] = "net.bitwrk/blender/0/2.69/{}".format(['2G','8G','32G','512M'][value])
     
 def get_max_cost(settings):
-    if settings.complexity == '2G':
+    if settings.complexity == '512M':
+        return  512*1024*1024
+    elif settings.complexity == '2G':
         return  2*1024*1024*1024
     elif settings.complexity == '8G':
         return  8*1024*1024*1024
@@ -71,7 +73,8 @@ class BitWrkSettings(bpy.types.PropertyGroup):
             items=[
                 ('2G',  " 2 Giga-rays", ""),
                 ('8G',  " 8 Giga-rays", ""),
-                ('32G', "32 Giga-rays", "")],
+                ('32G', "32 Giga-rays", ""),
+                ('512M', "512 Mega-rays", ""],
             default='8G',
             set=set_complexity,
             get=lambda value: value['complexity'])

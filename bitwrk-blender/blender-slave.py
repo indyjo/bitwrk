@@ -273,7 +273,7 @@ def parse_args():
     parser.add_argument('--bitwrk-host', metavar='HOST', help="BitWrk client host", default="localhost")
     parser.add_argument('--bitwrk-port', metavar='PORT', help="BitWrk client port", type=int, default=8081)
     parser.add_argument('--max-cost', metavar='CLASS', help="Maximum cost of one task (in giga-rays)",
-        choices=["2G", "8G", "32G"], default="8G")
+        choices=["512M", "2G", "8G", "32G"], default="8G")
     args = parser.parse_args()
     
     BLENDER_BIN=args.blender
@@ -282,7 +282,9 @@ def parse_args():
     BITWRK_HOST=args.bitwrk_host
     BITWRK_PORT=args.bitwrk_port
     ARTICLE_ID="net.bitwrk/blender/0/{}/{}".format(BLENDER_VERSION, args.max_cost)
-    if args.max_cost=='2G':
+    if args.max_cost=='512M':
+        MAX_COST=512*1024*1024
+    elif args.max_cost=='2G':
         MAX_COST=2*1024*1024*1024
     elif args.max_cost=='8G':
         MAX_COST=8*1024*1024*1024
