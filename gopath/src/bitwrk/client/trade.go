@@ -227,6 +227,9 @@ func (t *Trade) watchdog(log bitwrk.Logger, exitChan <-chan bool, closerChan <-c
 			log.Printf("Watchdog: closing %v channels", len(closers))
 			for _, c := range closers {
 				err := c.Close()
+				if err != nil {
+					log.Printf("Error closing channel: %v", err)
+				}
 			}
 			closers = closers[:0] // clear list of current closers
 		}
