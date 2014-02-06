@@ -163,8 +163,8 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	s := &http.Server{
 		Addr:         fmt.Sprintf("localhost:%v", InternalPort),
 		Handler:      mux,
-		ReadTimeout:  300 * time.Second,
-		WriteTimeout: 300 * time.Second,
+		ReadTimeout:  900 * time.Second,
+		WriteTimeout: 900 * time.Second,
 	}
 	relay := &HttpRelay{"/", client.BitwrkUrl}
 	mux.Handle("/account/", relay)
@@ -211,8 +211,8 @@ func serveExternal(receiveManager *client.ReceiveManager, exit chan<- error) {
 	s := &http.Server{
 		Addr:         fmt.Sprintf(":%v", ExternalPort),
 		Handler:      mux,
-		ReadTimeout:  300 * time.Second,
-		WriteTimeout: 300 * time.Second,
+		ReadTimeout:  900 * time.Second,
+		WriteTimeout: 900 * time.Second,
 	}
 
 	mux.Handle("/", receiveManager)
@@ -274,6 +274,8 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer buy.End()
 
+	log := bitwrk.Root().Newf("Buy #%v", buy.GetKey())
+
 	workWriter := buy.WorkWriter()
 
 	var reader io.Reader
@@ -307,7 +309,7 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result cafs.File
-	if res, err := buy.PerformBuy(bitwrk.Root().Newf("Buy #%v", buy.GetKey())); err != nil {
+	if res, err := buy.PerformBuy(log); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("Error receiving result from BitWrk network: %v", err)
 		return

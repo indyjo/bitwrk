@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -96,15 +97,19 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 	} else {
 		a.tx = tx
 		a.txETag = etag
-		log.Printf("Tx-etag: %#v", etag)
+		//log.Printf("Tx-etag: %#v", etag)
 	}
 
 	// TODO: Verify the transaction
 
 	// Start polling for state changes in background
+	abortPolling := make(chan bool)
+	defer func() {
+		// Stop polling when sell has ended
+		abortPolling <- true
+	}()
 	go func() {
-		a.pollTransaction(log)
-		log.Printf("Transaction polling has stopped.")
+		a.pollTransaction(log, abortPolling)
 	}()
 
 	var backchannel *backchannel
@@ -120,15 +125,15 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 		return fmt.Errorf("Error publishing buyer's secret: %v", err)
 	}
 
-	log.Println("Awaiting receipt...")
-	endpoint.SetHandler(func(w http.ResponseWriter, r *http.Request) {
-		a.handleReceipt(log.New("handleReceipt"), w, r)
-	})
-
-	if err := a.dispatchWorkAndSaveEncryptedResult(backchannel.workFile); err != nil {
+	log.Println("Dispatching work to", a.workerInfo)
+	if err := a.dispatchWorkAndSaveEncryptedResult(
+		log.New("dispatchWorkAndSaveEncryptedResult"),
+		backchannel.workFile); err != nil {
 		backchannel.release <- 0
 		return fmt.Errorf("Error dispatching work and saving encrypted result: %v", err)
 	}
+
+	log.Println("Checking transaction state")
 
 	// Getting the result has possibly taken too long
 	a.condition.L.Lock()
@@ -140,10 +145,15 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 	}
 
 	log.Println("Transmitting encrypted result back to buyer")
-	if err := a.transmitEncryptedResultBackToBuyer(backchannel.w); err != nil {
+	if err := a.transmitEncryptedResultBackToBuyer(log.New("send result"), backchannel.w); err != nil {
 		backchannel.release <- 0
 		return fmt.Errorf("Error transmitting encrypted result back to buyer: %v", err)
 	}
+
+	log.Println("Waiting for receipt...")
+	endpoint.SetHandler(func(w http.ResponseWriter, r *http.Request) {
+		a.handleReceipt(log.New("handleReceipt"), w, r)
+	})
 
 	backchannel.release <- 0
 
@@ -151,11 +161,30 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 	return nil
 }
 
-func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(workFile cafs.File) error {
+func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(log bitwrk.Logger, workFile cafs.File) error {
+	// Watch transaction state and close connection to worker when transaction expires
+	connChan := make(chan io.Closer)
+	exitChan := make(chan bool)
+	go a.watchdog(log, exitChan, connChan, func() bool { return a.tx.State == bitwrk.StateActive })
+	defer func() {
+		exitChan <- true
+	}()
+
+	// Customized HTTP client that submits all connections to watchdog
+	var controlledClient http.Client = client
+	controlledClient.Transport = &http.Transport{
+		Dial: func(network, addr string) (conn net.Conn, err error) {
+			conn, err = net.DialTimeout(network, addr, 10*time.Second)
+			if err == nil {
+				connChan <- conn // Start watching connection
+			}
+			return
+		},
+	}
+
 	reader := workFile.Open()
 	defer reader.Close()
-
-	resp, err := client.Post(a.workerInfo.PushURL, "application/octet-stream", reader)
+	resp, err := controlledClient.Post(a.workerInfo.PushURL, "application/octet-stream", reader)
 	if err != nil {
 		return err
 	}
@@ -200,7 +229,33 @@ func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(workFile cafs.File) er
 	return nil
 }
 
-func (a *SellActivity) transmitEncryptedResultBackToBuyer(writer io.Writer) error {
+// An io.Closer implementation using the http Hijacker feature
+type hijackCloser struct {
+	target interface{}
+}
+
+func (w hijackCloser) Close() error {
+	if hijacker, ok := w.target.(http.Hijacker); ok {
+		if conn, _, err := hijacker.Hijack(); err != nil {
+			return err
+		} else {
+			return conn.Close()
+		}
+	}
+	return nil
+}
+
+func (a *SellActivity) transmitEncryptedResultBackToBuyer(log bitwrk.Logger, writer io.Writer) error {
+	exitChan := make(chan bool)
+	closerChan := make(chan io.Closer)
+	go a.watchdog(log, exitChan, closerChan, func() bool { return a.tx.State == bitwrk.StateActive })
+	defer func() {
+		exitChan <- true
+	}()
+
+	// Close HTTP connection when transaction expires
+	closerChan <- hijackCloser{writer}
+
 	reader := a.encResultFile.Open()
 	defer reader.Close()
 
@@ -223,10 +278,10 @@ type backchannel struct {
 func (a *SellActivity) receiveWorkData(log bitwrk.Logger, endpoint *Endpoint) (*backchannel, error) {
 	result := backchannel{
 		ready:   false,
-		release: make(chan int),
+		release: make(chan int, 1),
 	}
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		a.handleRequest(log, w, r, &result)
+		a.handleBuyerRequest(log, w, r, &result)
 	}
 
 	endpoint.SetHandler(handler)
@@ -259,7 +314,7 @@ func (a *SellActivity) receiveWorkData(log bitwrk.Logger, endpoint *Endpoint) (*
 // Handles the incoming work request, up to the point where the work package
 // has been identified as legit. Then, the controlling goroutine takes over
 // while the request handler waits for the back-channel to be released.
-func (a *SellActivity) handleRequest(log bitwrk.Logger, w http.ResponseWriter, r *http.Request, backchannel *backchannel) {
+func (a *SellActivity) handleBuyerRequest(log bitwrk.Logger, w http.ResponseWriter, r *http.Request, backchannel *backchannel) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

@@ -22,6 +22,7 @@ import (
 	"bitwrk/cafs"
 	"bitwrk/money"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 )
@@ -200,14 +201,57 @@ func (t *Trade) waitWhile(f func() bool) {
 	}
 }
 
-// Polls the transaction state in a separate go-routine
-func (t *Trade) pollTransaction(log bitwrk.Logger) {
+// Closes resources upon exit of a function or when some condition no longer holds
+// Arguments:
+//  - exitChan: Signals the watchdog to exit
+//  - closerChan: Signals the watchdog to add an io.Closer to the list of closers
+//  - f: Defines the OK condition. When false, all current closers are closed
+func (t *Trade) watchdog(log bitwrk.Logger, exitChan <-chan bool, closerChan <-chan io.Closer, f func() bool) {
+	closers := make([]io.Closer, 0, 1)
+	for {
+		select {
+		case closer := <-closerChan:
+			closers = append(closers, closer)
+		case <-exitChan:
+			// Exit from watchdog if surrounding function has terminated
+			log.Print("Watchdog exiting by request")
+			return
+		default:
+		}
+
+		// Check if condition still holds
+		t.condition.L.Lock()
+		ok := f()
+		t.condition.L.Unlock()
+		if !ok {
+			log.Printf("Watchdog: closing %v channels", len(closers))
+			for _, c := range closers {
+				err := c.Close()
+			}
+			closers = closers[:0] // clear list of current closers
+		}
+
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+// Polls the transaction state in a separate go-routine. Returns on abort signal, or
+// when the polled transaction expires.
+func (t *Trade) pollTransaction(log bitwrk.Logger, abort <-chan bool) {
+	defer func() {
+		log.Printf("Transaction polling has stopped")
+	}()
 
 	for count := 1; ; count++ {
+		select {
+		case <-abort:
+			log.Printf("Aborting transaction polling while transaction active")
+			return
+		default:
+		}
 
 		if tx, etag, err := FetchTx(t.txId, ""); err != nil {
 			log.Printf("Error polling transaction: %v", err)
-			return
 		} else if etag != t.txETag {
 			t.condition.L.Lock()
 			t.tx = tx
@@ -215,10 +259,9 @@ func (t *Trade) pollTransaction(log bitwrk.Logger) {
 			expired := t.tx.State != bitwrk.StateActive
 			t.condition.Broadcast()
 			t.condition.L.Unlock()
-			log.Printf("Tx-etag: %#v", etag)
+			log.Printf("Tx change detected: phase=%v, expired=%v", t.tx.Phase, expired)
 			if expired {
-				log.Printf(" --> expired")
-				return
+				break
 			}
 		}
 
@@ -226,6 +269,9 @@ func (t *Trade) pollTransaction(log bitwrk.Logger) {
 		time.Sleep(time.Duration(count) * 500 * time.Millisecond)
 	}
 
+	log.Printf("Transaction has expired.")
+	// This is necessary so that the surrounding function call doesn't deadlock
+	<-abort
 }
 
 // Implement Activity

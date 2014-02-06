@@ -25,16 +25,24 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 )
 
-// Disallow redirects (or explicitly handle them)
 var client = http.Client{
+	// Disallow redirects (or explicitly handle them)
 	CheckRedirect: func(r *http.Request, _ []*http.Request) error {
 		return fmt.Errorf("Redirect encountered in request %v", r)
+	},
+	// 10 seconds timeout for TCP connection establishing
+	Transport: &http.Transport{
+		Dial: func(network, addr string) (net.Conn, error) {
+			return net.DialTimeout(network, addr, 10*time.Second)
+		},
 	},
 }
 

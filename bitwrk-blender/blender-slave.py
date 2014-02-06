@@ -24,6 +24,7 @@ if sys.version_info[:2] < (3,2):
     raise RuntimeError("Python >= 3.2 required. Detected: %s" % sys.version_info)
 
 import http.server, urllib.request, urllib.parse, struct, os, tempfile, subprocess
+from select import select
 
 # decode http chunked encoding
 class Unchunked:
@@ -218,7 +219,21 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
                 '--render-frame', '%d' % frame,
                 ]
             print("Calling", args)
-            subprocess.check_call(args)
+            #subprocess.check_call(args)
+            with subprocess.Popen(args, stdin=subprocess.DEVNULL) as proc:
+                while True:
+                    retcode = proc.poll()
+                    if retcode == 0:
+                        break
+                    elif retcode is not None:
+                        self.send_response(500)
+                        return
+                    rl, _, _ = select([self.rfile], [], [], 100)
+                    if self.rfile in rl:
+                        print("ERROR request cancelled")
+                        proc.kill()
+                        return
+                
             #subprocess.check_call(['/bin/sleep','120'])
             
             self.send_response(200)

@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -185,6 +186,8 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult(log bitwrk.Logger) e
 	// Send work to client
 	pipeIn, pipeOut := io.Pipe()
 	mwriter := multipart.NewWriter(pipeOut)
+
+	// Write work file into pipe for HTTP request
 	go func() {
 		part, err := mwriter.CreateFormFile("work", "workfile.bin")
 		if err != nil {
@@ -192,7 +195,7 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult(log bitwrk.Logger) e
 			return
 		}
 		work := a.workFile.Open()
-		log.Printf("Sending work data to seller [%v].", a.tx.WorkerURL)
+		log.Printf("Sending work data to seller [%v].", *a.tx.WorkerURL)
 		_, err = io.Copy(part, work)
 		work.Close()
 		if err != nil {
@@ -223,8 +226,26 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult(log bitwrk.Logger) e
 		return fmt.Errorf("Error creating transmit request: %v", err)
 	} else {
 		req.Header.Set("Content-Type", mwriter.FormDataContentType())
-		if resp, err := client.Do(req); err != nil {
-			return fmt.Errorf("Error fetching request %v: %v", req, err)
+
+		var controlledClient http.Client = client
+		controlledClient.Transport = &http.Transport{
+			Dial: func(network, addr string) (conn net.Conn, err error) {
+				conn, err = net.DialTimeout(network, addr, 10*time.Second)
+				if err == nil {
+					// Keep watching tx and close connection when retired before end of transmission
+					go func() {
+						if err := a.awaitTransactionPhase(log, bitwrk.PhaseUnverified, bitwrk.PhaseWorking, bitwrk.PhaseTransmitting); err != nil {
+							log.Printf("Closing connection to seller: %v", err)
+							conn.Close()
+						}
+					}()
+				}
+				return
+			},
+		}
+
+		if resp, err := controlledClient.Do(req); err != nil {
+			return err
 		} else {
 			response = resp.Body
 		}
