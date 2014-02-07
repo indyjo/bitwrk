@@ -10,6 +10,14 @@ simple cryptographic lottery can be lucrative, there must be demand
 for tasks more useful. Tasks that people are actually willing to pay for.
 Let's find out!
 
+If you like this project, the best support you can give is to try it out,
+test it for errors and help make it a community project. If you'd like
+to support BitWrk with money, you could send some Bitcoins to **tip4commit**.
+They will be distributed to contributors.
+
+[![tip for next commit](http://tip4commit.com/projects/541.svg)](http://tip4commit.com/projects/541)
+
+
 Quick Start Instructions
 ------------------------
 For the impatient, this will get you running within 5 minutes.
