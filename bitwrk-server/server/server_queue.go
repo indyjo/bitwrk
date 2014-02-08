@@ -26,6 +26,7 @@ import (
 	"hash/crc32"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 func mustDecodeKey(s string) *datastore.Key {
@@ -95,43 +96,48 @@ func handleRetireBid(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func addRetireTransactionTask(c appengine.Context, key string, tx *bitwrk.Transaction) {
-	task := taskqueue.NewPOSTTask("/_ah/queue/retire-tx", url.Values{
-		"tx": {key},
-	})
-	task.ETA = tx.Timeout
-	task.Name = fmt.Sprintf("retire-tx-%v-%v", key, tx.Phase)
-	task, err := taskqueue.Add(c, task, getQueue(string(tx.Article)))
+// Adds a task to the queue associated with an article.
+// article: The article id for which to enqueue the task.
+// tag:    The type of task, such as "retire-tx". Will cause the URL to be
+//         "/_ah/queue/retire-tx".
+// key:    The identifying key for the task (must be unique). The tasks's name
+//         is set to "tag-key".
+// eta:    The desired time of execution for the task, or zero if the task should execute
+//         instantly.
+// values: The data to send to the task handler (via POST).
+func addTaskForArticle(c appengine.Context,
+	article bitwrk.ArticleId,
+	tag string, key string,
+	eta time.Time,
+	values url.Values) (err error) {
+
+	task := taskqueue.NewPOSTTask("/_ah/queue/"+tag, values)
+	task.ETA = eta
+	task.Name = fmt.Sprintf("%v-%v", tag, key)
+	queue := getQueue(string(article))
+	newTask, err := taskqueue.Add(c, task, queue)
 	if err == nil {
-		c.Infof("Scheduled: %v - %v", task.Name, task.ETA)
+		c.Infof("[Queue %v] Scheduled: %v at %v", queue, newTask.Name, newTask.ETA)
 	} else {
-		c.Warningf(" -> %v", err)
+		c.Errorf("[Queue %v] Error scheduling %v at %v: %v", queue, task.Name, task.ETA, err)
 	}
+	return
 }
 
-func addRetireBidTask(c appengine.Context, key string, bid *bitwrk.Bid) {
-	task := taskqueue.NewPOSTTask("/_ah/queue/retire-bid", url.Values{
-		"bid": {key},
-	})
-	task.ETA = bid.Expires
-	task.Name = "retire-bid-" + key
-	task, err := taskqueue.Add(c, task, getQueue(string(bid.Article)))
-	c.Infof("Scheduled: %v - %v", task.Name, task.ETA)
-	if err != nil {
-		c.Warningf(" -> %v", err)
-	}
+func addRetireTransactionTask(c appengine.Context, txKey string, tx *bitwrk.Transaction) error {
+	taskKey := fmt.Sprintf("%v-%v", txKey, tx.Phase)
+	return addTaskForArticle(c, tx.Article, "retire-tx", taskKey, tx.Timeout,
+		url.Values{"tx": {txKey}})
 }
 
-func addPlaceBidTask(c appengine.Context, key string, bid *bitwrk.Bid) {
-	task := taskqueue.NewPOSTTask("/_ah/queue/place-bid", url.Values{
-		"bid": {key},
-	})
-	task.Name = "place-bid-" + key
-	task, err := taskqueue.Add(c, task, getQueue(string(bid.Article)))
-	c.Infof("Scheduled: %v", task.Name)
-	if err != nil {
-		c.Warningf(" -> %v", err)
-	}
+func addRetireBidTask(c appengine.Context, bidKey string, bid *bitwrk.Bid) error {
+	return addTaskForArticle(c, bid.Article, "retire-bid", bidKey, bid.Expires,
+		url.Values{"bid": {bidKey}})
+}
+
+func addPlaceBidTask(c appengine.Context, bidKey string, bid *bitwrk.Bid) error {
+	return addTaskForArticle(c, bid.Article, "place-bid", bidKey, time.Time{},
+		url.Values{"bid": {bidKey}})
 }
 
 func getQueue(article string) string {
