@@ -196,9 +196,6 @@ func enqueueBid(w http.ResponseWriter, r *http.Request) (err error) {
 		return fmt.Errorf("Error in db.EnqueueBid: %v", err)
 	}
 
-	addPlaceBidTask(c, bidKey.Encode(), bid)
-	addRetireBidTask(c, bidKey.Encode(), bid)
-
 	redirectToBid(bidKey, w, r)
 	return
 }

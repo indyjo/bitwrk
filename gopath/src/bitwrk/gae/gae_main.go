@@ -103,7 +103,13 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 			return err
 		}
 
-		//time.Sleep(4 * time.Second)
+		if err := addPlaceBidTask(c, bidKey.Encode(), bid); err != nil {
+			return err
+		}
+		if err := addRetireBidTask(c, bidKey.Encode(), bid); err != nil {
+			return err
+		}
+
 		return dao.Flush()
 	}
 
@@ -204,12 +210,10 @@ func RetireTransaction(c appengine.Context, key *datastore.Key) error {
 // When a matching bid exists, creates the corresponding
 // transaction and marks the bid as MATCHED. Otherwise, the
 // bid is marked as PLACED, waiting for other bids to match it.
-func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, *Transaction, error) {
-	var tx *Transaction
+func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, error) {
 	var txKey *datastore.Key
 
 	f := func(c appengine.Context) error {
-		tx = nil
 		txKey = nil
 		dao := NewGaeAccountingDao(c)
 
@@ -242,7 +246,7 @@ func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, *T
 				return err
 			}
 		} else {
-			tx = NewTransaction(now, bidKey.Encode(), otherKey.Encode(), bid, otherBid)
+			tx := NewTransaction(now, bidKey.Encode(), otherKey.Encode(), bid, otherBid)
 			if key, err := datastore.Put(c, datastore.NewIncompleteKey(c, "Tx", ArticleKey(c, bid.Article)), txCodec{tx}); err != nil {
 				// Error writing transaction
 				return err
@@ -253,6 +257,10 @@ func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, *T
 				otherBid.Transaction = &txKeyEncoded
 				if _, err := datastore.Put(c, otherKey, bidCodec{otherBid}); err != nil {
 					// Error writing other bid
+					return err
+				}
+
+				if err := addRetireTransactionTask(c, txKeyEncoded, tx); err != nil {
 					return err
 				}
 
@@ -281,10 +289,10 @@ func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, *T
 
 	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
 		// Transaction failed
-		return nil, nil, err
+		return nil, err
 	}
 
-	return txKey, tx, nil
+	return txKey, nil
 }
 
 // Finds the first matching hot bid in the list, and deletes it. Then, returns
@@ -341,16 +349,13 @@ func UpdateTransaction(c appengine.Context, txKey *datastore.Key,
 	now time.Time,
 	address string,
 	values map[string]string,
-	document, signature string) (*Transaction, error) {
-
-	var txResult *Transaction
+	document, signature string) error {
 
 	f := func(c appengine.Context) error {
 		tx, err := GetTransaction(c, txKey)
 		if err != nil {
 			return err
 		}
-		txResult = tx
 
 		message := tx.SendMessage(now, address, values)
 
@@ -371,12 +376,8 @@ func UpdateTransaction(c appengine.Context, txKey *datastore.Key,
 			return err
 		}
 
-		return nil
+		return addRetireTransactionTask(c, txKey.Encode(), tx)
 	}
 
-	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
-		return nil, err
-	}
-
-	return txResult, nil
+	return datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true})
 }
