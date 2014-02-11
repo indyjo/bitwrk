@@ -25,42 +25,51 @@ For the impatient, this will get you running within 5 minutes.
 These steps apply to users of Windows, Mac OS X and Linux, although there
 might be shortcuts for some users (like installing Go using the system's
 package manager).
+
+For selling to work, you will need to open a TCP port of your choice. This
+usually means configuring your local DSL router. If you don't know what this
+means, please Google for "open incoming tcp port" :-)
+
+Without an open port, you can still buy on the BitWrk network!
+
 - **Step 1:** Download and install Google's Go SDK to be able to compile BitWrk:
   http://golang.org/doc/install
   
   From a command prompt, you should be able to run the "go" tools.
-- **Step 2:** Download the Bitwrk client, compile and start it:
+- **Step 2:** Download and unpack the BitWrk client package from
   https://github.com/indyjo/bitwrk/archive/master.zip
-
+- **Step 3:** Compile and start the BitWrk client software:
         cd bitwrk-master
+        
+        # Now set GOPATH environment variable to directory root
         # Linux/Mac OS X users:
-        . env-vars.sh # To set the GOPATH for compilation
+        export GOPATH=$(pwd)
         # Windows users:
-        set GOPATH=C:/Path/To/bitwrk-master/gopath
-        cd bitwrk-client
-        go build
+        set GOPATH=%cd%
+        
+        # Now compile the BitWrk client software needed for buying and selling
+        cd src/cmd/bitwrk-client
+        go install
+        
+        # If everything went fine, the BitWrk client can be started now.
         # Port 8082 needs to be reachable for selling to work
-        ./bitwrk-client -extport 8082
+        ../../../bin/bitwrk-client -extport 8082
 
-  Now navigate your web browser to http://localhost:8081/ and keep it open.
-  You should see  your account number (which has been randomly chosen) and your current balance of **BTC 1**.
-- **Step 3:** Download the sample application, compile and start it:
-  https://github.com/indyjo/rays/archive/master.zip
-
-        cd rays-master
-        cd gorays
-        go build
-        # For buying:
-        ./gorays -bitwrk-master -a ../ART
-        # For selling:
-        ./gorays -bitwrk-slave
-
+  Now navigate your web browser to http://localhost:8081/ and
+  **keep it open during the following steps**.
+  You should see  your account number (which has been randomly chosen) and your current
+  balance of **BTC 1**.
+  
+  Your next step is to try buying and selling on the BitWrk network using Blender,
+  BitWrk's first supported application.
 
 Blender Integration
 -------------------
-Starting with the 20140124 release, BitWrk supports everybody's darling 3D rendering
+Starting with the 20140124 release, BitWrk supports the popular 3D rendering
 software, Blender (http://blender.org/), as a proof-of-concept project.
 
+
+### Buying rendering power on BitWrk
 If you are a **Blender artist** and you would like to try out the
 new Blender integration:
 - Perform steps 1 and 2 from the previous section.
@@ -70,21 +79,24 @@ new Blender integration:
   yet).
 - Go to **User Preferences -> Addons -> Install From File**
 - Select **render_bitwrk.py**. You find it in BitWrk's **bitwrk-blender** folder.
-- Now search for the new plugin by entering "bitwrk" in the add-on search field.
-  Render: BitWrk Distributed Rendering should be the only selectable add-on now.
+- An add-on called "Render: BitWrk Distributed Rendering" should show up. If not,
+  search for the new plugin by entering "bitwrk" in the add-on search field.
 - Activate the add-on by pressing the checkbox next to the running man icon.
 - Back in the main window, you can now select "BitWrk distributed rendering" as the
   active rendering engine.
-- You should see a new panel, "BitWrk Settings Panel". Everything can be left as is.
+- You should see a new panel, "BitWrk Settings Panel". Everything can be left as is
+  for now.
 - Next time you hit render, the task is dispatched to the BitWrk service as several
-  small tiles. You should control the BitWrk client's web UI (on http://localhost:8081)
-  to see the client's interaction with the BitWrk service.
+  small tiles. You should browse to the BitWrk client's web UI (on http://localhost:8081/)
+  to give the client permission to build interaction with the BitWrk service.
   
+### Selling rendering power on BitWrk
 If you would like to **sell Blender rendering** on BitWrk, run the provided script
 "blender-slave.py" the following way (you need to have Python > 3.2 installed, see
 http://www.python.org):
 
     python3 blender-slave.py --blender /Path/To/Blender/blender
+
 
 Idea
 ----
