@@ -27,7 +27,9 @@ function setWorkers(node, workersjson) {
             var info2 = item.Info;
             if (info.Article === info2.Article
             	&& info.Method === info2.Method
-            	&& info.PushURL === info2.PushURL) {
+            	&& info.PushURL === info2.PushURL
+            	&& worker.LastError === item.LastError
+            	&& worker.Idle === item.Idle) {
             	needsUpdate = false
             }
         }
@@ -39,7 +41,9 @@ function setWorkers(node, workersjson) {
 			item.innerHTML =
 				'<div class="key"></div>' +
 				'<input type="button" class="closebtn btn btn-default btn-xs" value="Stop"></input>' +
-				'<div class="article"></div>';
+				'<div class="status"></div>' +
+				'<div class="article"></div>' +
+				'<div class="lasterror"></div>';
             node.appendChild(item);
             // Update key attribute
             item.Key = key;
@@ -53,8 +57,12 @@ function setWorkers(node, workersjson) {
 					unregisterWorkerAsync(key);
 				};
 			}(key);
+			item.childNodes[childIdx++].textContent = worker.Idle ? "Idle" : "Work dispatched";
 			item.childNodes[childIdx++].textContent = info.Article;
+			item.childNodes[childIdx++].textContent = worker.LastError;
 			item.Info = info;
+			item.Idle = worker.Idle
+			item.LastError = worker.LastError
         }
     }
     

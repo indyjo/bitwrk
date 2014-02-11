@@ -146,6 +146,8 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
         except:
             self.send_error(500)
             raise
+        finally:
+            register_with_bitwrk_client()
             
     def _work(self, rfile):
         xmin,ymin,xmax,ymax = 0,0,63,63
@@ -248,19 +250,22 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(data)
                     data = f.read(32768)
 
-
-def serve():
-    httpd = http.server.HTTPServer(('127.0.0.1', 0), BlenderHandler)
-    
-    # Advertise worker to bitwrk
-    addr = httpd.server_address
-    print("Serving on", addr)
+def register_with_bitwrk_client():
     query = urllib.parse.urlencode({
         'id' : 'blender-%d' % addr[1],
         'article' : ARTICLE_ID,
         'pushurl' : 'http://%s:%d/work' % addr
     })
     urllib.request.urlopen("http://%s:%d/registerworker" % (BITWRK_HOST, BITWRK_PORT), query.encode('ascii'), 10)
+
+def serve():
+    httpd = http.server.HTTPServer(('127.0.0.1', 0), BlenderHandler)
+    
+    # Advertise worker to bitwrk
+    global addr
+    addr = httpd.server_address
+    print("Serving on", addr)
+    register_with_bitwrk_client()
     try:
         httpd.serve_forever()
     finally:

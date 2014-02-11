@@ -56,7 +56,7 @@ type Activity interface {
 type ActivityState struct {
 	Type     string
 	Article  bitwrk.ArticleId
-	Accepted bool
+	Accepted bool // Whether the activity was permitted
 	Amount   money.Money
 	Info     string
 }

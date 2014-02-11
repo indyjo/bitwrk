@@ -29,7 +29,6 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -38,10 +37,10 @@ import (
 type SellActivity struct {
 	Trade
 
-	workerInfo WorkerInfo
+	worker Worker
 }
 
-func (m *ActivityManager) NewSell(info *WorkerInfo) (*SellActivity, error) {
+func (m *ActivityManager) NewSell(worker Worker) (*SellActivity, error) {
 	now := time.Now()
 
 	result := &SellActivity{
@@ -52,10 +51,10 @@ func (m *ActivityManager) NewSell(info *WorkerInfo) (*SellActivity, error) {
 			started:      now,
 			lastUpdate:   now,
 			bidType:      bitwrk.Sell,
-			article:      info.Article,
+			article:      worker.GetWorkerState().Info.Article,
 			encResultKey: new(bitwrk.Tkey),
 		},
-		workerInfo: *info,
+		worker: worker,
 	}
 
 	// Get a random key for encrypting the result
@@ -125,7 +124,7 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 		return fmt.Errorf("Error publishing buyer's secret: %v", err)
 	}
 
-	log.Println("Dispatching work to", a.workerInfo)
+	log.Println("Dispatching work to worker", a.worker.GetWorkerState().Info.Id)
 	if err := a.dispatchWorkAndSaveEncryptedResult(
 		log.New("dispatchWorkAndSaveEncryptedResult"),
 		backchannel.workFile); err != nil {
@@ -170,28 +169,13 @@ func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(log bitwrk.Logger, wor
 		exitChan <- true
 	}()
 
-	// Customized HTTP client that submits all connections to watchdog
-	var controlledClient http.Client = client
-	controlledClient.Transport = &http.Transport{
-		Dial: func(network, addr string) (conn net.Conn, err error) {
-			conn, err = net.DialTimeout(network, addr, 10*time.Second)
-			if err == nil {
-				connChan <- conn // Start watching connection
-			}
-			return
-		},
-	}
-
 	reader := workFile.Open()
 	defer reader.Close()
-	resp, err := controlledClient.Post(a.workerInfo.PushURL, "application/octet-stream", reader)
+	result, err := a.worker.DoWork(reader, connChan)
 	if err != nil {
 		return err
 	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Worker returned status: %v", resp.Status)
-	}
+	defer result.Close()
 
 	temp := a.manager.storage.Create(fmt.Sprintf("Sell #%v: work", a.GetKey()))
 	defer temp.Dispose()
@@ -207,7 +191,7 @@ func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(log bitwrk.Logger, wor
 	stream := cipher.NewOFB(block, iv[:])
 
 	writer := &cipher.StreamWriter{S: stream, W: temp}
-	_, err = io.Copy(writer, resp.Body)
+	_, err = io.Copy(writer, result)
 	if err != nil {
 		return err
 	}
@@ -216,7 +200,7 @@ func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(log bitwrk.Logger, wor
 		return err
 	}
 
-	if err := resp.Body.Close(); err != nil {
+	if err := result.Close(); err != nil {
 		return err
 	}
 

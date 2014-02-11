@@ -28,7 +28,7 @@ div.activity, div.worker, div.mandate {
     overflow: hidden;
 }
 
-.activity .info, .mandate .validuntil, .mandate .tradesleft {
+.activity .info, .mandate .validuntil, .mandate .tradesleft, .lasterror {
     font-size: 75%;
     margin-left: 1em;
 }
@@ -45,7 +45,7 @@ div.mandate {
     background-color: #e6fad7;
 }
 
-.activity .type, .mandate .type, .key, .tradesleft, .validuntil {
+.activity .type, .mandate .type, .key, .tradesleft, .validuntil, .lasterror {
     float: left;
 }
 
@@ -56,7 +56,7 @@ div.mandate {
     margin-right: 1em;
 }
 
-.activity .price, .mandate .price {
+.activity .price, .mandate .price, .worker .status {
     float: right;
 }
 
@@ -69,6 +69,11 @@ div.mandate {
     float: right;
 }
 
-.mandate .closebtn {
+.mandate .closebtn, .worker .closebtn {
     margin-left: 1em;
+}
+
+.lasterror {
+	background-color: rgba(255, 255, 255, 0.5);
+	color: #800;
 }

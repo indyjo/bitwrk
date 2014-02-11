@@ -63,7 +63,7 @@ func (l logger) New(v ...interface{}) Logger {
 	} else {
 		context = fmt.Sprint(context, "/", fmt.Sprint(v...))
 	}
-	return logger{log.New(os.Stdout, l.Prefix(), flags), context}
+	return logger{log.New(os.Stderr, l.Prefix(), flags), context}
 }
 
 func (l logger) Newf(format string, v ...interface{}) Logger {
@@ -74,10 +74,10 @@ func (l logger) Newf(format string, v ...interface{}) Logger {
 	} else {
 		context = fmt.Sprint(context, "/", fmt.Sprintf(format, v...))
 	}
-	return logger{log.New(os.Stdout, l.Prefix(), flags), context}
+	return logger{log.New(os.Stderr, l.Prefix(), flags), context}
 }
 
-var defaultLogger = logger{log.New(os.Stdout, "", log.LstdFlags), ""}
+var defaultLogger = logger{log.New(os.Stderr, "", log.LstdFlags), ""}
 
 func Root() Logger {
 	return defaultLogger
