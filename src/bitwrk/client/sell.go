@@ -53,6 +53,7 @@ func (m *ActivityManager) NewSell(worker Worker) (*SellActivity, error) {
 			bidType:      bitwrk.Sell,
 			article:      worker.GetWorkerState().Info.Article,
 			encResultKey: new(bitwrk.Tkey),
+			alive:        true,
 		},
 		worker: worker,
 	}
@@ -68,6 +69,15 @@ func (m *ActivityManager) NewSell(worker Worker) (*SellActivity, error) {
 
 // Manages the complete lifecycle of a sell
 func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveManager) error {
+	err := a.doPerformSell(log, receiveManager)
+	if err != nil {
+		a.lastError = err
+	}
+	a.alive = false
+	return err
+}
+
+func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *ReceiveManager) error {
 	defer a.manager.unregister(a.key)
 	// wait for grant or reject
 	log.Println("Waiting for permission")

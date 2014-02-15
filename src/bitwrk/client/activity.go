@@ -54,17 +54,21 @@ type Activity interface {
 }
 
 type ActivityState struct {
-	Type     string
-	Article  bitwrk.ArticleId
-	Accepted bool // Whether the activity was permitted
-	Amount   money.Money
-	Info     string
+	Type        string
+	Article     bitwrk.ArticleId
+	Alive       bool // Whether the activity is still alive
+	Accepted    bool // Whether the activity was permitted
+	Rejected    bool
+	Amount      money.Money
+	BidId, TxId string
+	Info        string
 }
 
 type ActivityManager struct {
 	mutex      *sync.Mutex
 	activities map[ActivityKey]Activity
 	mandates   map[ActivityKey]*Mandate
+	history    []Activity
 	nextKey    ActivityKey
 	storage    cafs.FileStorage
 }
@@ -73,6 +77,7 @@ var activityManager = ActivityManager{
 	new(sync.Mutex),
 	make(map[ActivityKey]Activity),
 	make(map[ActivityKey]*Mandate),
+	make([]Activity, 0, 5), //history
 	1,
 	cafs.NewRamStorage(64 * 1024 * 1024), // 64 MByte
 }
@@ -92,6 +97,7 @@ func (m *ActivityManager) GetActivities() []Activity {
 	for _, a := range m.activities {
 		result = append(result, a)
 	}
+	result = append(result, m.history...)
 
 	return result
 }
@@ -176,6 +182,17 @@ func (m *ActivityManager) register(key ActivityKey, activity Activity) {
 func (m *ActivityManager) unregister(key ActivityKey) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+	activity, ok := m.activities[key]
+	if !ok {
+		return
+	}
+
+	// Append to history
+	if len(m.history) == 10 {
+		copy(m.history[1:], m.history[:len(m.history)-1])
+		m.history = m.history[1:]
+	}
+	m.history = append(m.history, activity)
 	delete(m.activities, key)
 }
 

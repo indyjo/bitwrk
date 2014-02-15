@@ -37,6 +37,10 @@ div.activity {
     background-color: #d1dcef;
 }
 
+div.activity.history {
+	background-color: #eee;
+}
+
 div.worker {
     background-color: #ceefe6;
 }

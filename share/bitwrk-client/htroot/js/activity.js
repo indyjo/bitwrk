@@ -30,7 +30,12 @@ function setActivities(node, activitiesjson) {
             needsCreate = false;
             var info2 = item.Info;
             if (info.Accepted !== info2.Accepted
-                || info.Article !== info2.Article)
+            	|| info.Rejected !== info2.Rejected
+            	|| info.Alive !== info2.Alive
+            	|| info.Rejected !== info2.Rejected
+                || info.Article !== info2.Article
+                || info.TxId !== info2.TxId
+                || info.BidId !== info2.BidId)
             {
                 // structural change -> refill
                 while (item.hasChildNodes()) {
@@ -51,36 +56,50 @@ function setActivities(node, activitiesjson) {
         if (needsCreate) {
             // Item is new -> append div to parent node
             item = document.createElement("div");
-            item.setAttribute("class", "activity");
-            node.appendChild(item);
+            node.insertBefore(item, node.firstChild);
             // Update key attribute
             item.Key = key;
         }
         
+        
         if (needsFill) {
             // Item is either new or has been emptied -> create children
-            if (info.Accepted) {
+            if (info.Accepted || info.Rejected) {
                 item.innerHTML =
                     '<div class="type"></div>' +
                     '<div class="price"></div>' +
                     '<div class="article"></div>' +
+                    (info.BidId?' \u00bb <a>Bid</a>':'') +
+                    (info.TxId?' \u00bb <a>Tx</a>':'') +
                     '<div class="info"></div>';
             } else {
                 item.innerHTML =
                     '<div class="type"></div>' +
-                    '<input type="button" class="closebtn btn btn-primary btn-xs" value="Permit"></input>' +
-                    '<input type="button" class="closebtn btn btn-default btn-xs" value="Cancel"></input>' +
+                    '<button class="closebtn btn btn-primary btn-xs">Permit</button>' +
+                    '<button class="closebtn btn btn-default btn-xs">Cancel</button>' +
                     '<div class="article"></div>' +
                     '<div class="info"></div>';
             }
+            item.setAttribute("class", info.Alive?"activity":"activity history");
             // Update info attribute
             item.Info = info;
         }
         
         var childIdx = 0;
         item.childNodes[childIdx++].textContent = info.Type;
-        if (info.Accepted) {
+        if (info.Accepted || info.Rejected) {
             item.childNodes[childIdx++].textContent = info.Amount;
+            item.childNodes[childIdx++].textContent = info.Article;
+            if (info.BidId) {
+            	childIdx++; // Skip text
+            	var url="http://" + document.location.host + "/bid/" + info.BidId
+                item.childNodes[childIdx++].setAttribute("onclick", "showIframeDialog('" + url + "')");
+            }
+            if (info.TxId) {
+            	childIdx++; // Skip text
+            	var url="http://" + document.location.host + "/tx/" + info.TxId
+                item.childNodes[childIdx++].setAttribute("onclick", "showIframeDialog('" + url + "')");
+            }
         } else {
             item.childNodes[childIdx++].onclick = function(info) {
                 return function() {
@@ -92,8 +111,8 @@ function setActivities(node, activitiesjson) {
                     forbidActivityAsync(key);
                 };
             }(key);
+            item.childNodes[childIdx++].textContent = info.Article;
         }
-        item.childNodes[childIdx++].textContent = info.Article;
         item.childNodes[childIdx++].textContent = info.Info;
     }
     

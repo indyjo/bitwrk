@@ -31,11 +31,13 @@ type Trade struct {
 	condition           *sync.Cond
 	manager             *ActivityManager
 	key                 ActivityKey
+	lastError           error
 	started, lastUpdate time.Time
 
 	bidType bitwrk.BidType
 	article bitwrk.ArticleId
 
+	alive    bool
 	rejected bool
 	accepted bool
 	identity *bitcoin.KeyPair
@@ -287,18 +289,27 @@ func (t *Trade) GetState() *ActivityState {
 	defer t.condition.L.Unlock()
 
 	info := ""
+	if t.lastError != nil {
+		info = t.lastError.Error()
+	} else if t.tx != nil {
+		info = t.tx.Phase.String()
+	} else if t.bid != nil {
+		info = t.bid.State.String()
+	}
 	price := t.price
 	if t.tx != nil {
-		info = fmt.Sprintf("Tx %v %v %v", t.txId, t.tx.Phase, t.tx.Timeout)
 		price = t.tx.Price
-	} else if t.bid != nil {
-		info = fmt.Sprintf("Bid %v %v", t.bidId, t.bid.State)
 	}
+
 	return &ActivityState{
 		Type:     t.bidType.String(),
 		Article:  t.article,
+		Alive:    t.alive,
 		Accepted: t.accepted,
+		Rejected: t.rejected,
 		Amount:   price,
+		BidId:    t.bidId,
+		TxId:     t.txId,
 		Info:     info,
 	}
 }

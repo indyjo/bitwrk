@@ -46,6 +46,7 @@ var homeTemplate = template.Must(template.New("home").Parse(`
 <script src="/js/js-iso8601.js" ></script>
 <script src="/js/accountinfo.js" ></script>
 <script src="/js/mandate-dialog.js" ></script>
+<script src="/js/iframe-dialog.js" ></script>
 <script src="/js/activity.js" ></script>
 <script src="/js/workers.js" ></script>
 <script src="/js/mandates.js" ></script>
@@ -95,7 +96,21 @@ The BitWrk client is asking for your permission to perform a trade.</div>
 </form>
 </div><!-- modal-body -->
 </div><!-- modal-dialog -->
-</div><!-- modal-col-sm-4 -->
+</div><!-- modal -->
+<div id="iframeModal" class="modal fade">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+<h4 class="modal-title">Bid/Transaction Detail</h4>This dialog shows detailed information about bids, transactions and accounts.</div>
+<div class="modal-body">
+<iframe id="iframe" src="#" width="100%" height="360">
+<p>Your web browser must be able to show &lt;iframe&gt; elements for this to work.
+</iframe>
+</div>
+</div><!-- modal-body -->
+</div><!-- modal-dialog -->
+</div><!-- modal -->
 <script>
 function updateAccountInfo() {
     updateAccountInfoFor("{{.ParticipantId}}");

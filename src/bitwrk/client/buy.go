@@ -48,6 +48,7 @@ func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error)
 			lastUpdate: now,
 			bidType:    bitwrk.Buy,
 			article:    article,
+			alive:      true,
 		},
 	}
 	m.register(result.key, result)
@@ -92,6 +93,15 @@ func (w buyWorkWriter) Close() error {
 
 // Manages the complete lifecycle of a buy
 func (a *BuyActivity) PerformBuy(log bitwrk.Logger) (cafs.File, error) {
+	file, err := a.doPerformBuy(log)
+	if err != nil {
+		a.lastError = err
+	}
+	a.alive = false
+	return file, err
+}
+
+func (a *BuyActivity) doPerformBuy(log bitwrk.Logger) (cafs.File, error) {
 	defer a.manager.unregister(a.key)
 	// wait for grant or reject
 	log.Println("Waiting for permission")
