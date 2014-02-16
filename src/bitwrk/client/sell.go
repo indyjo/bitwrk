@@ -68,8 +68,8 @@ func (m *ActivityManager) NewSell(worker Worker) (*SellActivity, error) {
 }
 
 // Manages the complete lifecycle of a sell
-func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveManager) error {
-	err := a.doPerformSell(log, receiveManager)
+func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveManager, interrupt <-chan bool) error {
+	err := a.doPerformSell(log, receiveManager, interrupt)
 	if err != nil {
 		a.lastError = err
 	}
@@ -77,13 +77,13 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 	return err
 }
 
-func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *ReceiveManager) error {
+func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *ReceiveManager, interrupt <-chan bool) error {
 	defer a.manager.unregister(a.key)
 	// wait for grant or reject
 	log.Println("Waiting for permission")
 
 	// Get a permission for the sell
-	if err := a.awaitPermission(); err != nil {
+	if err := a.awaitPermission(interrupt); err != nil {
 		return fmt.Errorf("Error awaiting permission: %v", err)
 	}
 	log.Printf("Got permission. Price: %v", a.price)

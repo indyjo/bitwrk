@@ -164,26 +164,6 @@ func handleActivities(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleForbid(w http.ResponseWriter, r *http.Request) {
-	activity := r.FormValue("activity")
-	if result, err := forbidActivity(activity); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	} else {
-		fmt.Fprintf(w, "%v", result)
-	}
-}
-
-func forbidActivity(activity string) (bool, error) {
-	var k client.ActivityKey
-	if err := k.Parse(activity); err != nil {
-		return false, err
-	} else if a := client.GetActivityManager().GetActivityByKey(k); a == nil {
-		return false, fmt.Errorf("Activity %#v not found.", activity)
-	} else {
-		return a.Forbid(), nil
-	}
-}
-
 func handleGrantMandate(r *http.Request) error {
 	var mandate client.Mandate
 	mandate.Identity = BitcoinIdentity

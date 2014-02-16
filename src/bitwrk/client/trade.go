@@ -21,6 +21,7 @@ import (
 	"bitwrk/bitcoin"
 	"bitwrk/cafs"
 	"bitwrk/money"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -59,12 +60,33 @@ type Trade struct {
 	resultFile cafs.File
 }
 
-func (t *Trade) awaitPermission() error {
+var ErrInterrupted = errors.New("The request was interrupted")
+
+func (t *Trade) awaitPermission(interrupt <-chan bool) error {
+	exit := make(chan bool)
+	defer func() {
+		exit <- true
+	}()
+	interrupted := false
+	go func() {
+		for {
+			select {
+			case <-interrupt:
+				interrupted = true
+				t.condition.Broadcast()
+			case <-exit:
+				return
+			}
+		}
+	}()
 	// wait for permission or rejection
 	t.condition.L.Lock()
 	defer t.condition.L.Unlock()
-	for !t.accepted && !t.rejected {
+	for !t.accepted && !t.rejected && !interrupted {
 		t.condition.Wait()
+	}
+	if interrupted {
+		return ErrInterrupted
 	}
 	if t.accepted {
 		return nil

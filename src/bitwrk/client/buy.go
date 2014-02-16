@@ -91,9 +91,10 @@ func (w buyWorkWriter) Close() error {
 	return nil
 }
 
-// Manages the complete lifecycle of a buy
-func (a *BuyActivity) PerformBuy(log bitwrk.Logger) (cafs.File, error) {
-	file, err := a.doPerformBuy(log)
+// Manages the complete lifecycle of a buy.
+// When a bool can be read from interrupt, the buy is aborted.
+func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
+	file, err := a.doPerformBuy(log, interrupt)
 	if err != nil {
 		a.lastError = err
 	}
@@ -101,13 +102,13 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger) (cafs.File, error) {
 	return file, err
 }
 
-func (a *BuyActivity) doPerformBuy(log bitwrk.Logger) (cafs.File, error) {
+func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
 	defer a.manager.unregister(a.key)
 	// wait for grant or reject
 	log.Println("Waiting for permission")
 
 	// Get a permission for the buy
-	if err := a.awaitPermission(); err != nil {
+	if err := a.awaitPermission(interrupt); err != nil {
 		return nil, err
 	}
 	log.Printf("Got permission. Price: %v", a.price)

@@ -64,7 +64,7 @@ function setActivities(node, activitiesjson) {
         
         if (needsFill) {
             // Item is either new or has been emptied -> create children
-            if (info.Accepted || info.Rejected) {
+            if (info.Accepted || !info.Alive) {
                 item.innerHTML =
                     '<div class="type"></div>' +
                     '<div class="price"></div>' +
@@ -76,7 +76,6 @@ function setActivities(node, activitiesjson) {
                 item.innerHTML =
                     '<div class="type"></div>' +
                     '<button class="closebtn btn btn-primary btn-xs">Permit</button>' +
-                    '<button class="closebtn btn btn-default btn-xs">Cancel</button>' +
                     '<div class="article"></div>' +
                     '<div class="info"></div>';
             }
@@ -106,11 +105,6 @@ function setActivities(node, activitiesjson) {
                     showMandateDialog(info.Type, info.Article);
                 };
             }(info);
-            item.childNodes[childIdx++].onclick = function(key) {
-                return function() {
-                    forbidActivityAsync(key);
-                };
-            }(key);
             item.childNodes[childIdx++].textContent = info.Article;
         }
         item.childNodes[childIdx++].textContent = info.Info;
@@ -122,17 +116,6 @@ function setActivities(node, activitiesjson) {
             node.removeChild(itemNodesByKey[key]);
         }
     }
-}
-
-function forbidActivityAsync(key) {
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4 && xhr.status == 200 ){
-            updateActivities();
-        }
-    };
-    xhr.open("GET", "/forbid?activity="+key);
-    xhr.send();
 }
 
 function updateActivities() {

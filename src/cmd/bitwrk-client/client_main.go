@@ -163,8 +163,7 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	s := &http.Server{
 		Addr:         fmt.Sprintf("localhost:%v", InternalPort),
 		Handler:      mux,
-		ReadTimeout:  900 * time.Second,
-		WriteTimeout: 900 * time.Second,
+		// No timeouts!
 	}
 	relay := &HttpRelay{"/", client.BitwrkUrl}
 	mux.Handle("/account/", relay)
@@ -191,7 +190,6 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux.HandleFunc("/unregisterworker", func(w http.ResponseWriter, r *http.Request) {
 		handleUnregisterWorker(workerManager, w, r)
 	})
-	mux.HandleFunc("/forbid", handleForbid)
 	mux.HandleFunc("/workers", func(w http.ResponseWriter, r *http.Request) {
 		handleWorkers(workerManager, w, r)
 	})
@@ -308,8 +306,11 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 		workWriter.Close()
 	}
 
+	// Listen for close notfications
+	interrupt := w.(http.CloseNotifier).CloseNotify()
+	
 	var result cafs.File
-	if res, err := buy.PerformBuy(log); err != nil {
+	if res, err := buy.PerformBuy(log, interrupt); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("Error receiving result from BitWrk network: %v", err)
 		return

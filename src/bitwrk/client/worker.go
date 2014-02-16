@@ -35,10 +35,12 @@ type WorkerManager struct {
 
 type WorkerState struct {
 	m            *WorkerManager
-	Info         WorkerInfo
-	Idle         bool   // set to true when registering, false when a job is started
+	cond         *sync.Cond
 	LastError    string // set after each call to DoWork
+	Info         WorkerInfo
+	Idle         bool // set to false when a job is started, true when worker reports back
 	Unregistered bool
+	Blockers     int // count of currently blocking circumstances
 }
 
 type WorkerInfo struct {
@@ -84,14 +86,20 @@ func (m *WorkerManager) RegisterWorker(info WorkerInfo) {
 	defer m.mutex.Unlock()
 	log := bitwrk.Root().Newf("Worker %#v", info.Id)
 	if s, ok := m.workers[info.Id]; ok {
-		log.Printf("Free again: %v", info)
+		log.Printf("Reported idle: %v", info)
+		s.cond.L.Lock()
+		defer s.cond.L.Unlock()
 		s.Info = info
-		s.Idle = true
-		go s.offer(log)
+		if !s.Idle {
+			s.Idle = true
+			s.Blockers--
+		}
+		s.cond.Broadcast()
 	} else {
 		log.Printf("Registered: %v", info)
 		s = &WorkerState{
 			m:    m,
+			cond: sync.NewCond(new(sync.Mutex)),
 			Info: info,
 			Idle: true,
 		}
@@ -105,71 +113,77 @@ func (m *WorkerManager) UnregisterWorker(id string) {
 	defer m.mutex.Unlock()
 	if s, ok := m.workers[id]; ok {
 		delete(m.workers, id)
+		s.cond.L.Lock()
+		defer s.cond.L.Unlock()
 		s.Unregistered = true
+		s.cond.Broadcast()
 		bitwrk.Root().Newf("Worker %#v", id).Printf("Unregistered: %v", s.Info)
 	}
 }
 
 func (s *WorkerState) offer(log bitwrk.Logger) {
-	for s.isIdle() {
-		if lastError := s.getLastError(); lastError != "" {
-			log.Printf("Delaying sell by 20s because of last error: %v", lastError)
-			time.Sleep(20 * time.Second)
-		}
-		if !s.isRegistered() {
+	defer log.Printf("Stopped offering")
+	s.cond.L.Lock()
+	defer s.cond.L.Unlock()
+	interrupt := make(chan bool, 1)
+	for {
+		// Interrupt if unregistered, stop iterating
+		if s.Unregistered {
+			log.Printf("No longer registered")
+			interrupt <- true
 			break
 		}
-		log.Printf("Creating sell")
-		s.setLastError(nil)
-		if sell, err := s.m.activityManager.NewSell(s); err != nil {
-			log.Printf("Error creating sell: %v", err)
-		} else {
-			if err = sell.PerformSell(log.Newf("Sell #%v", sell.GetKey()), s.m.receiveManager); err != nil {
-				log.Printf("Error performing sell: %v", err)
-				s.setLastError(err)
+		if s.Blockers == 0 {
+			s.LastError = ""
+			if sell, err := s.m.activityManager.NewSell(s); err != nil {
+				s.LastError = fmt.Sprintf("Error creating sell: %v", err)
+				log.Println(s.LastError)
+				s.blockFor(20 * time.Second)
+			} else {
+				s.Blockers++
+				go s.executeSell(log, sell, interrupt)
 			}
 		}
-	}
-	if !s.isRegistered() {
-		log.Printf("No longer registered")
-	}
-	if !s.isIdle() {
-		log.Printf("Waiting for worker to report back")
+		s.cond.Wait()
 	}
 }
 
-func (s *WorkerState) isRegistered() bool {
-	s.m.mutex.Lock()
-	defer s.m.mutex.Unlock()
-	return !s.Unregistered
-}
-
-func (s *WorkerState) isIdle() bool {
-	s.m.mutex.Lock()
-	defer s.m.mutex.Unlock()
-	return s.Idle
-}
-
-func (s *WorkerState) setIdle(idle bool) {
-	s.m.mutex.Lock()
-	defer s.m.mutex.Unlock()
-	s.Idle = idle
-}
-
-func (s *WorkerState) setLastError(err error) {
-	s.m.mutex.Lock()
-	defer s.m.mutex.Unlock()
-	if err == nil {
-		s.LastError = ""
-	} else {
-		s.LastError = err.Error()
+func (s *WorkerState) executeSell(log bitwrk.Logger, sell *SellActivity, interrupt <-chan bool) {
+	defer func() {
+		s.cond.L.Lock()
+		s.Blockers--
+		s.cond.Broadcast()
+		s.cond.L.Unlock()
+	} ()
+	if err := sell.PerformSell(log.Newf("Sell #%v", sell.GetKey()), s.m.receiveManager, interrupt); err != nil {
+		s.LastError = fmt.Sprintf("Error performing sell (delaying next sell by 20s): %v", err)
+		log.Println(s.LastError)
+		s.cond.L.Lock()
+		s.blockFor(20 * time.Second)
+		s.cond.L.Unlock()
 	}
+	log.Printf("returned from buy")
 }
 
-func (s *WorkerState) getLastError() string {
-	s.m.mutex.Lock()
-	defer s.m.mutex.Unlock()
-	return s.LastError
+func (s *WorkerState) blockFor(d time.Duration) {
+	s.Blockers++ // Unlocked after 20s
+	s.cond.Broadcast()
+	go func() {
+		time.Sleep(20 * time.Second)
+		s.cond.L.Lock()
+		defer s.cond.L.Unlock()
+		s.Blockers--
+		s.cond.Broadcast()
+	}()
+}
+
+func (s *WorkerState) setBusy() {
+	s.cond.L.Lock()
+	defer s.cond.L.Unlock()
+	if s.Idle {
+		s.Idle = false
+		s.Blockers++ // Wait for worker reporting back
+	}
 }
 
 func (s *WorkerState) GetWorkerState() WorkerState {
@@ -178,7 +192,7 @@ func (s *WorkerState) GetWorkerState() WorkerState {
 
 func (s *WorkerState) DoWork(workReader io.Reader, closerChan chan<- io.Closer) (io.ReadCloser, error) {
 	// Mark worker as busy
-	s.setIdle(false)
+	s.setBusy()
 
 	// Customized HTTP client that submits all connections to watchdog
 	var controlledClient http.Client = client
