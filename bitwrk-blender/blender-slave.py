@@ -230,7 +230,7 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
                     elif retcode is not None:
                         self.send_response(500)
                         return
-                    rl, _, _ = select([self.rfile], [], [], timeout=.1)
+                    rl, _, _ = select([self.rfile], [], [], .1)
                     if self.rfile in rl:
                         print("ERROR request cancelled")
                         proc.kill()
