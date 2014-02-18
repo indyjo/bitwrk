@@ -222,7 +222,7 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
                 ]
             print("Calling", args)
             #subprocess.check_call(args)
-            with subprocess.Popen(args, stdin=subprocess.DEVNULL) as proc:
+            with subprocess.Popen(args) as proc:
                 while True:
                     retcode = proc.poll()
                     if retcode == 0:
@@ -230,7 +230,7 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
                     elif retcode is not None:
                         self.send_response(500)
                         return
-                    rl, _, _ = select([self.rfile], [], [], timeout=1.0)
+                    rl, _, _ = select([self.rfile], [], [], timeout=.1)
                     if self.rfile in rl:
                         print("ERROR request cancelled")
                         proc.kill()
