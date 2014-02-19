@@ -223,33 +223,7 @@ func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(log bitwrk.Logger, wor
 	return nil
 }
 
-// An io.Closer implementation using the http Hijacker feature
-type hijackCloser struct {
-	target interface{}
-}
-
-func (w hijackCloser) Close() error {
-	if hijacker, ok := w.target.(http.Hijacker); ok {
-		if conn, _, err := hijacker.Hijack(); err != nil {
-			return err
-		} else {
-			return conn.Close()
-		}
-	}
-	return nil
-}
-
 func (a *SellActivity) transmitEncryptedResultBackToBuyer(log bitwrk.Logger, writer io.Writer) error {
-	exitChan := make(chan bool)
-	closerChan := make(chan io.Closer)
-	go a.watchdog(log, exitChan, closerChan, func() bool { return a.tx.State == bitwrk.StateActive })
-	defer func() {
-		exitChan <- true
-	}()
-
-	// Close HTTP connection when transaction expires
-	closerChan <- hijackCloser{writer}
-
 	reader := a.encResultFile.Open()
 	defer reader.Close()
 
