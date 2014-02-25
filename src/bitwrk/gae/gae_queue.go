@@ -43,13 +43,13 @@ func addTaskForArticle(c appengine.Context,
 
 	task := taskqueue.NewPOSTTask("/_ah/queue/"+tag, values)
 	task.ETA = eta
-	task.Name = fmt.Sprintf("%v-%v", tag, key)
+	//task.Name = fmt.Sprintf("%v-%v", tag, key)
 	queue := getQueue(string(article))
 	newTask, err := taskqueue.Add(c, task, queue)
 	if err == nil {
-		c.Infof("[Queue %v] Scheduled: %v at %v", queue, newTask.Name, newTask.ETA)
+		c.Infof("[Queue %v] Scheduled: '%v' at %v", queue, newTask.Name, newTask.ETA)
 	} else {
-		c.Errorf("[Queue %v] Error scheduling %v at %v: %v", queue, task.Name, task.ETA, err)
+		c.Errorf("[Queue %v] Error scheduling '%v' at %v: %v", queue, task.Name, task.ETA, err)
 	}
 	return
 }
