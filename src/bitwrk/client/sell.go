@@ -78,7 +78,6 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 }
 
 func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *ReceiveManager, interrupt <-chan bool) error {
-	defer a.manager.unregister(a.key)
 	// wait for grant or reject
 	log.Println("Waiting for permission")
 
@@ -214,11 +213,7 @@ func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(log bitwrk.Logger, wor
 		return err
 	}
 
-	if file, err := temp.File(); err != nil {
-		return err
-	} else {
-		a.encResultFile = file
-	}
+	a.encResultFile = temp.File()
 
 	return nil
 }
@@ -343,14 +338,12 @@ func (a *SellActivity) handleBuyerRequest(log bitwrk.Logger, w http.ResponseWrit
 				http.Error(w, "Error handling work", http.StatusBadRequest)
 				return
 			}
-			temp.Close()
-			if file, err := temp.File(); err != nil {
+			if err := temp.Close(); err != nil {
 				log.Printf("Error creating file from temporary data: %v", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
-			} else {
-				workFile = file
 			}
+			workFile = temp.File()
 		default:
 			log.Printf("Don't know what to do with part %#v", formName)
 			http.Error(w, "Unknown part", http.StatusBadRequest)

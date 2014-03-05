@@ -155,6 +155,7 @@ func (s *WorkerState) executeSell(log bitwrk.Logger, sell *SellActivity, interru
 		s.cond.Broadcast()
 		s.cond.L.Unlock()
 	} ()
+	defer sell.Dispose()
 	if err := sell.PerformSell(log.Newf("Sell #%v", sell.GetKey()), s.m.receiveManager, interrupt); err != nil {
 		s.LastError = fmt.Sprintf("Error performing sell (delaying next sell by 20s): %v", err)
 		log.Println(s.LastError)

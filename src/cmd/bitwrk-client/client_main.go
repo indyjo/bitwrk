@@ -270,7 +270,7 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 	} else {
 		buy = _buy
 	}
-	defer buy.End()
+	defer buy.Dispose()
 
 	log := bitwrk.Root().Newf("Buy #%v", buy.GetKey())
 

@@ -363,3 +363,18 @@ func (t *Trade) Forbid() bool {
 func (t *Trade) GetTrade() *Trade {
 	return t
 }
+
+func (t *Trade) Dispose() {
+	t.manager.unregister(t.GetKey())
+	for _, fp := range []*cafs.File{
+		&t.workFile,
+		&t.resultFile,
+		&t.encResultFile,
+	} {
+		f := *fp
+		if f != nil {
+			f.Dispose()
+			*fp = nil
+		}
+	}
+}

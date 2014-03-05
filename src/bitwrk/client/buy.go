@@ -82,18 +82,14 @@ func (w buyWorkWriter) Close() error {
 		panic("Work file already received")
 	}
 
-	if file, err := w.workTemporary.File(); err != nil {
-		return err
-	} else {
-		w.a.workFile = file
-	}
-
+	w.a.workFile = w.workTemporary.File()
 	return nil
 }
 
 // Manages the complete lifecycle of a buy.
 // When a bool can be read from interrupt, the buy is aborted.
 func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
+	
 	file, err := a.doPerformBuy(log, interrupt)
 	if err != nil {
 		a.lastError = err
@@ -103,7 +99,6 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs
 }
 
 func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
-	defer a.manager.unregister(a.key)
 	// wait for grant or reject
 	log.Println("Waiting for permission")
 
@@ -182,15 +177,6 @@ func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (ca
 	}
 
 	return a.resultFile, nil
-}
-
-func (a *BuyActivity) End() {
-	a.condition.L.Lock()
-	defer a.condition.L.Unlock()
-	if !a.accepted && !a.rejected {
-		a.rejected = true
-	}
-	a.condition.Broadcast()
 }
 
 func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult(log bitwrk.Logger) error {
@@ -275,11 +261,7 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult(log bitwrk.Logger) e
 		return err
 	}
 
-	if f, err := temp.File(); err != nil {
-		return err
-	} else {
-		a.encResultFile = f
-	}
+	a.encResultFile = temp.File()
 
 	return nil
 }
@@ -334,11 +316,7 @@ func (a *BuyActivity) decryptResult() error {
 		return err
 	}
 
-	if file, err := temp.File(); err != nil {
-		return err
-	} else {
-		a.resultFile = file
-	}
+	a.resultFile = temp.File()
 
 	return nil
 }
