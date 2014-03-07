@@ -55,40 +55,10 @@ func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error)
 	return result, nil
 }
 
-func (a *BuyActivity) WorkWriter() io.WriteCloser {
-	return buyWorkWriter{
-		a,
-		a.manager.storage.Create(fmt.Sprintf("Buy #%v: work", a.GetKey())),
-	}
-}
-
-type buyWorkWriter struct {
-	a             *BuyActivity
-	workTemporary cafs.Temporary
-}
-
-func (w buyWorkWriter) Write(b []byte) (n int, err error) {
-	n, err = w.workTemporary.Write(b)
-	return
-}
-
-func (w buyWorkWriter) Close() error {
-	defer w.workTemporary.Dispose()
-	if err := w.workTemporary.Close(); err != nil {
-		return err
-	}
-
-	if w.a.workFile != nil {
-		panic("Work file already received")
-	}
-
-	w.a.workFile = w.workTemporary.File()
-	return nil
-}
-
 // Manages the complete lifecycle of a buy.
 // When a bool can be read from interrupt, the buy is aborted.
-func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
+func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workFile cafs.File) (cafs.File, error) {
+	a.workFile = workFile.Duplicate()
 	
 	file, err := a.doPerformBuy(log, interrupt)
 	if err != nil {

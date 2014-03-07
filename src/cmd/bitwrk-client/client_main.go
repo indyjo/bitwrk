@@ -161,8 +161,8 @@ func startReceiveManager() (receiveManager *client.ReceiveManager) {
 func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux := http.NewServeMux()
 	s := &http.Server{
-		Addr:         fmt.Sprintf("localhost:%v", InternalPort),
-		Handler:      mux,
+		Addr:    fmt.Sprintf("localhost:%v", InternalPort),
+		Handler: mux,
 		// No timeouts!
 	}
 	relay := &HttpRelay{"/", client.BitwrkUrl}
@@ -274,8 +274,6 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 
 	log := bitwrk.Root().Newf("Buy #%v", buy.GetKey())
 
-	workWriter := buy.WorkWriter()
-
 	var reader io.Reader
 	if multipart, err := r.MultipartReader(); err != nil {
 		// read directly from body
@@ -298,19 +296,27 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if _, err := io.Copy(workWriter, reader); err != nil {
+	workTemp := client.GetActivityManager().GetStorage().Create(fmt.Sprintf("buy #%v: work", buy.GetKey()))
+	defer workTemp.Dispose()
+	if _, err := io.Copy(workTemp, reader); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("Error receiving work data from client: %v", err)
 		return
 	} else {
-		workWriter.Close()
+		if err := workTemp.Close(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("Error writing work data to storage: %v", err)
+			return
+		}
 	}
 
 	// Listen for close notfications
 	interrupt := w.(http.CloseNotifier).CloseNotify()
-	
+
+	workFile := workTemp.File()
+	defer workFile.Dispose()
 	var result cafs.File
-	if res, err := buy.PerformBuy(log, interrupt); err != nil {
+	if res, err := buy.PerformBuy(log, interrupt, workFile); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("Error receiving result from BitWrk network: %v", err)
 		return

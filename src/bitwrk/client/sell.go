@@ -186,7 +186,7 @@ func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(log bitwrk.Logger, wor
 	}
 	defer result.Close()
 
-	temp := a.manager.storage.Create(fmt.Sprintf("Sell #%v: work", a.GetKey()))
+	temp := a.manager.storage.Create(fmt.Sprintf("Sell #%v: encrypted result", a.GetKey()))
 	defer temp.Dispose()
 
 	// Use AES-256 to encrypt the result
@@ -344,6 +344,7 @@ func (a *SellActivity) handleBuyerRequest(log bitwrk.Logger, w http.ResponseWrit
 				return
 			}
 			workFile = temp.File()
+			defer workFile.Dispose()
 		default:
 			log.Printf("Don't know what to do with part %#v", formName)
 			http.Error(w, "Unknown part", http.StatusBadRequest)
