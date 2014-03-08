@@ -92,8 +92,8 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 		}
 
 		//parentKey := ArticleKey(c, bid.Article)
-		parentKey := AccountKey(c, bid.Participant)
-		if key, err := datastore.Put(c, datastore.NewIncompleteKey(c, "Bid", parentKey), bidCodec{bid}); err != nil {
+		//parentKey := AccountKey(c, bid.Participant)
+		if key, err := datastore.Put(c, datastore.NewIncompleteKey(c, "Bid", nil), bidCodec{bid}); err != nil {
 			return err
 		} else {
 			bidKey = key
