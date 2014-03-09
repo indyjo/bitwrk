@@ -2,12 +2,19 @@ This document describes the key concepts involved in the BitWrk service protocol
 
 Bids
 ====
-A bid is the statet intent to buy or sell an article.
-TODO
+A bid is the stated intent to buy or sell an article for a certain price. Bids can be created
+clients at any time by performing an HTTP POST to http://SERVER/bid. Additional restrictions
+apply, such as rate-control and having to provide a one-time random token (nonce) to avoid high
+loads on the server
 
-Transaction Phases
-==================
-<img src="http://files.bitwrk.net/transaction-phases.svg" width="600">
+ A bid is initially in state INQUEUE. At some (short) time later,
+the server tries to match the bid against another bid. Buys match with sells and vice-versa.
+If a bid can be matched right away, it will be in MATCHED state, otherwise it is placed as
+an open bid. The latter is called PLACED state. If such a bid can be matched within a certain
+time, it will be put into MATCHED state, too. Otherwise, the bid retires.
+
+Transactions
+============
 
 In BitWrk, a transaction is what is created if two bids (a buy and a sell) match.
 A transaction starts in ESTABLISHING phase and transitions to other phases based on
@@ -26,6 +33,16 @@ Data is transferred as form data (Content-Type application/x-www-form-urlencoded
 To make things secure, participants must provide a signature (using the same mechanism the
 Bitcoin client offers) of the sent data. The signature proves that the message was created
 by the participants. (See server_transaction.go, updateTransaction())
+
+Bid States and Transaction Phases
+=================================
+A complete, successful example:
+-------------------------------
+> <img src="http://files.bitwrk.net/message-sequence.svg" width="600">
+
+An overview of transaction phases:
+----------------------------------
+> <img src="http://files.bitwrk.net/transaction-phases.svg" width="600">
 
 Explanation of message arguments
 --------------------------------
