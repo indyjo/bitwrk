@@ -41,6 +41,7 @@ var ResourceDir string
 var BitwrkUrl string
 
 func main() {
+	client.BitwrkUserAgent = "BitWrkGoClient/" + ClientVersion
 	flags := flag.NewFlagSet("bitwrk-client", flag.ExitOnError)
 	flags.StringVar(&ExternalAddress, "extaddr", "auto",
 		"IP address or name this host can be reached under from the internet")
@@ -201,6 +202,8 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
+	mux.HandleFunc("/id", handleId)
+	mux.HandleFunc("/version", handleVersion)
 	exit <- s.ListenAndServe()
 }
 
@@ -361,3 +364,12 @@ func handleRegisterWorker(workerManager *client.WorkerManager, w http.ResponseWr
 func handleUnregisterWorker(workerManager *client.WorkerManager, w http.ResponseWriter, r *http.Request) {
 	workerManager.UnregisterWorker(r.FormValue("id"))
 }
+
+func handleId(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("BitWrk Go Client"))
+}
+
+func handleVersion(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(ClientVersion))
+}
+

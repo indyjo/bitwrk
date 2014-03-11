@@ -26,6 +26,7 @@ bl_info = {
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory)
 
 import bpy, os, sys, http.client, select, struct, tempfile, urllib.request, colorsys, math
+import webbrowser, time
 from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty
 
 # used by BitWrkSettings PropertyGroup
@@ -47,7 +48,51 @@ def get_max_cost(settings):
         print(settings.complexity)
         raise RuntimeError()
 
-
+# Functions for probing host:port settings for a running BitWrk client
+LAST_PROBE_TIME = time.time()
+LAST_PROBE_RESULT = False
+LAST_PROBE_SETTINGS = None
+def probe_bitwrk_client(settings):
+    global LAST_PROBE_TIME, LAST_PROBE_RESULT, LAST_PROBE_SETTINGS
+    if settings_string(settings) == LAST_PROBE_SETTINGS and time.time() - LAST_PROBE_TIME < 5.0:
+        return LAST_PROBE_RESULT
+        
+    LAST_PROBE_RESULT=do_probe_bitwrk_client(settings)
+    LAST_PROBE_TIME=time.time()
+    LAST_PROBE_SETTINGS=settings_string(settings)
+    return LAST_PROBE_RESULT
+    
+def settings_string(settings):
+    return "{}:{}".format(settings.bitwrk_client_host, settings.bitwrk_client_port)
+    
+def do_probe_bitwrk_client(settings):
+    conn = http.client.HTTPConnection(
+        host=settings.bitwrk_client_host, port=settings.bitwrk_client_port,
+        timeout=1)
+    try:
+        conn.request('GET', "/id")
+        resp = conn.getresponse()
+        if resp.status != http.client.OK:
+            return False
+        data = resp.read(256)
+        if data != b"BitWrk Go Client":
+            return False
+        conn.request('GET', "/version")
+        resp = conn.getresponse()
+        if resp.status != http.client.OK:
+            return False
+        data = resp.read(256)
+        if not data.startswith(b"0.0."):
+            return False
+        return True
+    except:
+        try:
+            conn.close()
+        except:
+            pass
+        return False
+            
+    
 class BitWrkSettings(bpy.types.PropertyGroup):
     
     @classmethod
@@ -71,15 +116,15 @@ class BitWrkSettings(bpy.types.PropertyGroup):
             name="Complexity",
             description="Defines the maximum allowed computation complexity for each rendered tile",
             items=[
-                ('2G',  " 2 Giga-rays", ""),
-                ('8G',  " 8 Giga-rays", ""),
-                ('32G', "32 Giga-rays", ""),
-                ('512M', "512 Mega-rays", "")],
+                ('512M', "0.5 Giga-rays", "", 3),
+                ('2G',  " 2 Giga-rays", "", 0),
+                ('8G',  " 8 Giga-rays", "", 1),
+                ('32G', "32 Giga-rays", "", 2)],
             default='8G',
             set=set_complexity,
             get=lambda value: value['complexity'])
         settings.concurrency = IntProperty(
-            name="Concurrency",
+            name="Concurrent tiles",
             description="Maximum number of BitWrk trades active in parallel",
             default=4,
             min=1,
@@ -90,6 +135,23 @@ class BitWrkSettings(bpy.types.PropertyGroup):
     @classmethod
     def unregister(cls):
         del bpy.types.Scene.bitwrk_settings
+
+class StartBrowserOperator(bpy.types.Operator):
+    """Open BitWrk admin console in web browser"""
+    bl_idname = "bitwrk.startbrowser"
+    bl_label = "Open BitWrk Client User Interface"
+
+    @classmethod
+    def poll(cls, context):
+        return probe_bitwrk_client(context.scene.bitwrk_settings)
+    
+    def execute(self, context):
+        settings=context.scene.bitwrk_settings
+        webbrowser.open("http://{}:{}/".format(settings.bitwrk_client_host, settings.bitwrk_client_port)) 
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return self.execute(context)
 
 
 class RENDER_PT_bitwrk_settings(bpy.types.Panel):
@@ -110,6 +172,10 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
         row = self.layout.row()
         row.prop(settings, "bitwrk_client_host", text="")
         row.prop(settings, "bitwrk_client_port", text="")
+        if probe_bitwrk_client(settings):
+            self.layout.operator("bitwrk.startbrowser", icon='URL')
+        else:
+            self.layout.label("No BitWrk client at this address", icon='ERROR')
         
         self.layout.prop(settings, "complexity")
         row = self.layout.row()
@@ -375,6 +441,7 @@ def register():
     bpy.utils.register_class(BitWrkRenderEngine)
     bpy.utils.register_class(RENDER_PT_bitwrk_settings)
     bpy.utils.register_class(BitWrkSettings)
+    bpy.utils.register_class(StartBrowserOperator)
     for name in dir(bpy.types):
         klass = getattr(bpy.types, name)
         if 'COMPAT_ENGINES' not in dir(klass):
@@ -390,6 +457,7 @@ def register():
         
     
 def unregister():
+    bpy.utils.unregister_class(StartBrowserOperator)
     bpy.utils.unregister_class(BitWrkSettings)
     bpy.utils.unregister_class(RENDER_PT_bitwrk_settings)
     bpy.utils.unregister_class(BitWrkRenderEngine)
