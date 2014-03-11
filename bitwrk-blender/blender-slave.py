@@ -101,7 +101,7 @@ render.image_settings.file_format='OPEN_EXR'
 render.image_settings.exr_codec='PIZ'
 render.image_settings.use_preview=False
 
-percentage = max(1, min(100, render.resolution_percentage))
+percentage = max(1, min(10000, render.resolution_percentage))
 resx = int(render.resolution_x * percentage / 100)
 resy = int(render.resolution_y * percentage / 100)
 
