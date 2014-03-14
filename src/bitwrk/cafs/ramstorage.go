@@ -314,12 +314,114 @@ func (f *ramFile) Dispose() {
 	}
 }
 
+func (f *ramFile) checkValid() {
+	if f.disposed {
+		panic("Already disposed")
+	}
+}
+
 func (f *ramFile) Duplicate() File {
+	f.checkValid()
 	file, err := f.storage.Get(&f.key)
 	if err != nil {
 		panic("Couldn't duplicate file")
 	}
 	return file
+}
+
+func (f *ramFile) IsChunked() bool {
+	f.checkValid()
+	return len(f.entry.chunks) > 0
+}
+
+func (f *ramFile) Chunks() FileIterator {
+	var chunks []chunkRef
+	if len(f.entry.chunks) > 0 {
+		chunks = f.entry.chunks
+	} else {
+		chunks = make([]chunkRef, 1)
+		chunks[0] = chunkRef{f.key, f.Size()}
+	}
+	f.storage.lockL(&f.key, f.entry)
+	return &ramChunksIter{
+		storage:      f.storage,
+		entry:        f.entry,
+		chunks:       chunks,
+		chunkIdx:     0,
+		lastChunkIdx: -1,
+		disposed:     false,
+	}
+}
+
+func (ci *ramChunksIter) checkValid() {
+	if ci.disposed {
+		panic("Already disposed")
+	}
+}
+
+type ramChunksIter struct {
+	storage      *ramStorage
+	key          SKey
+	entry        *ramEntry
+	chunks       []chunkRef
+	chunkIdx     int
+	lastChunkIdx int
+	disposed     bool
+}
+
+func (ci *ramChunksIter) Dispose() {
+	if !ci.disposed {
+		ci.disposed = true
+		ci.storage.releaseL(&ci.key, ci.entry)
+	}
+}
+
+func (ci *ramChunksIter) Duplicate() FileIterator {
+	ci.checkValid()
+	ci.storage.lockL(&ci.key, ci.entry)
+	return &ramChunksIter{
+		storage:  ci.storage,
+		key:      ci.key,
+		entry:    ci.entry,
+		chunks:   ci.chunks,
+		chunkIdx: ci.chunkIdx,
+		disposed: false,
+	}
+}
+
+func (ci *ramChunksIter) Next() bool {
+	ci.checkValid()
+	if ci.chunkIdx == len(ci.chunks) {
+		ci.Dispose()
+		return false
+	} else {
+		ci.lastChunkIdx = ci.chunkIdx
+		ci.chunkIdx++
+		return true
+	}
+}
+
+func (ci *ramChunksIter) Key() SKey {
+	ci.checkValid()
+	return ci.chunks[ci.lastChunkIdx].key
+}
+
+func (ci *ramChunksIter) Size() int64 {
+	ci.checkValid()
+	startPos := int64(0)
+	if ci.lastChunkIdx > 0 {
+		startPos = ci.chunks[ci.lastChunkIdx-1].nextPos
+	}
+	return ci.chunks[ci.lastChunkIdx].nextPos - startPos
+}
+
+func (ci *ramChunksIter) File() File {
+	ci.checkValid()
+	if f, err := ci.storage.Get(&ci.key); err != nil {
+		panic(err)
+	} else {
+		return f
+	}
 }
 
 func (r *ramDataReader) Read(b []byte) (n int, err error) {

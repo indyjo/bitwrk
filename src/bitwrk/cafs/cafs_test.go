@@ -94,7 +94,13 @@ func TestLRU(t *testing.T) {
 func TestCompression(t *testing.T) {
 	s := NewRamStorage(1000000)
 	f1 := addData(t, s, 1000001)
-	f1.Dispose()
+	defer f1.Dispose()
+	iter := f1.Chunks()
+	defer iter.Dispose()
+	t.Log("Iterating over chunks...")
+	for iter.Next() {
+		t.Logf("Chunk: Key %v, size %v", iter.Key(), iter.Size())
+	}
 }
 
 func TestCompression2(t *testing.T) {

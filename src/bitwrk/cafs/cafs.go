@@ -36,12 +36,12 @@ type FileStorage interface {
 	// with the temporary and also with the file, should it be created, and serves only
 	// informational purposes.
 	Create(info string) Temporary
-	
+
 	// Queries a file from the storage that can be read from. If the file exists, a File
 	// interface is returned that has been locked once and that must be released correctly.
 	// If the file does not exist, then (nil, ErrNotFound) is returned.
 	Get(key *SKey) (File, error)
-	
+
 	DumpStatistics()
 }
 
@@ -58,6 +58,38 @@ type File interface {
 	// Creates a new handle to the same file that must be Dispose()'d
 	// independently.
 	Duplicate() File
+
+	// Returns true if the file is stored in chunks internally.
+	// It is an error to call this function after Dispose().
+	IsChunked() bool
+	// Returns an iterator to the chunks of the file. The iterator must be disposed after use.
+	Chunks() FileIterator
+}
+
+// Iterate over a set of files or chunks.
+type FileIterator interface {
+	// Must be called after using this iterator.
+	Dispose()
+	// Returns a copy of this iterator that must be Dispose()'d independently.
+	Duplicate() FileIterator
+
+	// Advances the iterator and returns true if successful, or false if no further chunks
+	// could be read.
+	// Must be called before calling File().
+	Next() bool
+
+	// Returns the key of the last file or chunk successfully read by Next().
+	// Before calling this function, Next() must have been called and returned true.
+	Key() SKey
+
+	// Returns the size of the last file or chunk successfully read by Next().
+	// Before calling this function, Next() must have been called and returned true.
+	Size() int64
+	
+	// Returns the last file or chunk successfully read by Next() as a file.
+	// The received File must be Dispose()'d.
+	// Before calling this function, Next() must have been called and returned true.
+	File() File
 }
 
 type Temporary interface {
