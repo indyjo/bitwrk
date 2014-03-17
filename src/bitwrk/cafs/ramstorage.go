@@ -353,6 +353,16 @@ func (f *ramFile) Chunks() FileIterator {
 	}
 }
 
+func (f *ramFile) NumChunks() int64 {
+	if len(f.entry.chunks) > 0 {
+		return int64(len(f.entry.chunks))
+	} else if len(f.entry.data) > 0 {
+		return 1
+	} else {
+		return 0
+	}
+}
+
 func (ci *ramChunksIter) checkValid() {
 	if ci.disposed {
 		panic("Already disposed")

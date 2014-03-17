@@ -64,6 +64,8 @@ type File interface {
 	IsChunked() bool
 	// Returns an iterator to the chunks of the file. The iterator must be disposed after use.
 	Chunks() FileIterator
+	// Returns the number of chunks in this file, or 1 if file is not chunked
+	NumChunks() int64
 }
 
 // Iterate over a set of files or chunks.
@@ -85,7 +87,7 @@ type FileIterator interface {
 	// Returns the size of the last file or chunk successfully read by Next().
 	// Before calling this function, Next() must have been called and returned true.
 	Size() int64
-	
+
 	// Returns the last file or chunk successfully read by Next() as a file.
 	// The received File must be Dispose()'d.
 	// Before calling this function, Next() must have been called and returned true.
@@ -124,3 +126,4 @@ func ParseKey(s string) (*SKey, error) {
 
 	return &result, nil
 }
+

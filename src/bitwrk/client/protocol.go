@@ -236,7 +236,9 @@ func SendTxMessage(txId string, identity *bitcoin.KeyPair, arguments map[string]
 		if r.StatusCode == http.StatusSeeOther {
 			// Success! Do nothing.
 		} else {
-			return fmt.Errorf("Unexpected reply status posting form to server: %v (%v)", r.StatusCode, r.Status)
+			buf := make([]byte, 1024)
+			io.ReadFull(r.Body, buf)
+			return fmt.Errorf("Unexpected reply status posting form to server: %v (%v)", r.Status, string(buf))
 		}
 	} else {
 		return fmt.Errorf("Error posting form to server: %v", err)
