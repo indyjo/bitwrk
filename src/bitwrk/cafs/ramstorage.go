@@ -346,6 +346,7 @@ func (f *ramFile) Chunks() FileIterator {
 	return &ramChunksIter{
 		storage:      f.storage,
 		entry:        f.entry,
+		key:          f.key,
 		chunks:       chunks,
 		chunkIdx:     0,
 		lastChunkIdx: -1,
