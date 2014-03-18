@@ -14,18 +14,45 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// Implements a differential file synching mechanism based on the content-based chunking
+// that is used by CAFS internally.
+// Step 1: Sender lists hashes of chunks of file to transmit (32 byte + ~2.5 bytes for length per chunk)
+// Step 2: Receiver lists missing chunks (one bit per chunk)
+// Step 3: Sender sends content of missing chunks
+
 package cafs
 
 import (
 	"chunking"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 )
 
+type byteReader struct {
+	r   io.Reader
+	buf [1]byte
+}
+
+func (r byteReader) ReadByte() (byte, error) {
+	_, err := r.r.Read(r.buf[:])
+	return r.buf[0], err
+}
+
+func readVarint(r io.Reader) (int64, error) {
+	return binary.ReadVarint(byteReader{r: r})
+}
+
+func writeVarint(w io.Writer, value int64) error {
+	var buf [binary.MaxVarintLen64]byte
+	_, err := w.Write(buf[:binary.PutVarint(buf[:], value)])
+	return err
+}
+
 // Writes a stream of chunk hash/length pairs into an io.Writer. Length is encoded
 // as Varint.
-func EncodeChunkHashes(file File, w io.Writer) error {
+func WriteChunkHashes(file File, w io.Writer) error {
 	chunks := file.Chunks()
 	defer chunks.Dispose()
 	for chunks.Next() {
@@ -33,14 +60,16 @@ func EncodeChunkHashes(file File, w io.Writer) error {
 		if _, err := w.Write(key[:]); err != nil {
 			return err
 		}
-		if err := binary.Write(w, binary.BigEndian, chunks.Size()); err != nil {
+		if err := writeVarint(w, chunks.Size()); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func EncodeRequestedChunks(file File, wishList []byte, w io.Writer) error {
+// Writes a stream of chunk length / data pairs into an io.Writer, based on
+// the chunks of a file and a matching list of requested chunks.
+func WriteRequestedChunks(file File, wishList []byte, w io.Writer) error {
 	if int64(len(wishList)) != (file.NumChunks()+7)/8 {
 		return errors.New("Illegal size of wishList")
 	}
@@ -57,7 +86,7 @@ func EncodeRequestedChunks(file File, wishList []byte, w io.Writer) error {
 		if 0 != (b & 0x80) {
 			chunk := iter.File()
 			defer chunk.Dispose()
-			if err := binary.Write(w, binary.BigEndian, chunk.Size()); err != nil {
+			if err := writeVarint(w, chunk.Size()); err != nil {
 				return err
 			}
 			r := chunk.Open()
@@ -77,23 +106,8 @@ type Builder struct {
 	chunks        []chunkRef
 	chunksWritten int
 	found         map[SKey]File
-	missing       map[SKey]bool
 	disposed      bool
 	info          string
-}
-
-func readKey(r io.Reader, key *SKey) error {
-	k := key[:]
-	for len(k) > 0 {
-		if n, err := r.Read(k); err == io.EOF && n == len(k) {
-			return nil
-		} else if err != nil {
-			return err
-		} else {
-			k = k[n:]
-		}
-	}
-	return nil
 }
 
 // Reads a byte sequence encoded with EncodeChunkHashes and returns a new builder.
@@ -106,14 +120,16 @@ func NewBuilder(storage FileStorage, r io.Reader, info string) (*Builder, error)
 	found := make(map[SKey]File)
 	missing := make(map[SKey]bool)
 	for {
-		if err := readKey(r, &key); err == io.EOF {
+		if _, err := io.ReadFull(r, key[:]); err == io.EOF {
 			break
 		} else if err != nil {
 			return nil, err
 		}
 		var length int64
-		if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+		if l, err := readVarint(r); err != nil {
 			return nil, err
+		} else {
+			length = l
 		}
 		lastPos += length
 		chunks = append(chunks, chunkRef{key, lastPos})
@@ -128,7 +144,6 @@ func NewBuilder(storage FileStorage, r io.Reader, info string) (*Builder, error)
 		chunks:        chunks,
 		chunksWritten: 0,
 		found:         found,
-		missing:       missing,
 		disposed:      false,
 		info:          info,
 	}
@@ -153,26 +168,32 @@ func (b *Builder) checkValid() {
 
 // Outputs a bit stream with '1' for each missing chunk, and
 // '0' for each chunk that is already available.
-func (b *Builder) EncodeMissingChunks(w io.Writer) error {
+func (b *Builder) WriteWishList(w io.Writer) error {
 	b.checkValid()
-	var requested [1]byte
+	var buf [1]byte
+	requested := make(map[SKey]bool)
 	for idx, chunk := range b.chunks {
-		if _, ok := b.missing[chunk.key]; ok {
-			// chunk is missing -> request it
-			requested[0] = (requested[0] << 1) | 1
+		if _, ok := b.found[chunk.key]; !ok && !requested[chunk.key] {
+			// chunk is missing and not already requested -> request it
+			buf[0] = (buf[0] << 1) | 1
+			requested[chunk.key] = true
 		} else {
-			requested[0] = (requested[0] << 1) | 0
+			// chunk either found or already requested  
+			buf[0] = (buf[0] << 1) | 0
 		}
+		// Flush byte if 8 bits are set
 		if (idx & 7) == 7 {
-			if _, err := w.Write(requested[:]); err != nil {
+			if _, err := w.Write(buf[:]); err != nil {
 				return err
 			}
-			requested[0] = 0
+			buf[0] = 0
 		}
 	}
+	// Flush final byte
 	if (len(b.chunks) & 7) != 0 {
-		// Flush final byte
-		if _, err := w.Write(requested[:]); err != nil {
+		// shift in enough zeros so that first written bit is at msb position
+		buf[0] <<= 8 - uint(len(b.chunks)&7)
+		if _, err := w.Write(buf[:]); err != nil {
 			return err
 		}
 	}
@@ -188,26 +209,28 @@ func (b *Builder) ReconstructFileFromRequestedChunks(r io.Reader) (File, error) 
 
 	temp := b.storage.Create(b.info)
 	defer temp.Dispose()
-	for len(b.chunks) > 0 {
-		if f, ok := b.found[b.chunks[0].key]; ok {
+	idx := 0
+	for idx < len(b.chunks) {
+		key := b.chunks[idx].key
+		if f, ok := b.found[key]; ok {
 			// chunk is available already, get it from store
 			if err := appendChunk(temp, f); err != nil {
 				return nil, err
 			}
-			b.chunks = b.chunks[1:]
+			idx++
 			if bufferedChunks > 0 {
 				bufferedChunks--
 			}
-		} else if f, err := b.storage.Get(&b.chunks[0].key); err != nil {
-			b.found[b.chunks[0].key] = f
-			delete(b.missing, b.chunks[0].key)
+		} else if f, err := b.storage.Get(&key); err == nil {
+			// chunk is not locked, but in storage, so lock it
+			b.found[key] = f
 		} else {
 			if bufferedChunks > 16 {
 				return nil, errors.New("Too many buffered chunks")
 			}
 			bufferedChunks++
 
-			if err := readChunk(b.storage, r); err != nil {
+			if err := readChunk(b.storage, r, fmt.Sprintf("%v #%d", b.info, idx)); err != nil {
 				return nil, err
 			}
 		}
@@ -229,15 +252,17 @@ func appendChunk(temp Temporary, chunk File) error {
 	return nil
 }
 
-func readChunk(s FileStorage, r io.Reader) error {
+func readChunk(s FileStorage, r io.Reader, info string) error {
 	var length int64
-	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+	if n, err := readVarint(r); err != nil {
 		return err
+	} else {
+		length = n
 	}
 	if length < chunking.MIN_CHUNK || length > chunking.MAX_CHUNK {
 		return errors.New("Invalid chunk length")
 	}
-	tempChunk := s.Create("chunk")
+	tempChunk := s.Create(info)
 	defer tempChunk.Dispose()
 	if _, err := io.CopyN(tempChunk, r, length); err != nil {
 		return err

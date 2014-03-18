@@ -169,8 +169,8 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 	if todo.mustHandleReceipt {
 		return receiver.handleReceipt()
 	} else if todo.mustHandleChunkHashes {
-		w.Header().Set("Content-Type", "application/x-missing-chunks")
-		return receiver.builder.EncodeMissingChunks(w)
+		w.Header().Set("Content-Type", "application/x-wishlist")
+		return receiver.builder.WriteWishList(w)
 	} else if todo.mustHandleWork {
 		if r, err := receiver.handleWorkAndReturnEncryptedResult(); err != nil {
 			return err
