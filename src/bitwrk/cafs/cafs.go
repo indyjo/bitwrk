@@ -42,7 +42,7 @@ type FileStorage interface {
 	// If the file does not exist, then (nil, ErrNotFound) is returned.
 	Get(key *SKey) (File, error)
 
-	DumpStatistics()
+	DumpStatistics(log Printer)
 }
 
 type File interface {
@@ -108,6 +108,10 @@ type Temporary interface {
 	Dispose()
 }
 
+type Printer interface {
+	Printf(format string, v ...interface{})
+}
+
 func (k SKey) String() string {
 	return hex.EncodeToString(k[:])
 }
@@ -126,4 +130,3 @@ func ParseKey(s string) (*SKey, error) {
 
 	return &result, nil
 }
-

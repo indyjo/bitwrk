@@ -29,20 +29,27 @@ func TestSame(t *testing.T) {
 	}
 }
 
+type logPrinter struct {
+}
+
+func (p logPrinter) Printf(format string, v ...interface{}) {
+	fmt.Printf(format+"\n", v...)
+}
+
 func TestLRU(t *testing.T) {
 	s := NewRamStorage(1000)
 	f1 := addData(t, s, 400)
 	f1.Dispose()
-	s.DumpStatistics()
+	s.DumpStatistics(logPrinter{})
 	f2 := addData(t, s, 350)
 	f2.Dispose()
-	s.DumpStatistics()
+	s.DumpStatistics(logPrinter{})
 	f3 := addData(t, s, 250)
 	f3.Dispose()
-	s.DumpStatistics()
+	s.DumpStatistics(logPrinter{})
 	f4 := addData(t, s, 450)
 	f4.Dispose()
-	s.DumpStatistics()
+	s.DumpStatistics(logPrinter{})
 	var key SKey
 	key = f1.Key()
 	if _, err := s.Get(&key); err != ErrNotFound {
@@ -65,7 +72,7 @@ func TestLRU(t *testing.T) {
 		f.Dispose()
 	}
 
-	s.DumpStatistics()
+	s.DumpStatistics(logPrinter{})
 
 	// Now f3 is youngest, then f4 (f1 and f2 are gone)
 	addData(t, s, 500).Dispose()
@@ -138,6 +145,23 @@ func TestCompression2(t *testing.T) {
 	}
 }
 
+func TestRefCounting(t *testing.T) {
+	_s := NewRamStorage(80 * 1024)
+	s := _s.(*ramStorage)
+	_f := addRandomData(t, _s, 60*1024)
+	f := _f.(*ramFile)
+	defer s.DumpStatistics(logPrinter{})
+	if f.entry.refs != 1 {
+		t.Fatalf("Refs != 1 before dispose: %v", f.entry.refs)
+	}
+	_f.Dispose()
+	if f.entry.refs != 0 {
+		t.Fatalf("Refs != 0 after dispose: %v", f.entry.refs)
+	}
+	// This has to push out many chunks of first file
+	addRandomData(t, _s, 70*1024)
+}
+
 func addData(t *testing.T, s FileStorage, size int) File {
 	temp := s.Create(fmt.Sprintf("Adding %v bytes object", size))
 	defer temp.Dispose()
@@ -146,6 +170,22 @@ func addData(t *testing.T, s FileStorage, size int) File {
 			panic(err)
 		}
 		size--
+	}
+	if err := temp.Close(); err != nil {
+		panic(err)
+	}
+	return temp.File()
+}
+
+func addRandomData(t *testing.T, s FileStorage, size int) File {
+	temp := s.Create(fmt.Sprintf("%v random bytes", size))
+	defer temp.Dispose()
+	buf := make([]byte, size)
+	for i, _ := range buf {
+		buf[i] = byte(rand.Int())
+	}
+	if _, err := temp.Write(buf); err != nil {
+		panic(err)
 	}
 	if err := temp.Close(); err != nil {
 		panic(err)

@@ -127,11 +127,11 @@ func (s *ramStorage) Create(info string) Temporary {
 	}
 }
 
-func (s *ramStorage) DumpStatistics() {
+func (s *ramStorage) DumpStatistics(log Printer) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	log.Printf("Bytes used: %d, locked: %d", s.bytesUsed, s.bytesLocked)
+	log.Printf("Bytes used: %d, locked: %d, oldest: %x, youngest: %x", s.bytesUsed, s.bytesLocked, s.oldest[:4], s.youngest[:4])
 	for key, entry := range s.entries {
 		log.Printf("  [%x] refs=%d size=%v [%v] %x (older) %x (younger)", key[:4], entry.refs, entry.storageSize(), entry.info, entry.older[:4], entry.younger[:4])
 
@@ -158,6 +158,7 @@ func (s *ramStorage) reserveBytes(info string, numBytes int64) error {
 		if oldestEntry == nil {
 			return ErrNotEnoughSpace
 		}
+		s.removeFromChain(&s.oldest, oldestEntry)
 		delete(s.entries, oldestKey)
 
 		oldLocked := s.bytesLocked
@@ -165,8 +166,7 @@ func (s *ramStorage) reserveBytes(info string, numBytes int64) error {
 		for _, chunk := range oldestEntry.chunks {
 			s.release(&chunk.key, s.entries[chunk.key])
 		}
-		s.removeFromChain(&s.oldest, oldestEntry)
-		oldestSize := int64(len(oldestEntry.data))
+		oldestSize := oldestEntry.storageSize()
 		s.bytesUsed -= oldestSize
 		bytesFree += oldestSize
 		log.Printf("[%v]   Deleted object of size %v bytes: [%v] %v", info, oldestSize, oldestEntry.info, oldestKey)
@@ -180,7 +180,7 @@ func (s *ramStorage) reserveBytes(info string, numBytes int64) error {
 // Puts an entry into the store. If an entry already exists, it must be identical to the old one.
 // The newly-created or recycled entry has been lock'ed once and must be release'd properly.
 func (s *ramStorage) storeEntry(key *SKey, data []byte, chunks []chunkRef, info string) error {
-	if len(data) == 0 && len(chunks) == 0 || len(data) > 0 && len(chunks) > 0 {
+	if len(data) > 0 && len(chunks) > 0 {
 		panic("Illegal entry")
 	}
 	s.mutex.Lock()
@@ -357,10 +357,8 @@ func (f *ramFile) Chunks() FileIterator {
 func (f *ramFile) NumChunks() int64 {
 	if len(f.entry.chunks) > 0 {
 		return int64(len(f.entry.chunks))
-	} else if len(f.entry.data) > 0 {
-		return 1
 	} else {
-		return 0
+		return 1
 	}
 }
 
@@ -428,7 +426,7 @@ func (ci *ramChunksIter) Size() int64 {
 
 func (ci *ramChunksIter) File() File {
 	ci.checkValid()
-	if f, err := ci.storage.Get(&ci.key); err != nil {
+	if f, err := ci.storage.Get(&ci.chunks[ci.lastChunkIdx].key); err != nil {
 		panic(err)
 	} else {
 		return f
@@ -505,7 +503,7 @@ func (t *ramTemporary) flushBufferIntoChunk() error {
 	}
 
 	// Copy the chunk's data
-	chunkInfo := fmt.Sprintf("chunk #%d of [%v]", len(t.chunks), t.info)
+	chunkInfo := fmt.Sprintf("%v #%d", t.info, len(t.chunks))
 	chunkData := make([]byte, t.buffer.Len())
 	copy(chunkData, t.buffer.Bytes())
 
