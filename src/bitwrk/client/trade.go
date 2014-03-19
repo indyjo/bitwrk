@@ -62,6 +62,36 @@ type Trade struct {
 
 var ErrInterrupted = errors.New("The request was interrupted")
 
+func (a *Trade) beginTrade(log bitwrk.Logger, interrupt <-chan bool) error {
+	// wait for grant or reject
+	log.Println("Waiting for permission")
+
+	// Get a permission for the sell
+	if err := a.awaitPermission(interrupt); err != nil {
+		return fmt.Errorf("Error awaiting permission: %v", err)
+	}
+	log.Printf("Got permission. Price: %v", a.price)
+
+	if err := a.awaitBid(); err != nil {
+		return fmt.Errorf("Error awaiting bid: %v", err)
+	}
+	log.Printf("Got bid id: %v", a.bidId)
+
+	if err := a.awaitTransaction(log); err != nil {
+		return fmt.Errorf("Error awaiting transaction: %v", err)
+	}
+	log.Printf("Got transaction id: %v", a.txId)
+
+	if tx, etag, err := FetchTx(a.txId, ""); err != nil {
+		return err
+	} else {
+		a.tx = tx
+		a.txETag = etag
+	}
+
+	return nil
+}
+
 func (t *Trade) awaitPermission(interrupt <-chan bool) error {
 	exit := make(chan bool)
 	defer func() {
@@ -139,62 +169,24 @@ func (t *Trade) awaitTransaction(log bitwrk.Logger) error {
 	return nil
 }
 
-func (t *Trade) awaitTransactionPhase(log bitwrk.Logger, phase bitwrk.TxPhase, viaPhases ...bitwrk.TxPhase) error {
-	log.Printf("Awaiting transaction phase %v...", phase)
-	for count := 1; ; count++ {
-		if tx, etag, err := FetchTx(t.txId, ""); err != nil {
-			return err
-		} else if etag != t.txETag {
-			t.tx = tx
-			t.txETag = etag
-			log.Printf("Tx-etag: %#v", etag)
-		}
-
-		if t.tx.State != bitwrk.StateActive {
-			return ErrTxExpired
-		}
-
-		if phase == t.tx.Phase {
-			break
-		}
-
-		valid := false
-		for _, via := range viaPhases {
-			if t.tx.Phase == via {
-				valid = true
-				break
-			}
-		}
-
-		if !valid {
-			return ErrTxUnexpectedState
-		}
-
-		// Sleep for gradually longer durations
-		time.Sleep(time.Duration(count) * 500 * time.Millisecond)
-	}
-
-	log.Printf("Phase %v reached.", phase)
-	return nil
-}
-
 func (t *Trade) waitForTransactionPhase(log bitwrk.Logger, phase bitwrk.TxPhase, viaPhases ...bitwrk.TxPhase) error {
 	log.Printf("Waiting for transaction phase %v...", phase)
-	for {
-		t.condition.L.Lock()
-		t.condition.Wait()
-		currentPhase := t.tx.Phase
-		currentState := t.tx.State
-		t.condition.L.Unlock()
-
+	
+	if err := t.updateTransaction(log); err != nil {
+		return err
+	}
+	
+	var currentPhase bitwrk.TxPhase
+	var currentState bitwrk.TxState
+	t.waitWhile(func() bool {
+		currentPhase = t.tx.Phase
+		currentState = t.tx.State
 		if currentState != bitwrk.StateActive {
-			return ErrTxExpired
+			return false
 		}
-
 		if currentPhase == phase {
-			break
+			return false
 		}
-
 		valid := false
 		for _, via := range viaPhases {
 			if currentPhase == via {
@@ -202,15 +194,18 @@ func (t *Trade) waitForTransactionPhase(log bitwrk.Logger, phase bitwrk.TxPhase,
 				break
 			}
 		}
-
-		if !valid {
-			return ErrTxUnexpectedState
-		}
-
+		return valid
+	})
+	if currentState != bitwrk.StateActive {
+		return ErrTxExpired
 	}
 
-	log.Printf("Phase %v reached.", phase)
-	return nil
+	if currentPhase == phase {
+		log.Printf("Phase %v reached.", phase)
+		return nil
+	}
+
+	return ErrTxUnexpectedState
 }
 
 func (t *Trade) waitWhile(f func() bool) {
@@ -260,6 +255,38 @@ func (t *Trade) watchdog(log bitwrk.Logger, exitChan <-chan bool, closerChan <-c
 
 		time.Sleep(250 * time.Millisecond)
 	}
+}
+
+func (t *Trade) updateTransaction(log bitwrk.Logger) error {
+	attemptsLeft := 3
+	for attemptsLeft > 0 {
+		attemptsLeft--
+		if tx, etag, err := FetchTx(t.txId, ""); err != nil {
+			log.Printf("Error updating transaction: %v (attempts left: %d)", err, attemptsLeft)
+			if attemptsLeft > 0 {
+				time.Sleep(5 * time.Second)
+			} else {
+				return err
+			}
+		} else {
+			expired := false
+			func() {
+				t.condition.L.Lock()
+				defer t.condition.L.Unlock()
+				if etag != t.txETag {
+					t.tx = tx
+					t.txETag = etag
+					expired = t.tx.State != bitwrk.StateActive
+					t.condition.Broadcast()
+					log.Printf("Tx change detected: phase=%v, expired=%v", t.tx.Phase, expired)
+				}
+			}()
+			if expired {
+				break
+			}
+		}
+	}
+	return nil
 }
 
 // Polls the transaction state in a separate go-routine. Returns on abort signal, or

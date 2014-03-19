@@ -154,7 +154,7 @@ func (s *WorkerState) executeSell(log bitwrk.Logger, sell *SellActivity, interru
 		s.Blockers--
 		s.cond.Broadcast()
 		s.cond.L.Unlock()
-	} ()
+	}()
 	defer sell.Dispose()
 	if err := sell.PerformSell(log.Newf("Sell #%v", sell.GetKey()), s.m.receiveManager, interrupt); err != nil {
 		s.LastError = fmt.Sprintf("Error performing sell (delaying next sell by 20s): %v", err)
@@ -196,7 +196,7 @@ func (s *WorkerState) DoWork(workReader io.Reader, closerChan chan<- io.Closer) 
 	s.setBusy()
 
 	// Customized HTTP client that submits all connections to watchdog
-	var controlledClient http.Client = client
+	var controlledClient *http.Client = GetClient()
 	controlledClient.Transport = &http.Transport{
 		Dial: func(network, addr string) (conn net.Conn, err error) {
 			conn, err = net.DialTimeout(network, addr, 10*time.Second)

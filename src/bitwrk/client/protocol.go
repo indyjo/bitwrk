@@ -33,21 +33,20 @@ import (
 	"time"
 )
 
-var client = http.Client{
-	// Disallow redirects (or explicitly handle them)
-	CheckRedirect: func(r *http.Request, _ []*http.Request) error {
-		return fmt.Errorf("Redirect encountered in request %v", r)
-	},
-	// 10 seconds timeout for TCP connection establishing
-	Transport: &http.Transport{
-		Dial: func(network, addr string) (net.Conn, error) {
-			return net.DialTimeout(network, addr, 10*time.Second)
-		},
-	},
-}
-
 func GetClient() *http.Client {
-	return &client
+	return &http.Client{
+		// Disallow redirects (or explicitly handle them)
+		CheckRedirect: func(r *http.Request, _ []*http.Request) error {
+			return fmt.Errorf("Redirect encountered in request %v", r)
+		},
+		// 10 seconds timeout for TCP connection establishing
+		Transport: &http.Transport{
+			Dial: func(network, addr string) (net.Conn, error) {
+				return net.DialTimeout(network, addr, 10*time.Second)
+			},
+		},
+	}
+
 }
 
 func NewRequest(method, url string, body io.Reader) (*http.Request, error) {
@@ -73,7 +72,7 @@ func getFromServer(relpath string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.Do(req)
+	return GetClient().Do(req)
 }
 
 func getJsonFromServer(relpath, etag string) (*http.Response, error) {
@@ -85,7 +84,7 @@ func getJsonFromServer(relpath, etag string) (*http.Response, error) {
 	if etag != "" {
 		req.Header.Set("If-None-Match", etag)
 	}
-	return client.Do(req)
+	return GetClient().Do(req)
 }
 
 func FetchBid(bidId, etag string) (*bitwrk.Bid, string, error) {
@@ -141,7 +140,7 @@ func postFormToServer(relpath, query string) (*http.Response, error) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	return client.Do(req)
+	return GetClient().Do(req)
 }
 
 func getStringFromServer(relpath string, limit int64) (string, error) {

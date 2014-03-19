@@ -72,34 +72,7 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 }
 
 func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *ReceiveManager, interrupt <-chan bool) error {
-	// wait for grant or reject
-	log.Println("Waiting for permission")
-
-	// Get a permission for the sell
-	if err := a.awaitPermission(interrupt); err != nil {
-		return fmt.Errorf("Error awaiting permission: %v", err)
-	}
-	log.Printf("Got permission. Price: %v", a.price)
-
-	if err := a.awaitBid(); err != nil {
-		return fmt.Errorf("Error awaiting bid: %v", err)
-	}
-	log.Printf("Got bid id: %v", a.bidId)
-
-	if err := a.awaitTransaction(log); err != nil {
-		return fmt.Errorf("Error awaiting transaction: %v", err)
-	}
-	log.Printf("Got transaction id: %v", a.txId)
-
-	if tx, etag, err := FetchTx(a.txId, ""); err != nil {
-		return err
-	} else {
-		a.tx = tx
-		a.txETag = etag
-		//log.Printf("Tx-etag: %#v", etag)
-	}
-
-	// TODO: Verify the transaction
+	a.beginTrade(log, interrupt)
 
 	// Start polling for state changes in background
 	abortPolling := make(chan bool)
@@ -120,7 +93,14 @@ func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *ReceiveM
 		return err
 	}
 
-	a.waitForTransactionPhase(log, bitwrk.PhaseFinished, bitwrk.PhaseTransmitting, bitwrk.PhaseWorking, bitwrk.PhaseUnverified)
+	// Wait through the whole transaction lifecycle
+	a.waitForTransactionPhase(log, bitwrk.PhaseFinished,
+		bitwrk.PhaseEstablishing,
+		bitwrk.PhaseBuyerEstablished,
+		bitwrk.PhaseSellerEstablished,
+		bitwrk.PhaseTransmitting,
+		bitwrk.PhaseWorking,
+		bitwrk.PhaseUnverified)
 	return nil
 }
 

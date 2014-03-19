@@ -70,34 +70,7 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workF
 }
 
 func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
-	// wait for grant or reject
-	log.Println("Waiting for permission")
-
-	// Get a permission for the buy
-	if err := a.awaitPermission(interrupt); err != nil {
-		return nil, err
-	}
-	log.Printf("Got permission. Price: %v", a.price)
-
-	if err := a.awaitBid(); err != nil {
-		return nil, err
-	}
-	log.Printf("Got bid id: %v", a.bidId)
-
-	if err := a.awaitTransaction(log); err != nil {
-		return nil, err
-	}
-	log.Printf("Got transaction id: %v", a.txId)
-
-	if tx, etag, err := FetchTx(a.txId, ""); err != nil {
-		return nil, err
-	} else {
-		a.tx = tx
-		a.txETag = etag
-		log.Printf("Tx-etag: %#v", etag)
-	}
-
-	// TODO: Verify the transaction
+	a.beginTrade(log, interrupt)
 
 	// draw random bytes for buyer's secret
 	var secret bitwrk.Thash
@@ -117,23 +90,28 @@ func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (ca
 	hash.Write(secret[:])
 	hash.Sum(workSecretHash[:0])
 
+	// Start polling for transaction state changes in background
+	abortPolling := make(chan bool)
+	defer func() {
+		abortPolling <- true // Stop polling when sell has ended
+	}()
+	go func() {
+		a.pollTransaction(log, abortPolling)
+	}()
+
 	if err := SendTxMessageEstablishBuyer(a.txId, a.identity, workHash, workSecretHash); err != nil {
 		return nil, fmt.Errorf("Error establishing buyer: %v", err)
 	}
 
-	if err := a.awaitTransactionPhase(log.New("establishing"), bitwrk.PhaseTransmitting, bitwrk.PhaseBuyerEstablished); err != nil {
+	if err := a.waitForTransactionPhase(log.New("establishing"), bitwrk.PhaseTransmitting, bitwrk.PhaseBuyerEstablished); err != nil {
 		return nil, fmt.Errorf("Error awaiting TRANSMITTING phase: %v", err)
 	}
 
-	if err := a.transmitWorkAndReceiveEncryptedResult(log.New("transmitting")); err != nil {
+	if err := a.interactWithSeller(log.New("transmitting")); err != nil {
 		return nil, fmt.Errorf("Error transmitting work and receiving encrypted result: %v", err)
 	}
 
-	if err := a.signReceipt(); err != nil {
-		return nil, fmt.Errorf("Error signing receipt for encrypted result: %v", err)
-	}
-
-	if err := a.awaitTransactionPhase(log, bitwrk.PhaseUnverified, bitwrk.PhaseTransmitting, bitwrk.PhaseWorking); err != nil {
+	if err := a.waitForTransactionPhase(log, bitwrk.PhaseUnverified, bitwrk.PhaseTransmitting, bitwrk.PhaseWorking); err != nil {
 		return nil, fmt.Errorf("Error awaiting UNVERIFIED phase: %v", err)
 	}
 
@@ -150,7 +128,7 @@ func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (ca
 	return a.resultFile, nil
 }
 
-func (a *BuyActivity) testSellerForChunkedCapability(log bitwrk.Logger) (bool, error) {
+func (a *BuyActivity) testSellerForChunkedCapability(log bitwrk.Logger, client *http.Client) (bool, error) {
 	req, err := newRequest("OPTIONS", *a.tx.WorkerURL, nil)
 	if err != nil {
 		return false, err
@@ -176,17 +154,44 @@ func (a *BuyActivity) testSellerForChunkedCapability(log bitwrk.Logger) (bool, e
 	return caps.Adler32Chunking, nil
 }
 
-// Initiates buyer to seller conact.
+// Performs all buyer to seller conact.
 // First queries the seller via HTTP OPTIONS whether chunked transmission is supported.
 // If yes, a chunk list is transmitted, followed by data of missing work data chunks.
 // Otherwise, work data is transferred linearly.
 // The result is either an error or nil. In the latter case, a.encResultFile contains
 // the result data encrypted with a key that the seller will hand out after we have signed
 // a receipt for the encrypted result.
-func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult(log bitwrk.Logger) error {
+func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
+    // Use a watchdog to make sure that all connnections created in the call time of this
+    // function are closed when the transaction leaves the active state or the allowed
+    // phases.
+    // Transaction polling is guaranteed by the calling function.
+	exitChan := make(chan bool)
+	connChan := make(chan io.Closer)
+	go a.watchdog(log, exitChan, connChan, func() bool {
+		return a.tx.State == bitwrk.StateActive &&
+			(a.tx.Phase == bitwrk.PhaseSellerEstablished ||
+				a.tx.Phase == bitwrk.PhaseTransmitting ||
+				a.tx.Phase == bitwrk.PhaseWorking)
+	})
+	defer func() {
+		exitChan <- true
+	}()
+
+	var controlledClient *http.Client = GetClient()
+	controlledClient.Transport = &http.Transport{
+		Dial: func(network, addr string) (conn net.Conn, err error) {
+			conn, err = net.DialTimeout(network, addr, 10*time.Second)
+			if err == nil {
+				connChan <- conn
+			}
+			return
+		},
+	}
+
 	chunked := false
 	if a.workFile.IsChunked() {
-		if supported, err := a.testSellerForChunkedCapability(log); err != nil {
+		if supported, err := a.testSellerForChunkedCapability(log, controlledClient); err != nil {
 			log.Printf("Failed to probe seller for capabilities: %v", err)
 		} else {
 			chunked = supported
@@ -194,29 +199,12 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult(log bitwrk.Logger) e
 		}
 	}
 
-	var controlledClient http.Client = client
-	controlledClient.Transport = &http.Transport{
-		Dial: func(network, addr string) (conn net.Conn, err error) {
-			conn, err = net.DialTimeout(network, addr, 10*time.Second)
-			if err == nil {
-				// Keep watching tx and close connection when retired before end of transmission
-				go func() {
-					if err := a.awaitTransactionPhase(log, bitwrk.PhaseUnverified, bitwrk.PhaseWorking, bitwrk.PhaseTransmitting); err != nil {
-						log.Printf("Closing connection to seller: %v", err)
-						conn.Close()
-					}
-				}()
-			}
-			return
-		},
-	}
-
 	var response io.ReadCloser
 	var transmissionError error
 	if chunked {
-		response, transmissionError = a.transmitWorkChunked(log, &controlledClient)
+		response, transmissionError = a.transmitWorkChunked(log, controlledClient)
 	} else {
-		response, transmissionError = a.transmitWorkLinear(log, &controlledClient)
+		response, transmissionError = a.transmitWorkLinear(log, controlledClient)
 	}
 	if response != nil {
 		defer response.Close()
@@ -239,6 +227,10 @@ func (a *BuyActivity) transmitWorkAndReceiveEncryptedResult(log bitwrk.Logger) e
 	}
 
 	a.encResultFile = temp.File()
+
+	if err := a.signReceipt(controlledClient); err != nil {
+		return fmt.Errorf("Error signing receipt for encrypted result: %v", err)
+	}
 
 	return nil
 }
@@ -282,7 +274,7 @@ func (a *BuyActivity) transmitWorkLinear(log bitwrk.Logger, client *http.Client)
 		log.Printf("Work transmitted successfully.")
 	}()
 
-	return a.postToSeller(pipeIn, mwriter.FormDataContentType())
+	return a.postToSeller(pipeIn, mwriter.FormDataContentType(), client)
 }
 
 func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client) (io.ReadCloser, error) {
@@ -322,7 +314,7 @@ func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Clien
 		log.Printf("Work chunk hashes transmitted successfully.")
 	}()
 
-	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType()); err != nil {
+	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), client); err != nil {
 		return nil, fmt.Errorf("Error sending work chunk hashes to seller: %v", err)
 	} else {
 		return r, nil
@@ -352,13 +344,12 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 		log.Printf("Missing chunk data transmitted successfully.")
 	}()
 
-	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType()); err != nil {
+	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), client); err != nil {
 		return nil, fmt.Errorf("Error sending work chunk data to seller: %v", err)
 	} else {
 		return r, nil
 	}
 }
-
 
 func (a *BuyActivity) encodeChunkedFirstTransmission(log bitwrk.Logger, mwriter *multipart.Writer) (err error) {
 	part, err := mwriter.CreateFormFile("a32chunks", "a32chunks.bin")
@@ -378,7 +369,7 @@ func (a *BuyActivity) encodeChunkedFirstTransmission(log bitwrk.Logger, mwriter 
 	return mwriter.Close()
 }
 
-func (a *BuyActivity) postToSeller(postData io.Reader, contentType string) (io.ReadCloser, error) {
+func (a *BuyActivity) postToSeller(postData io.Reader, contentType string, client *http.Client) (io.ReadCloser, error) {
 	if req, err := newRequest("POST", *a.tx.WorkerURL, postData); err != nil {
 		return nil, fmt.Errorf("Error creating transmit request: %v", err)
 	} else {
@@ -401,7 +392,7 @@ func (a *BuyActivity) postToSeller(postData io.Reader, contentType string) (io.R
 // Signs a receipt for the encrypted result that the seller can use to
 // prove that the result was transmitted correctly. In exchange, we get the
 // key to unlock the encrypted result.
-func (a *BuyActivity) signReceipt() error {
+func (a *BuyActivity) signReceipt(client *http.Client) error {
 	encresulthash := a.encResultFile.Key().String()
 	if sig, err := a.identity.SignMessage(encresulthash, rand.Reader); err != nil {
 		return err
