@@ -125,9 +125,7 @@ func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (ca
 		return nil, fmt.Errorf("Failed to send 'accept result' message: %v", err)
 	}
 	
-	if err := a.waitForTransactionPhase(log, bitwrk.PhaseFinished, bitwrk.PhaseUnverified); err != nil {
-		return nil, fmt.Errorf("Error awaiting FINISHED phase: %v", err)
-	}
+	a.waitWhile(func() bool { return a.tx.State == bitwrk.StateActive })
 
 	return a.resultFile, nil
 }
