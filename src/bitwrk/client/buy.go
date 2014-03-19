@@ -120,9 +120,13 @@ func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (ca
 	if err := a.decryptResult(); err != nil {
 		return nil, fmt.Errorf("Error decrypting result: %v", err)
 	}
-
+	
 	if err := SendTxMessageAcceptResult(a.txId, a.identity); err != nil {
 		return nil, fmt.Errorf("Failed to send 'accept result' message: %v", err)
+	}
+	
+	if err := a.waitForTransactionPhase(log, bitwrk.PhaseFinished, bitwrk.PhaseUnverified); err != nil {
+		return nil, fmt.Errorf("Error awaiting FINISHED phase: %v", err)
 	}
 
 	return a.resultFile, nil
