@@ -272,6 +272,7 @@ func (b *Builder) ReconstructFileFromRequestedChunks(r io.Reader) (File, error) 
 		// Try to write a chunk of the work file
 		if idx < len(b.chunks) {
 			key := b.chunks[idx].key
+			idx++
 			chunk, _ := b.storage.Get(&key)
 			buffer.pop(key)
 			if chunk != nil {
