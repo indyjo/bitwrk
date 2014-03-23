@@ -178,7 +178,7 @@ func (b *Builder) WriteWishList(w io.Writer) error {
 			buf[0] = (buf[0] << 1) | 1
 			requested[chunk.key] = true
 		} else {
-			// chunk either found or already requested  
+			// chunk either found or already requested
 			buf[0] = (buf[0] << 1) | 0
 		}
 		// Flush byte if 8 bits are set
@@ -200,39 +200,95 @@ func (b *Builder) WriteWishList(w io.Writer) error {
 	return nil
 }
 
+// A datastructure to buffer the chunks sent up to a certain number
+type chunkBuffer struct {
+	chunks map[SKey]*chunkBufferEntry
+	avail  int
+}
+type chunkBufferEntry struct {
+	chunk File
+	count int
+}
+
+func newChunkBuffer(avail int) *chunkBuffer {
+	return &chunkBuffer{make(map[SKey]*chunkBufferEntry), avail}
+}
+func (b *chunkBuffer) isFull() bool { return b.avail <= 0 }
+func (b *chunkBuffer) push(file File) {
+	entry := b.chunks[file.Key()]
+	if entry == nil {
+		entry = &chunkBufferEntry{file, 0}
+		b.chunks[file.Key()] = entry
+	}
+	entry.count++
+	b.avail--
+}
+func (b *chunkBuffer) pop(key SKey) {
+	entry := b.chunks[key]
+	if entry == nil {
+		return
+	}
+	b.avail++
+	entry.count--
+	if entry.count == 0 {
+		entry.chunk.Dispose()
+		delete(b.chunks, key)
+	}
+}
+func (b *chunkBuffer) dispose() {
+	for key, entry := range b.chunks {
+		entry.chunk.Dispose()
+		delete(b.chunks, key)
+	}
+}
+
 // Reads a sequence of length-prefixed data chunks and tries to reconstruct a file from that
-// information.
+// information. By using a 16-chunk buffer lookahead, we try to be a little bit flexible
+// with regard to the exact sequence of chunks.
 func (b *Builder) ReconstructFileFromRequestedChunks(r io.Reader) (File, error) {
 	b.checkValid()
 	// Counts the number of not immediately helpful chunks received to avoid being spammed.
-	bufferedChunks := 0
+	buffer := newChunkBuffer(16)
+	defer buffer.dispose()
 
 	temp := b.storage.Create(b.info)
 	defer temp.Dispose()
-	idx := 0
-	for idx < len(b.chunks) {
-		key := b.chunks[idx].key
-		if f, ok := b.found[key]; ok {
-			// chunk is available already, get it from store
-			if err := appendChunk(temp, f); err != nil {
-				return nil, err
-			}
-			idx++
-			if bufferedChunks > 0 {
-				bufferedChunks--
-			}
-		} else if f, err := b.storage.Get(&key); err == nil {
-			// chunk is not locked, but in storage, so lock it
-			b.found[key] = f
-		} else {
-			if bufferedChunks > 16 {
-				return nil, errors.New("Too many buffered chunks")
-			}
-			bufferedChunks++
 
-			if err := readChunk(b.storage, r, fmt.Sprintf("%v #%d", b.info, idx)); err != nil {
+	// Index of the next chunk to write into temp
+	idx := 0
+	eof := false
+
+	for {
+		// Read as many chunks from the stream as possible
+		for !eof && !buffer.isFull() {
+			if f, err := readChunk(b.storage, r, fmt.Sprintf("%v #%d", b.info, idx)); err == io.EOF {
+				eof = true
+			} else if err != nil {
 				return nil, err
+			} else {
+				buffer.push(f)
 			}
+		}
+		// Try to write a chunk of the work file
+		if idx < len(b.chunks) {
+			key := b.chunks[idx].key
+			idx++
+			chunk, _ := b.storage.Get(&key)
+			buffer.pop(key)
+			if chunk != nil {
+				// Todo: we could check for chunk size here
+				if err := appendChunk(temp, chunk); err != nil {
+					chunk.Dispose()
+					return nil, err
+				}
+				chunk.Dispose()
+			} else {
+				return nil, errors.New("Could not reconstruct file from received chunks")
+			}
+		} else if !eof {
+			return nil, errors.New("Received more chunks than needed.")
+		} else {
+			break
 		}
 	}
 
@@ -252,23 +308,23 @@ func appendChunk(temp Temporary, chunk File) error {
 	return nil
 }
 
-func readChunk(s FileStorage, r io.Reader, info string) error {
+func readChunk(s FileStorage, r io.Reader, info string) (File, error) {
 	var length int64
 	if n, err := readVarint(r); err != nil {
-		return err
+		return nil, err
 	} else {
 		length = n
 	}
 	if length < chunking.MIN_CHUNK || length > chunking.MAX_CHUNK {
-		return errors.New("Invalid chunk length")
+		return nil, errors.New("Invalid chunk length")
 	}
 	tempChunk := s.Create(info)
 	defer tempChunk.Dispose()
 	if _, err := io.CopyN(tempChunk, r, length); err != nil {
-		return err
+		return nil, err
 	}
 	if err := tempChunk.Close(); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return tempChunk.File(), nil
 }
