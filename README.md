@@ -1,3 +1,6 @@
+master [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=master)](https://travis-ci.org/indyjo/bitwrk)
+experimental [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=experimental)](https://travis-ci.org/indyjo/bitwrk)
+
 Bitwrk - A Bitcoin-friendly, anonymous marketplace for computing power
 ======================================================================
 
