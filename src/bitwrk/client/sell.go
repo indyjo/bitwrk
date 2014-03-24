@@ -72,7 +72,9 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 }
 
 func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *ReceiveManager, interrupt <-chan bool) error {
-	a.beginTrade(log, interrupt)
+	if err := a.beginTrade(log, interrupt); err != nil {
+		return err
+	}
 
 	// Start polling for state changes in background
 	abortPolling := make(chan bool)

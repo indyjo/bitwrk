@@ -69,7 +69,9 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workF
 }
 
 func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
-	a.beginTrade(log, interrupt)
+	if err := a.beginTrade(log, interrupt); err != nil {
+		return nil, err
+	}
 
 	// draw random bytes for buyer's secret
 	var secret bitwrk.Thash
