@@ -159,5 +159,9 @@ func (a *SellActivity) dispatchWork(log bitwrk.Logger, workFile cafs.File) (io.R
 
 	reader := workFile.Open()
 	defer reader.Close()
-	return a.worker.DoWork(reader, connChan)
+	
+	st := NewScopedTransport()
+	connChan <- st
+	defer st.Close()
+	return a.worker.DoWork(reader, NewClient(&st.Transport))
 }
