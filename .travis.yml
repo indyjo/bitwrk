@@ -3,11 +3,11 @@ language: go
 go:
  - 1.1
  - 1.2
- 
+
 install:
  - echo "Luckily, there are no dependencies"
 
 script:
- - ls -l
- - cd script
- - ls -l
+ - export GOPATH=$GOPATH:$(pwd)
+ - go test bitbucket.org/ww/goautoneg bitwrk/... chunking/...
+ - go install ./src/cmd/bitwrk-client/ && bin/bitwrk-client --help
