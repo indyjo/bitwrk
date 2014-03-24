@@ -161,9 +161,14 @@ func (a *SellActivity) dispatchWork(log bitwrk.Logger, workFile cafs.File) (io.R
 
 	reader := workFile.Open()
 	defer reader.Close()
-	
+
 	st := NewScopedTransport()
 	connChan <- st
 	defer st.Close()
-	return a.worker.DoWork(reader, NewClient(&st.Transport))
+	r, err := a.worker.DoWork(reader, NewClient(&st.Transport))
+	if err == nil {
+		// Defuse connection closing mechanism
+		st.DisownConnections()
+	}
+	return r, err
 }

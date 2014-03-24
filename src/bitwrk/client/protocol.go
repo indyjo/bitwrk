@@ -73,6 +73,12 @@ func NewScopedTransport() *ScopedTransport {
 	return st
 }
 
+func (st *ScopedTransport) DisownConnections() {
+	st.mutex.Lock()
+	st.conns = nil
+	st.mutex.Unlock()
+}
+
 func (st *ScopedTransport) Close() (err error) {
 	st.mutex.Lock()
 	conns := st.conns
