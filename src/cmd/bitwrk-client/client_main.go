@@ -166,7 +166,7 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 		Handler: mux,
 		// No timeouts!
 	}
-	relay := &HttpRelay{"/", client.BitwrkUrl}
+	relay := &HttpRelay{"/", client.BitwrkUrl, client.NewClient(&http.Transport{})}
 	mux.Handle("/account/", relay)
 	mux.Handle("/bid", relay)
 	mux.Handle("/bid/", relay)

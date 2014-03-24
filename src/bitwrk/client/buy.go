@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -70,7 +69,9 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workF
 }
 
 func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
-	a.beginTrade(log, interrupt)
+	if err := a.beginTrade(log, interrupt); err != nil {
+		return nil, err
+	}
 
 	// draw random bytes for buyer's secret
 	var secret bitwrk.Thash
@@ -180,20 +181,14 @@ func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
 		exitChan <- true
 	}()
 
-	var controlledClient *http.Client = GetClient()
-	controlledClient.Transport = &http.Transport{
-		Dial: func(network, addr string) (conn net.Conn, err error) {
-			conn, err = net.DialTimeout(network, addr, 10*time.Second)
-			if err == nil {
-				connChan <- conn
-			}
-			return
-		},
-	}
-
+	st := NewScopedTransport()
+	connChan <- st
+	defer st.Close()
+	scopedClient := NewClient(&st.Transport)
+	
 	chunked := false
 	if a.workFile.IsChunked() {
-		if supported, err := a.testSellerForChunkedCapability(log, controlledClient); err != nil {
+		if supported, err := a.testSellerForChunkedCapability(log, scopedClient); err != nil {
 			log.Printf("Failed to probe seller for capabilities: %v", err)
 		} else {
 			chunked = supported
@@ -204,9 +199,9 @@ func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
 	var response io.ReadCloser
 	var transmissionError error
 	if chunked {
-		response, transmissionError = a.transmitWorkChunked(log, controlledClient)
+		response, transmissionError = a.transmitWorkChunked(log, scopedClient)
 	} else {
-		response, transmissionError = a.transmitWorkLinear(log, controlledClient)
+		response, transmissionError = a.transmitWorkLinear(log, scopedClient)
 	}
 	if response != nil {
 		defer response.Close()
@@ -230,7 +225,7 @@ func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
 
 	a.encResultFile = temp.File()
 
-	if err := a.signReceipt(controlledClient); err != nil {
+	if err := a.signReceipt(scopedClient); err != nil {
 		return fmt.Errorf("Error signing receipt for encrypted result: %v", err)
 	}
 

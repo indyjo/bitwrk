@@ -20,7 +20,6 @@ import (
 	"bitwrk"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -57,10 +56,7 @@ type Worker interface {
 	GetWorkerState() WorkerState
 	// Makes the worker perform some work. Returns an io.ReadCloser containing the result,
 	// or an error if anything went wrong. The caller is responsible for closing the result.
-	// By putting closeable objects into closerChan, the Worker implementation can submit
-	// any connections or files used to communicate with the worker process to a watchdog
-	// supervising the process.
-	DoWork(workReader io.Reader, closerChan chan<- io.Closer) (io.ReadCloser, error)
+	DoWork(workReader io.Reader, client *http.Client) (io.ReadCloser, error)
 }
 
 func NewWorkerManager(a *ActivityManager, r *ReceiveManager) *WorkerManager {
@@ -191,24 +187,12 @@ func (s *WorkerState) GetWorkerState() WorkerState {
 	return *s
 }
 
-func (s *WorkerState) DoWork(workReader io.Reader, closerChan chan<- io.Closer) (io.ReadCloser, error) {
+func (s *WorkerState) DoWork(workReader io.Reader, client *http.Client) (io.ReadCloser, error) {
 	// Mark worker as busy
 	s.setBusy()
 
-	// Customized HTTP client that submits all connections to watchdog
-	var controlledClient *http.Client = GetClient()
-	controlledClient.Transport = &http.Transport{
-		Dial: func(network, addr string) (conn net.Conn, err error) {
-			conn, err = net.DialTimeout(network, addr, 10*time.Second)
-			if err == nil {
-				closerChan <- conn // Start watching connection
-			}
-			return
-		},
-	}
-
 	// Do ectual HTTP request
-	resp, err := controlledClient.Post(s.Info.PushURL, "application/octet-stream", workReader)
+	resp, err := client.Post(s.Info.PushURL, "application/octet-stream", workReader)
 	if err != nil {
 		return nil, err
 	}

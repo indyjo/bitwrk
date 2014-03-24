@@ -26,6 +26,7 @@ import (
 type HttpRelay struct {
 	localPathPrefix string
 	remoteUrlPrefix string
+	client          *http.Client
 }
 
 func (r *HttpRelay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -39,7 +40,11 @@ func (r *HttpRelay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		remoteReq.Header.Set("Accept", req.Header.Get("Accept"))
-		if remoteResp, err := client.GetClient().Do(remoteReq); err != nil {
+		remoteResp, err := r.client.Do(remoteReq)
+		if remoteResp != nil && remoteResp.Body != nil {
+			defer remoteResp.Body.Close()
+		}
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		} else {
 			w.WriteHeader(remoteResp.StatusCode)

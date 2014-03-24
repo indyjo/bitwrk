@@ -342,9 +342,13 @@ func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(log bitwrk.Logger, wor
 		exitChan <- true
 	}()
 
+	st := NewScopedTransport()
+	connChan <- st
+	defer st.Close()
+	
 	reader := workFile.Open()
 	defer reader.Close()
-	result, err := a.worker.DoWork(reader, connChan)
+	result, err := a.worker.DoWork(reader, NewClient(&st.Transport))
 	if err != nil {
 		return err
 	}

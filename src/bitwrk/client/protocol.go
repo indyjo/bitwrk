@@ -30,23 +30,65 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
-func GetClient() *http.Client {
-	return &http.Client{
-		// Disallow redirects (or explicitly handle them)
-		CheckRedirect: func(r *http.Request, _ []*http.Request) error {
-			return fmt.Errorf("Redirect encountered in request %v", r)
-		},
-		// 10 seconds timeout for TCP connection establishing
-		Transport: &http.Transport{
-			Dial: func(network, addr string) (net.Conn, error) {
-				return net.DialTimeout(network, addr, 10*time.Second)
-			},
-		},
-	}
+var defaultClient = NewClient(&http.Transport{Dial: timedDial})
 
+// Disallow redirects (or explicitly handle them)
+func disallowRedirects(r *http.Request, _ []*http.Request) error {
+	return fmt.Errorf("Redirect encountered in request %v", r)
+}
+
+// 10 seconds timeout for TCP connection establishing
+func timedDial(network, addr string) (net.Conn, error) {
+	return net.DialTimeout(network, addr, 10*time.Second)
+}
+
+func NewClient(transport *http.Transport) *http.Client {
+	return &http.Client{
+		CheckRedirect: disallowRedirects,
+		Transport:     transport,
+	}
+}
+
+type ScopedTransport struct {
+	http.Transport
+	mutex sync.Mutex
+	conns []net.Conn
+}
+
+func NewScopedTransport() *ScopedTransport {
+	st := &ScopedTransport{}
+	st.Dial = func(network, addr string) (net.Conn, error) {
+		c, err := timedDial(network, addr)
+		if c != nil {
+			st.mutex.Lock()
+			st.conns = append(st.conns, c)
+			st.mutex.Unlock()
+		}
+		return c, err
+	}
+	return st
+}
+
+func (st *ScopedTransport) DisownConnections() {
+	st.mutex.Lock()
+	st.conns = nil
+	st.mutex.Unlock()
+}
+
+func (st *ScopedTransport) Close() (err error) {
+	st.mutex.Lock()
+	conns := st.conns
+	st.conns = nil
+	st.mutex.Unlock()
+	for _, conn := range conns {
+		err = conn.Close()
+	}
+	st.CloseIdleConnections()
+	return
 }
 
 func NewRequest(method, url string, body io.Reader) (*http.Request, error) {
@@ -72,7 +114,7 @@ func getFromServer(relpath string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	return GetClient().Do(req)
+	return defaultClient.Do(req)
 }
 
 func getJsonFromServer(relpath, etag string) (*http.Response, error) {
@@ -84,7 +126,7 @@ func getJsonFromServer(relpath, etag string) (*http.Response, error) {
 	if etag != "" {
 		req.Header.Set("If-None-Match", etag)
 	}
-	return GetClient().Do(req)
+	return defaultClient.Do(req)
 }
 
 func FetchBid(bidId, etag string) (*bitwrk.Bid, string, error) {
@@ -140,7 +182,7 @@ func postFormToServer(relpath, query string) (*http.Response, error) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	return GetClient().Do(req)
+	return defaultClient.Do(req)
 }
 
 func getStringFromServer(relpath string, limit int64) (string, error) {

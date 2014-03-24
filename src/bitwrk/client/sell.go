@@ -72,7 +72,9 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 }
 
 func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *ReceiveManager, interrupt <-chan bool) error {
-	a.beginTrade(log, interrupt)
+	if err := a.beginTrade(log, interrupt); err != nil {
+		return err
+	}
 
 	// Start polling for state changes in background
 	abortPolling := make(chan bool)
@@ -159,5 +161,14 @@ func (a *SellActivity) dispatchWork(log bitwrk.Logger, workFile cafs.File) (io.R
 
 	reader := workFile.Open()
 	defer reader.Close()
-	return a.worker.DoWork(reader, connChan)
+
+	st := NewScopedTransport()
+	connChan <- st
+	defer st.Close()
+	r, err := a.worker.DoWork(reader, NewClient(&st.Transport))
+	if err == nil {
+		// Defuse connection closing mechanism
+		st.DisownConnections()
+	}
+	return r, err
 }
