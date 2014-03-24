@@ -4,6 +4,9 @@ go:
  - 1.1
  - 1.2
  
+install:
+ - echo "Luckily, there are no dependencies"
+
 script:
  - ls -l
  - cd script
