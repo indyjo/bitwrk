@@ -53,6 +53,7 @@ func main() {
 		"Directory where the bitwrk client loads resources from")
 	flags.StringVar(&BitwrkUrl, "bitwrkurl", "http://bitwrk.appspot.com/",
 		"URL to contact the bitwrk service at")
+	flags.BoolVar(&cafs.LoggingEnabled, "log-cafs", cafs.LoggingEnabled, "Enable logging for content-addressable file storage")
 	err := flags.Parse(os.Args[1:])
 	if err == flag.ErrHelp {
 		flags.Usage()
@@ -372,4 +373,3 @@ func handleId(w http.ResponseWriter, r *http.Request) {
 func handleVersion(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(ClientVersion))
 }
-

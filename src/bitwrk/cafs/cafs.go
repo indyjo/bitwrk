@@ -29,6 +29,8 @@ var ErrStillOpen = errors.New("Temporary still open")
 var ErrInvalidState = errors.New("Invalid temporary state")
 var ErrNotEnoughSpace = errors.New("Not enough space")
 
+var LoggingEnabled = false
+
 type SKey [32]byte
 
 type FileStorage interface {

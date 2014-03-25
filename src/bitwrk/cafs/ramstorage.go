@@ -148,7 +148,7 @@ func (s *ramStorage) reserveBytes(info string, numBytes int64) error {
 		return ErrNotEnoughSpace
 	}
 	bytesFree := s.bytesMax - s.bytesUsed
-	if bytesFree < numBytes {
+	if bytesFree < numBytes && LoggingEnabled {
 		log.Printf("[%v] Need to free %v (currently unlocked %v) more bytes of CAFS space to store object of size %v",
 			info, numBytes-bytesFree, s.bytesUsed-s.bytesLocked, numBytes)
 	}
@@ -169,9 +169,11 @@ func (s *ramStorage) reserveBytes(info string, numBytes int64) error {
 		oldestSize := oldestEntry.storageSize()
 		s.bytesUsed -= oldestSize
 		bytesFree += oldestSize
-		log.Printf("[%v]   Deleted object of size %v bytes: [%v] %v", info, oldestSize, oldestEntry.info, oldestKey)
-		if oldLocked != s.bytesLocked {
-			log.Printf("       -> unlocked %d bytes", oldLocked-s.bytesLocked)
+		if LoggingEnabled {
+			log.Printf("[%v]   Deleted object of size %v bytes: [%v] %v", info, oldestSize, oldestEntry.info, oldestKey)
+			if oldLocked != s.bytesLocked {
+				log.Printf("       -> unlocked %d bytes", oldLocked-s.bytesLocked)
+			}
 		}
 	}
 	return nil
@@ -192,7 +194,9 @@ func (s *ramStorage) storeEntry(key *SKey, data []byte, chunks []chunkRef, info 
 		if len(oldEntry.data) != len(data) || len(oldEntry.chunks) != len(chunks) {
 			panic(fmt.Sprintf("[%v] Key collision: %v [%v]", info, key, oldEntry.info))
 		}
-		log.Printf("[%v] Recycling key: %v [%v] (data: %d bytes, chunks: %d)", info, key, oldEntry.info, len(data), len(chunks))
+		if LoggingEnabled {
+			log.Printf("[%v] Recycling key: %v [%v] (data: %d bytes, chunks: %d)", info, key, oldEntry.info, len(data), len(chunks))
+		}
 
 		// Ref the reused entry.
 		s.lock(key, oldEntry)
@@ -214,7 +218,9 @@ func (s *ramStorage) storeEntry(key *SKey, data []byte, chunks []chunkRef, info 
 		s.entries[*key] = newEntry
 		s.bytesUsed += newEntry.storageSize()
 		s.bytesLocked += newEntry.storageSize()
-		log.Printf("[%v] Stored key: %v (data: %d bytes, chunks: %d)", info, key, len(data), len(chunks))
+		if LoggingEnabled {
+			log.Printf("[%v] Stored key: %v (data: %d bytes, chunks: %d)", info, key, len(data), len(chunks))
+		}
 	}
 
 	return nil
@@ -638,9 +644,11 @@ func (t *ramTemporary) Dispose() {
 	t.buffer = bytes.Buffer{}
 	t.chunker = nil
 	t.chunks = nil
-	if wasOpen {
-		log.Printf("[%v] Temporary canceled", t.info)
-	} else {
-		log.Printf("[%v] Temporary disposed", t.info)
+	if LoggingEnabled {
+		if wasOpen {
+			log.Printf("[%v] Temporary canceled", t.info)
+		} else {
+			log.Printf("[%v] Temporary disposed", t.info)
+		}
 	}
 }
