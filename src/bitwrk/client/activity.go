@@ -188,9 +188,9 @@ func (m *ActivityManager) unregister(key ActivityKey) {
 	}
 
 	// Append to history
-	if len(m.history) == 10 {
-		copy(m.history[1:], m.history[:len(m.history)-1])
-		m.history = m.history[1:]
+	if len(m.history) == 100 {
+		copy(m.history[:len(m.history)-1], m.history[1:])
+		m.history = m.history[:len(m.history)-1]
 	}
 	m.history = append(m.history, activity)
 	delete(m.activities, key)
