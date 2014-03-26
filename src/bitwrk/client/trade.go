@@ -21,7 +21,6 @@ import (
 	"bitwrk/bitcoin"
 	"bitwrk/cafs"
 	"bitwrk/money"
-	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -60,7 +59,8 @@ type Trade struct {
 	resultFile cafs.File
 }
 
-var ErrInterrupted = errors.New("The request was interrupted")
+// Configuration value for the maximum number of unmatched bids to allow at a time
+var NumUnmatchedBids = 1
 
 func (a *Trade) beginTrade(log bitwrk.Logger, interrupt <-chan bool) error {
 	// wait for grant or reject
@@ -71,6 +71,13 @@ func (a *Trade) beginTrade(log bitwrk.Logger, interrupt <-chan bool) error {
 		return fmt.Errorf("Error awaiting permission: %v", err)
 	}
 	log.Printf("Got permission. Price: %v", a.price)
+
+	// Prevent too many unmatched bids on server
+	key := fmt.Sprintf("%v-%v", a.bidType, a.article)
+	if err := a.manager.checkoutToken(key, NumUnmatchedBids, interrupt); err != nil {
+		return err
+	}
+	defer a.manager.returnToken(key)
 
 	if err := a.awaitBid(); err != nil {
 		return fmt.Errorf("Error awaiting bid: %v", err)
@@ -171,11 +178,11 @@ func (t *Trade) awaitTransaction(log bitwrk.Logger) error {
 
 func (t *Trade) waitForTransactionPhase(log bitwrk.Logger, phase bitwrk.TxPhase, viaPhases ...bitwrk.TxPhase) error {
 	log.Printf("Waiting for transaction phase %v...", phase)
-	
+
 	if err := t.updateTransaction(log); err != nil {
 		return err
 	}
-	
+
 	var currentPhase bitwrk.TxPhase
 	var currentState bitwrk.TxState
 	t.waitWhile(func() bool {

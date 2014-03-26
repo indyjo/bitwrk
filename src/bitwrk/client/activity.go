@@ -28,6 +28,7 @@ import (
 	"time"
 )
 
+var ErrInterrupted = errors.New("The request was interrupted")
 var ErrNoPermission = errors.New("Permission request rejected")
 var ErrBidExpired = errors.New("Bid expired without match")
 var ErrTxExpired = errors.New("Transaction no longer active")
@@ -71,6 +72,7 @@ type ActivityManager struct {
 	history    []Activity
 	nextKey    ActivityKey
 	storage    cafs.FileStorage
+	bidTokens  map[string]chan bool
 }
 
 var activityManager = ActivityManager{
@@ -80,6 +82,7 @@ var activityManager = ActivityManager{
 	make([]Activity, 0, 5), //history
 	1,
 	cafs.NewRamStorage(64 * 1024 * 1024), // 64 MByte
+	make(map[string]chan bool),
 }
 
 func GetActivityManager() *ActivityManager {
@@ -223,4 +226,33 @@ func (m *ActivityManager) applyMandate(activities []Activity, mandate *Mandate, 
 			}
 		}
 	}
+}
+
+// Consume a limited resource. The resource is named by the key parameter and limited to up
+// to 'limit' checked out tokens.
+func (m *ActivityManager) checkoutToken(key string, limit int, interrupt <-chan bool) error {
+	m.mutex.Lock()
+	tokenChan := m.bidTokens[key]
+	if tokenChan == nil {
+		// Initialize tokens if not done so already
+		tokenChan = make(chan bool, limit)
+		m.bidTokens[key] = tokenChan
+		for i := 0; i < limit; i++ {
+			tokenChan <- true
+		}
+	}
+	m.mutex.Unlock()
+	select {
+	case <-interrupt:
+		return ErrInterrupted
+	case <-tokenChan:
+		return nil
+	}
+}
+
+func (m *ActivityManager) returnToken(key string) {
+	m.mutex.Lock()
+	tokenChan := m.bidTokens[key]
+	m.mutex.Unlock()
+	tokenChan <- true
 }

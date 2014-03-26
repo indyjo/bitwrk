@@ -53,7 +53,10 @@ func main() {
 		"Directory where the bitwrk client loads resources from")
 	flags.StringVar(&BitwrkUrl, "bitwrkurl", "http://bitwrk.appspot.com/",
 		"URL to contact the bitwrk service at")
-	flags.BoolVar(&cafs.LoggingEnabled, "log-cafs", cafs.LoggingEnabled, "Enable logging for content-addressable file storage")
+	flags.BoolVar(&cafs.LoggingEnabled, "log-cafs", cafs.LoggingEnabled,
+		"Enable logging for content-addressable file storage")
+	flags.IntVar(&client.NumUnmatchedBids, "num-unmatched-bids", client.NumUnmatchedBids,
+		"Mamimum number of unmatched bids for an article on server")
 	err := flags.Parse(os.Args[1:])
 	if err == flag.ErrHelp {
 		flags.Usage()
