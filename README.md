@@ -1,22 +1,33 @@
 master [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=master)](https://travis-ci.org/indyjo/bitwrk)
 experimental [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=experimental)](https://travis-ci.org/indyjo/bitwrk)
 
-Bitwrk - A Bitcoin-friendly, anonymous marketplace for computing power
+BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
 ======================================================================
 
-This is going to be a proof-of-concept implementation of a marketplace
-for computing services, an idea I had in 2011 when I saw the enormous
-amounts of computing capacity dedicated to mining Bitcoin.
+> In 2011, an open marketplace for computing power was a visionary concept.
+> In 2014, it has become reality.
 
-If generating this enormous amount of work for nothing more than a
-simple cryptographic lottery can be lucrative, there must be demand
-for tasks more useful. Tasks that people are actually willing to pay for.
-Let's find out!
+BitWrk is based on the idea that many of today's applications consume enormous
+amounts of computing power. Their thirst for CPU and GPU power is never satisfied.
+However expensive, your hardware is never enough.
 
-If you like this project, the best support you can give is to try it out,
-test it for errors and help make it a community project. If you'd like
-to support BitWrk with money, you could send some Bitcoins to **tip4commit**.
-They will be distributed to contributors.
+Enter *BitWrk*, the first true **Cloud 2.0** application:
+- The computing power you don't have can be provided by the internet,
+  in a peer-to-peer fashion.
+- Small units of computation are dispatched to potentially thousands of participating
+  peers, giving a huge performance boost.
+- Internet currencies such as [Bitcoin](http://bitcoin.org/) are ideally suited to
+  support the kind of micro-transactions necessary to make this work.
+  
+> **BitWrk = Crowd + Cloud**
+
+As a proof-of-concept use case, BitWrk comes with support for [Blender](http://blender.org/), the Free
+3D rendering software suite. Blender rendering is being accelerated by BitWrk today!
+
+I want BitWrk to become a true community project. The best support you can give is to
+try it out and test it for errors! If you prefer to support BitWrk
+financially, consider sending some Bitcoins to **tip4commit**. They will be distributed
+to everybody who contributes code to BitWrk.
 
 [![tip for next commit](http://tip4commit.com/projects/541.svg)](http://tip4commit.com/projects/541)
 
@@ -163,6 +174,10 @@ Every new client account starts with **1 BTC virtual starting capital**.
 News
 ----
 
+- **2014-03-26:** BitWrk is making big progress towards a new release. Many user interface
+  enhancements, both in BitWrk's browser-based client, as well as in the Blender add-on,
+  make working with BitWrk smoother every day. A huge boost in performace comes from a
+  unique compression mechanism that reduces network transmissions to a minimum.
 - **2014-01-25:** Experimental Blender integration is now available.
 - **2013-12-04:** A lot of progress has been made on the client side. Basic
   management functionality is now available for trades, workers and mandates.
@@ -214,6 +229,8 @@ Usage of bitwrk-client:
   -extaddr="auto": IP address or name this host can be reached under from the internet
   -extport=-1: Port that can be reached from the Internet (-1 disables incoming connections)
   -intport=8081: Maintenance port for admin interface
+  -log-cafs=false: Enable logging for content-addressable file storage
+  -num-unmatched-bids=1: Mamimum number of unmatched bids for an article on server
   -resourcedir="auto": Directory where the bitwrk client loads resources from
 </pre>
 <dl>
@@ -237,6 +254,8 @@ Local programs will be able to dispatch work to the BitWrk network by doing a
 POST to http://localhost:8081/<em>&lt;article-id&gt;</em>, where <em>&lt;article-id</em>
 identifies the article to trade. It must be an article that is traded on the BitWrk
 server.
+<dt><strong>-num-unmatched-bids</strong></dt>
+<dd>Limits the number of not-yet-matched bids that are sent to the BitWrk service.</dd>
 </dl>
 
 Identity Management
@@ -287,5 +306,5 @@ of now is not possible, but will be). As a trust-building measure, the
 server's source code is open-sourced, too.
 
 Have fun!
-2014-01-26, Jonas Eschenburg
+2014-03-26, Jonas Eschenburg
 
