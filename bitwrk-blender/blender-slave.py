@@ -121,14 +121,14 @@ try:
     if scene.cycles.progressive == 'PATH':
         cost_per_bounce = scene.cycles.samples
     elif scene.cycles.progressive == 'BRANCHED_PATH':
-		cost_per_bounce = scene.cycles.aa_samples * (
-			scene.cycles.diffuse_samples +
-			scene.cycles.glossy_samples +
-			scene.cycles.transmission_samples +
-			scene.cycles.ao_samples +
-			scene.cycles.mesh_light_samples +
-			scene.cycles.subsurface_samples)
-	else:
+        cost_per_bounce = scene.cycles.aa_samples * (
+            scene.cycles.diffuse_samples +
+            scene.cycles.glossy_samples +
+            scene.cycles.transmission_samples +
+            scene.cycles.ao_samples +
+            scene.cycles.mesh_light_samples +
+            scene.cycles.subsurface_samples)
+    else:
         raise RuntimeError("Unknown sampling")
 
     cost_per_pixel = scene.cycles.max_bounces * cost_per_bounce
