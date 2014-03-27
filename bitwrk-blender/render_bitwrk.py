@@ -356,8 +356,18 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
     def _doRender(self, scene):
         # Make sure the .blend file has been saved
         filename = bpy.data.filepath
-        if scene.cycles.progressive != 'PATH':
-            raise RuntimeError("Please use 'Path Tracing' sampling")
+        if scene.cycles.progressive == 'PATH':
+            cost_per_bounce = scene.cycles.samples
+        elif scene.cycles.progressive == 'BRANCHED_PATH':
+            cost_per_bounce = scene.cycles.aa_samples * (
+                scene.cycles.diffuse_samples +
+                scene.cycles.glossy_samples +
+                scene.cycles.transmission_samples +
+                scene.cycles.ao_samples +
+                scene.cycles.mesh_light_samples +
+                scene.cycles.subsurface_samples)
+        else:
+            raise RuntimeError("Unknows sampling type: %s" % (scene.cycles.progressive))
         if not os.path.exists(filename):
             raise RuntimeError("Current file path not defined\nSave your file before sending a job")
         bpy.ops.wm.save_mainfile(filepath=filename, check_existing=False)
@@ -366,7 +376,7 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         percentage = max(1, min(100, scene.render.resolution_percentage))
         resx = int(scene.render.resolution_x * percentage / 100)
         resy = int(scene.render.resolution_y * percentage / 100)
-        cost_per_pixel = scene.cycles.max_bounces * scene.cycles.samples
+        cost_per_pixel = scene.cycles.max_bounces * cost_per_bounce
         
         max_pixels_per_tile = int(math.floor(get_max_cost(settings) / cost_per_pixel))
         tiles = self._makeTiles(settings, scene.frame_current, 0, 0, resx, resy, max_pixels_per_tile)
