@@ -158,8 +158,9 @@ func (s *WorkerState) executeSell(log bitwrk.Logger, sell *SellActivity, interru
 		s.cond.L.Lock()
 		s.blockFor(20 * time.Second)
 		s.cond.L.Unlock()
+	} else {
+		log.Printf("Returned from PerformSell successfully")
 	}
-	log.Printf("returned from buy")
 }
 
 func (s *WorkerState) blockFor(d time.Duration) {
