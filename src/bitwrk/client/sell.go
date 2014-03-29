@@ -137,7 +137,12 @@ func (a *SellActivity) HandleWork(log bitwrk.Logger, workFile cafs.File, buyerSe
 	}
 
 	log.Println("Starting to work...")
-	return a.dispatchWork(log, workFile)
+	r, err := a.dispatchWork(log, workFile)
+	if err != nil {
+		log.Printf("Rejecting work because of error '%v'", err)
+		SendTxMessageRejectWork(a.txId, a.identity)
+	}
+	return r, err
 }
 
 func (a *SellActivity) HandleReceipt(log bitwrk.Logger, encResultHash, encResultHashSig string) error {

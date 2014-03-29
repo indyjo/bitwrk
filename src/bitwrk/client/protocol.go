@@ -315,6 +315,12 @@ func SendTxMessageTransmitFinished(txId string, identity *bitcoin.KeyPair, encRe
 	return SendTxMessage(txId, identity, arguments)
 }
 
+func SendTxMessageRejectWork(txId string, identity *bitcoin.KeyPair) error {
+	arguments := make(map[string]string)
+	arguments["rejectwork"] = "on"
+	return SendTxMessage(txId, identity, arguments)
+}
+
 func SendTxMessageAcceptResult(txId string, identity *bitcoin.KeyPair) error {
 	arguments := make(map[string]string)
 	arguments["acceptresult"] = "on"
