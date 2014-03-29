@@ -321,7 +321,8 @@ var phaseTransitionRules = []phaseTransitionRule{
 	{makeMessageType(FromSeller, "rejectwork"),
 		[]phaseTransition{
 			{PhaseSellerEstablished, PhaseWorkDisputed},
-			{PhaseTransmitting, PhaseWorkDisputed}}},
+			{PhaseTransmitting, PhaseWorkDisputed},
+			{PhaseWorking, PhaseWorkDisputed}}},
 	{makeMessageType(FromSeller, "encresulthash", "encresulthashsig", "encresultkey").with(handleTransmitFinished),
 		[]phaseTransition{
 			{PhaseWorking, PhaseUnverified}}},
