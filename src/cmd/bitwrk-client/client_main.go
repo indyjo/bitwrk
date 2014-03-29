@@ -87,6 +87,7 @@ func main() {
 	client.BitwrkUrl = BitwrkUrl
 
 	log.Printf("Resource directory: %v\n", ResourceDir)
+	initTemplates()
 
 	receiveManager := startReceiveManager()
 
