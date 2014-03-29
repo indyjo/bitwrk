@@ -168,7 +168,16 @@ func enqueueBid(w http.ResponseWriter, r *http.Request) (err error) {
 	}
 
 	switch bidArticle {
-	case "fnord", "snafu", "foobar", "net.bitwrk/gorays/0", "net.bitwrk/blender/0/2.69/512M", "net.bitwrk/blender/0/2.69/2G", "net.bitwrk/blender/0/2.69/8G", "net.bitwrk/blender/0/2.69/32G":
+	case "fnord", "snafu", "foobar",
+		"net.bitwrk/gorays/0",
+		"net.bitwrk/blender/0/2.69/512M",
+		"net.bitwrk/blender/0/2.69/2G",
+		"net.bitwrk/blender/0/2.69/8G",
+		"net.bitwrk/blender/0/2.69/32G",
+		"net.bitwrk/blender/0/2.70/512M",
+		"net.bitwrk/blender/0/2.70/2G",
+		"net.bitwrk/blender/0/2.70/8G",
+		"net.bitwrk/blender/0/2.70/32G":
 		// TODO: add real article management
 	default:
 		return fmt.Errorf("Article not traded here: %#v", bidArticle)

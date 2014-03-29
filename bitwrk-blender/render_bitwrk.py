@@ -29,10 +29,13 @@ import bpy, os, sys, http.client, select, struct, tempfile, urllib.request, colo
 import webbrowser, time
 from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty
 
+def get_article_id(complexity):
+    major, minor, micro = bpy.app.version
+    return "net.bitwrk/blender/0/{}.{}/{}".format(major, minor, complexity)
+    
 # used by BitWrkSettings PropertyGroup
 def set_complexity(self, value):
     self['complexity'] = value
-    self['article_id'] = "net.bitwrk/blender/0/2.69/{}".format(['2G','8G','32G','512M'][value])
     
 def get_max_cost(settings):
     if settings.complexity == '512M':
@@ -108,10 +111,6 @@ class BitWrkSettings(bpy.types.PropertyGroup):
             default=8081,
             min=1,
             max=65535)
-        settings.article_id = StringProperty(
-            name="Article Id",
-            description="Identifies Blender jobs on the BitWrk service",
-            default="net.bitwrk/blender/0/2.69/8G")
         settings.complexity = EnumProperty(
             name="Complexity",
             description="Defines the maximum allowed computation complexity for each rendered tile",
@@ -178,9 +177,9 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
             self.layout.label("No BitWrk client at this address", icon='ERROR')
         
         self.layout.prop(settings, "complexity")
-        row = self.layout.row()
-        row.prop(settings, "article_id")
-        row.enabled = False
+        row = self.layout.split(0.333)
+        row.label("Article id: ", icon="RNDCURVE")
+        row.label(get_article_id(settings.complexity))
         
         self.layout.prop(settings, "concurrency")
 
@@ -263,7 +262,7 @@ class Tile:
             settings.bitwrk_client_host, settings.bitwrk_client_port,
             strict=True, timeout=600)
         try:
-            self.conn.putrequest("POST", "/buy/" + settings.article_id)
+            self.conn.putrequest("POST", "/buy/" + get_article_id(settings.complexity))
             self.conn.putheader('Transfer-Encoding', 'chunked')
             self.conn.endheaders()
             chunked = Chunked(self.conn)

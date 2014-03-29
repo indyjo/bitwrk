@@ -290,6 +290,8 @@ def get_blender_version():
     output, _ = proc.communicate()
     if b"Blender 2.69" in output:
         return "2.69"
+    elif b"Blender 2.70 (sub 0)" in output:
+        return "2.70"
     else:
         raise RuntimeError("Blender version could not be detected")
 
@@ -302,7 +304,7 @@ def parse_args():
     parser.add_argument('--blender', metavar='PATH', help="Blender executable to call", required=True)
     parser.add_argument('--bitwrk-host', metavar='HOST', help="BitWrk client host", default="localhost")
     parser.add_argument('--bitwrk-port', metavar='PORT', help="BitWrk client port", type=int, default=8081)
-    parser.add_argument('--max-cost', metavar='CLASS', help="Maximum cost of one task (in giga-rays)",
+    parser.add_argument('--max-cost', metavar='CLASS', help="Maximum cost of one task (in mega- and giga-rays)",
         choices=["512M", "2G", "8G", "32G"], default="8G")
     args = parser.parse_args()
     
