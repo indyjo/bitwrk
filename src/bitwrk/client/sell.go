@@ -140,7 +140,9 @@ func (a *SellActivity) HandleWork(log bitwrk.Logger, workFile cafs.File, buyerSe
 	r, err := a.dispatchWork(log, workFile)
 	if err != nil {
 		log.Printf("Rejecting work because of error '%v'", err)
-		SendTxMessageRejectWork(a.txId, a.identity)
+		if err := SendTxMessageRejectWork(a.txId, a.identity); err != nil {
+			log.Printf("Rejecting work failed: %v", err)
+		}
 	}
 	return r, err
 }
