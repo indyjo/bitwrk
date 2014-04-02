@@ -26,7 +26,7 @@ bl_info = {
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory)
 
 import bpy, os, sys, http.client, select, struct, tempfile, urllib.request, colorsys, math
-import webbrowser, time
+import webbrowser, time, traceback
 from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty
 
 def get_article_id(complexity):
@@ -279,7 +279,7 @@ class Tile:
                 chunked.close()
         except:
             print("Exception in dispatch:", sys.exc_info())
-            engine.report({'ERROR'}, "Exception in dispatch: {}".format(sys.exc_info()))
+            engine.report({'ERROR'}, "Exception in dispatch: {}".format(traceback.format_exc()))
             self.conn.close()
             self.conn = None
             self.result.layers[0].rect = [[1,0,0,1]] * (self.resx*self.resy)
@@ -289,7 +289,7 @@ class Tile:
         else:
             return True
         
-    def collect(self, settings, engine):
+    def collect(self, settings, engine, is_multilayer):
         if self.conn is None:
             return
         try:
@@ -309,7 +309,10 @@ class Tile:
                             while len(data) > 0:
                                 tmpfile.write(data)
                                 data = response.read(32768)
-                        self.result.layers[0].load_from_file(filename)
+                        if is_multilayer:
+                            self.result.load_from_file(filename)
+                        else:
+                            self.result.layers[0].load_from_file(filename)
                         self.success = True
                 else:
                     message = resp.read(1024).decode('ascii')
@@ -319,7 +322,7 @@ class Tile:
             engine.end_result(self.result)
         except:
             print("Exception in collect:", sys.exc_info())
-            engine.report({'WARNING'}, "Exception in collect: {}".format(sys.exc_info()))
+            engine.report({'WARNING'}, "Exception in collect: {}".format(traceback.format_exc()))
             self.result.layers[0].rect = [[1,0,0,1]] * (self.resx*self.resy)
             engine.end_result(self.result)
             self.result = None
@@ -350,7 +353,8 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         try:
             self._doRender(scene)
         except:
-            self.report({'ERROR'}, "Exception while rendering: {}".format(sys.exc_info()))
+            self.report({'ERROR'}, "Exception while rendering: {}".format(traceback.format_exc()))
+            
             
     def _doRender(self, scene):
         # Make sure the .blend file has been saved
@@ -375,7 +379,14 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         percentage = max(1, min(100, scene.render.resolution_percentage))
         resx = int(scene.render.resolution_x * percentage / 100)
         resy = int(scene.render.resolution_y * percentage / 100)
-        cost_per_pixel = scene.cycles.max_bounces * cost_per_bounce
+        num_layers = 0
+        for layer in scene.render.layers:
+            if layer.use:
+                num_layers += 1
+        if scene.render.use_single_layer:
+            num_layers=1
+        is_multilayer = len(scene.render.layers) > 1 and not scene.render.use_single_layer
+        cost_per_pixel = max(1, num_layers) * scene.cycles.max_bounces * cost_per_bounce
         
         max_pixels_per_tile = int(math.floor(get_max_cost(settings) / cost_per_pixel))
         tiles = self._makeTiles(settings, scene.frame_current, 0, 0, resx, resy, max_pixels_per_tile)
@@ -402,7 +413,7 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
             for list in rlist, xlist:
                 for tile in list:
                     if tile.conn is not None:
-                        tile.collect(settings, self)
+                        tile.collect(settings, self, is_multilayer)
                         # collect has either failed or not. In any case, the tile is
                         # no longer active.
                         num_active -= 1

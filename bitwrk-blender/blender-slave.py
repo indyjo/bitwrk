@@ -97,14 +97,23 @@ print("Blender sees:", xmin, ymin, xmax, ymax, MAX_COST)
 
 scene = bpy.context.scene
 render = scene.render
+num_layers = 0
+for layer in render.layers:
+    if layer.use:
+        num_layers += 1
+if render.use_single_layer:
+    num_layers = 1
 render.image_settings.file_format='OPEN_EXR'
+# Multi-layer rendering support in BitWrk was introduced with support for
+# Blender 2.70, so only enable multilayer starting with that version.
+if len(render.layers) > 1 and not render.use_single_layer and bpy.app.version >= (2,70,0):
+    print("Multilayer enabled")
+    render.image_settings.file_format='OPEN_EXR_MULTILAYER'
 render.image_settings.color_mode='RGBA'
 render.image_settings.exr_codec='PIZ'
 render.image_settings.use_preview=False
 render.use_compositing=False
 render.use_sequencer=False
-for idx, layer in enumerate(render.layers):
-    layer.use = idx == 0
 
 percentage = max(1, min(10000, render.resolution_percentage))
 resx = int(render.resolution_x * percentage / 100)
@@ -137,7 +146,7 @@ try:
         raise RuntimeError("Unknown sampling")
 
     cost_per_pixel = scene.cycles.max_bounces * cost_per_bounce
-    cost_of_tile = cost_per_pixel * (xmax - xmin + 1) * (ymax - ymin + 1)
+    cost_of_tile = num_layers * cost_per_pixel * (xmax - xmin + 1) * (ymax - ymin + 1)
     if cost_of_tile > MAX_COST:
         raise RuntimeError("Cost limit exceeded")
 except:
