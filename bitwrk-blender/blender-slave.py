@@ -103,6 +103,8 @@ render.image_settings.exr_codec='PIZ'
 render.image_settings.use_preview=False
 render.use_compositing=False
 render.use_sequencer=False
+for idx, layer in enumerate(render.layers):
+    layer.use = idx == 0
 
 percentage = max(1, min(10000, render.resolution_percentage))
 resx = int(render.resolution_x * percentage / 100)
