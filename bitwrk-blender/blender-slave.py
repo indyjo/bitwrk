@@ -98,8 +98,11 @@ print("Blender sees:", xmin, ymin, xmax, ymax, MAX_COST)
 scene = bpy.context.scene
 render = scene.render
 render.image_settings.file_format='OPEN_EXR'
+render.image_settings.color_mode='RGBA'
 render.image_settings.exr_codec='PIZ'
 render.image_settings.use_preview=False
+render.use_compositing=False
+render.use_sequencer=False
 
 percentage = max(1, min(10000, render.resolution_percentage))
 resx = int(render.resolution_x * percentage / 100)
