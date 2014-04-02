@@ -39,10 +39,12 @@ func addTaskForArticle(c appengine.Context,
 	article bitwrk.ArticleId,
 	tag string, key string,
 	eta time.Time,
+	delay time.Duration,
 	values url.Values) (err error) {
 
 	task := taskqueue.NewPOSTTask("/_ah/queue/"+tag, values)
 	task.ETA = eta
+	task.Delay = delay
 	//task.Name = fmt.Sprintf("%v-%v", tag, key)
 	queue := getQueue(string(article))
 	newTask, err := taskqueue.Add(c, task, queue)
@@ -56,17 +58,17 @@ func addTaskForArticle(c appengine.Context,
 
 func addRetireTransactionTask(c appengine.Context, txKey string, tx *bitwrk.Transaction) error {
 	taskKey := fmt.Sprintf("%v-%v", txKey, tx.Phase)
-	return addTaskForArticle(c, tx.Article, "retire-tx", taskKey, tx.Timeout,
+	return addTaskForArticle(c, tx.Article, "retire-tx", taskKey, tx.Timeout, time.Duration(0),
 		url.Values{"tx": {txKey}})
 }
 
 func addRetireBidTask(c appengine.Context, bidKey string, bid *bitwrk.Bid) error {
-	return addTaskForArticle(c, bid.Article, "retire-bid", bidKey, bid.Expires,
+	return addTaskForArticle(c, bid.Article, "retire-bid", bidKey, bid.Expires, time.Duration(0),
 		url.Values{"bid": {bidKey}})
 }
 
 func addPlaceBidTask(c appengine.Context, bidKey string, bid *bitwrk.Bid) error {
-	return addTaskForArticle(c, bid.Article, "place-bid", bidKey, time.Time{},
+	return addTaskForArticle(c, bid.Article, "place-bid", bidKey, time.Time{}, 1*time.Second,
 		url.Values{"bid": {bidKey}})
 }
 
