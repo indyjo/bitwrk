@@ -209,6 +209,9 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	})
 	mux.HandleFunc("/id", handleId)
 	mux.HandleFunc("/version", handleVersion)
+	mux.HandleFunc("/cafsdebug", func(w http.ResponseWriter, r *http.Request) {
+		client.GetActivityManager().GetStorage().DumpStatistics(cafs.NewWriterPrinter(w))
+	})
 	exit <- s.ListenAndServe()
 }
 

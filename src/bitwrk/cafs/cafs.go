@@ -110,10 +110,6 @@ type Temporary interface {
 	Dispose()
 }
 
-type Printer interface {
-	Printf(format string, v ...interface{})
-}
-
 func (k SKey) String() string {
 	return hex.EncodeToString(k[:])
 }
