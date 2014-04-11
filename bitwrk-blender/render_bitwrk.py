@@ -390,6 +390,8 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         
         max_pixels_per_tile = int(math.floor(get_max_cost(settings) / cost_per_pixel))
         tiles = self._makeTiles(settings, scene.frame_current, 0, 0, resx, resy, max_pixels_per_tile)
+        # Sort by distance to center
+        tiles.sort(key=lambda t: abs(t.minx + t.resx/2 - resx/2) + abs(t.miny + t.resy/2 - resy/2))
         
         num_active = 0
         while not self.test_break():        
