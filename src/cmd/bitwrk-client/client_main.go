@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"runtime/pprof"
 	"strings"
 	"time"
 )
@@ -211,6 +212,21 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux.HandleFunc("/version", handleVersion)
 	mux.HandleFunc("/cafsdebug", func(w http.ResponseWriter, r *http.Request) {
 		client.GetActivityManager().GetStorage().DumpStatistics(cafs.NewWriterPrinter(w))
+	})
+	mux.HandleFunc("/stackdump", func(w http.ResponseWriter, r *http.Request) {
+		name := r.FormValue("name")
+		if len(name) == 0 {
+			name = "goroutine"
+		}
+		profile := pprof.Lookup(name)
+		if profile == nil {
+			w.Write([]byte("No such profile"))
+			return
+		}
+		err := profile.WriteTo(w, 1)
+		if err != nil {
+			log.Printf("Error in profile.WriteTo: %v\n", err)
+		}
 	})
 	exit <- s.ListenAndServe()
 }
