@@ -177,6 +177,7 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux.Handle("/bid", relay)
 	mux.Handle("/bid/", relay)
 	mux.Handle("/tx/", relay)
+	mux.Handle("/motd", relay)
 
 	resource := http.FileServer(http.Dir(path.Join(ResourceDir, "htroot")))
 	mux.Handle("/js/", resource)

@@ -9,7 +9,7 @@
 <link href="css/client.css" rel="stylesheet" />
 <body>
 <header>
-<div id="account-info" />
+<div id="account-info"></div>
 </header>
 <script src="/js/jquery-1.10.2.js" ></script>
 <script src="/js/jquery.cookie.js" ></script>
@@ -21,6 +21,8 @@
 <script src="/js/activity.js" ></script>
 <script src="/js/workers.js" ></script>
 <script src="/js/mandates.js" ></script>
+<script src="/js/motd.js" ></script>
+<div id="motd" class="alert alert-dismissable alert-info">Message from server: <span id="motd-content"></span><button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button></div>
 <div class="col-sm-4"><h3>Activities</h3><div id="activities"></div></div>
 <div class="col-sm-4"><h3>Workers</h3><div id="workers"></div></div>
 <div class="col-sm-4"><h3>Mandates</h3><div id="mandates"></div></div>
@@ -86,6 +88,10 @@ The BitWrk client is asking for your permission to perform a trade.</div>
 function updateAccountInfo() {
     updateAccountInfoFor("{{.ParticipantId}}");
 }
+$("#motd").hide()
+var updateMOTD = newMessageUpdater($("#motd"), $("#motd-content"));
+setInterval(updateMOTD, 60 * 60 * 1000);
+updateMOTD();
 setInterval(updateAccountInfo, 30000);
 updateAccountInfo();
 setInterval(updateActivities, 500);

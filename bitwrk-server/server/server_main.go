@@ -27,6 +27,7 @@ func init() {
 	http.HandleFunc("/tx/", handleTx)
 	http.HandleFunc("/account/", handleAccount)
 	http.HandleFunc("/myip", handleMyIp)
+	http.HandleFunc("/motd", handleMessageOfTheDay)
 	http.HandleFunc("/_ah/queue/place-bid", handlePlaceBid)
 	http.HandleFunc("/_ah/queue/retire-tx", handleRetireTransaction)
 	http.HandleFunc("/_ah/queue/retire-bid", handleRetireBid)
