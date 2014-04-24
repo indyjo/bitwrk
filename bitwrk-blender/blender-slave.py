@@ -124,10 +124,11 @@ render.use_crop_to_border = True
 render.tile_x = 32
 render.tile_y = 32
 
-render.border_min_x = xmin / float(resx)
-render.border_max_x = (xmax+1) / float(resx)
-render.border_min_y = ymin / float(resy)
-render.border_max_y = (ymax+1) / float(resy)
+# Add 0.5 to integer coords to avoid errors caused by rounding towards zero
+render.border_min_x = (xmin+0.5) / resx
+render.border_max_x = (xmax+1.5) / resx
+render.border_min_y = (ymin+0.5) / resy
+render.border_max_y = (ymax+1.5) / resy
 
 try:
     if xmax < xmin or ymax < ymin:
