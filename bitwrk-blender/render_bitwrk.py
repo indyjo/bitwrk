@@ -18,7 +18,7 @@ bl_info = {
     "name": "BitWrk Distributed Rendering",
     "description": "Support for distributed rendering using BitWrk, a marketplace for computing power",
     "author": "Jonas Eschenburg",
-    "version": (0, 0, 1),
+    "version": (0, 3, 0),
     "blender": (2, 69, 0),
     "category": "Render",
 }
@@ -85,7 +85,7 @@ def do_probe_bitwrk_client(settings):
         if resp.status != http.client.OK:
             return False
         data = resp.read(256)
-        if not data.startswith(b"0.0."):
+        if not data.startswith(b"0.3."):
             return False
         return True
     except:
