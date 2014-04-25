@@ -1,6 +1,3 @@
-master [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=master)](https://travis-ci.org/indyjo/bitwrk)
-experimental [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=experimental)](https://travis-ci.org/indyjo/bitwrk)
-
 BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
 ======================================================================
 
@@ -11,7 +8,7 @@ BitWrk is based on the idea that many of today's applications consume enormous
 amounts of computing power. Their thirst for CPU and GPU power is never satisfied.
 However expensive, your hardware is never enough.
 
-Enter *BitWrk*, the first true **Cloud 2.0** application:
+This is what *BitWrk* tries to solve:
 - The computing power you don't have can be provided by the internet,
   in a peer-to-peer fashion.
 - Small units of computation are dispatched to potentially thousands of participating
@@ -21,15 +18,21 @@ Enter *BitWrk*, the first true **Cloud 2.0** application:
   
 > **BitWrk = Crowd + Cloud**
 
-As a proof-of-concept use case, BitWrk comes with support for [Blender](http://blender.org/), the Free
-3D rendering software suite. Blender rendering is being accelerated by BitWrk today!
+BitWrk includes an add-on for [Blender](http://blender.org/), the Free
+3D rendering software suite. This enables Blender users to accelerate their renderings using
+the power of peer-to-peer computing.
 
-I want BitWrk to become a true community project. The best support you can give is to
-try it out and test it for errors! If you prefer to support BitWrk
-financially, consider sending some Bitcoins to **tip4commit**. They will be distributed
-to everybody who contributes code to BitWrk.
+> *"I want BitWrk to become a true community project. You can support the project by
+> trying out the software and testing it for bugs! If you prefer to support BitWrk
+> financially, consider sending some milli-Bitcoins to* **tip4commit**. *They will be distributed
+> to everybody who contributes code to BitWrk."*
+>
+>   -- Jonas Eschenburg, developer of Bitwrk
 
-[![tip for next commit](http://tip4commit.com/projects/541.svg)](http://tip4commit.com/projects/541)
+tip4commit: [![tip for next commit](http://tip4commit.com/projects/541.svg)](http://tip4commit.com/projects/541)
+master: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=master)](https://travis-ci.org/indyjo/bitwrk)
+experimental: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=experimental)](https://travis-ci.org/indyjo/bitwrk)
+
 
 
 Quick Start Instructions
@@ -44,16 +47,19 @@ For selling to work, you will need to open a TCP port of your choice. This
 usually means configuring your local DSL router. If you don't know what this
 means, please Google for "open incoming tcp port" :-)
 
-Without an open port, you can still buy on the BitWrk network!
+Without an open port, you can't sell, but you can still buy computing power on
+the BitWrk network (this is what you will typically do)!
 
 - **Step 1:** Download and install Google's Go SDK to be able to compile BitWrk:
   http://golang.org/doc/install
   
   From a command prompt, you should be able to run the "go" tools.
-- **Step 2:** Download and unpack the BitWrk client package from
-  https://github.com/indyjo/bitwrk/archive/master.zip
+- **Step 2:** Download and unpack the latest BitWrk client package from
+  https://github.com/indyjo/bitwrk/releases 
 - **Step 3:** Compile and start the BitWrk client software:
-        cd bitwrk-master
+        
+        # Version number 0.3.0 serves as an example
+        cd bitwrk-0.3.0/
         
         # Now set GOPATH environment variable to directory root
         # Linux/Mac OS X users:
@@ -66,13 +72,11 @@ Without an open port, you can still buy on the BitWrk network!
         go install
         
         # If everything went fine, the BitWrk client can be started now.
-        # Port 8082 needs to be reachable for selling to work
-        ../../../bin/bitwrk-client -extport 8082
+        ../../../bin/bitwrk-client
 
-  Now navigate your web browser to http://localhost:8081/ and
-  **keep it open during the following steps**.
-  You should see  your account number (which has been randomly chosen) and your current
-  balance of **BTC 1**.
+  Now you should see the BitWrk client's admin user interface on http://localhost:8081/,
+  showing your account number (which has been randomly chosen) and your current (virtual)
+  balance of **BTC 1** in the black bar at the top of the page.
   
   Your next step is to try buying and selling on the BitWrk network using Blender,
   BitWrk's first supported application.
@@ -83,26 +87,29 @@ Starting with the 20140124 release, BitWrk supports the popular 3D rendering
 software, Blender (http://blender.org/), as a proof-of-concept project.
 
 
-### Buying rendering power on BitWrk
-If you are a **Blender artist** and you would like to try out the
-new Blender integration:
-- Perform steps 1 and 2 from the previous section.
-- Start Blender 2.69. Select a scene you like. Verify that it looks good when rendered
-  with the "Cycles" rendering engine. Also make sure that "Path Tracing" is selected
-  on the "Sampling" rendering properties panel ("Branched Path Tracing" is not supported
-  yet).
+### Accelerating Blender with BitWrk
+In order to use BitWrk to accelerate Blender's "Cycles" rendering engine, perform
+the following steps: 
+- Setup the BitWrk client as described in the previous section.
+- Start Blender (at least version 2.69). Select a scene you like. Verify that it looks
+  good when rendered with the "Cycles" rendering engine, and that it doesn't import
+  any assets from external library files.
 - Go to **User Preferences -> Addons -> Install From File**
 - Select **render_bitwrk.py**. You find it in BitWrk's **bitwrk-blender** folder.
 - An add-on called "Render: BitWrk Distributed Rendering" should show up. If not,
   search for the new plugin by entering "bitwrk" in the add-on search field.
 - Activate the add-on by pressing the checkbox next to the running man icon.
+- Click "Save User Settings" to have the BitWrk add-on load every time you start Blender. 
 - Back in the main window, you can now select "BitWrk distributed rendering" as the
   active rendering engine.
 - You should see a new panel, "BitWrk Settings Panel". Everything can be left as is
-  for now.
-- Next time you hit render, the task is dispatched to the BitWrk service as several
-  small tiles. You should browse to the BitWrk client's web UI (on http://localhost:8081/)
-  to give the client permission to build interaction with the BitWrk service.
+  for now. There should be a button labeled "Open BitWrk Client User Interface".
+- Next time you hit render (F12), the task is dispatched to the BitWrk service as several
+  small tiles.
+- You now need to browse to the BitWrk client's user interface (on http://localhost:8081/)
+  permit the buys you just made. You can choose a price you are willing to pay for each
+  tile (this is just proof-of-concept for now, there is no money involved with BitWrk at
+  this stage). Best to leave it at the default.
   
 ### Selling rendering power on BitWrk
 If you would like to **sell Blender rendering** on BitWrk, run the provided script
@@ -159,12 +166,9 @@ months and currently consists of:
   local programs and dispatching them to the BitWrk service. For sellers, it
   provides the service to offer local worker programs to the BitWrk
   exchange and to keep them busy.
-- "bitwrk-blender", an experimental integration into the Blender graphics
+- "bitwrk-blender", an add-on to the Blender graphics
   software, consisting of *render_bitwrk.py*, a Python addon which registers
   a new rendering engine, and *blender-slave.py*, a script for sellers.
-- "gorays", a sample application. It's a simple raytracer demonstrating
-  how to *use* BitWrk, and also, for developers,  how to *extend* an
-  existing application to leverage the BitWrk service.
 
 In the current phase of development, there is no way to transfer money into
 or out of the BitWrk service. Thus, **no actual money can be made or lost.**
@@ -174,6 +178,8 @@ Every new client account starts with **1 BTC virtual starting capital**.
 News
 ----
 
+- **2014-04-25:** Release of **BitWrk 0.3.0 (Mercury)** featuring support for Blender 2.70a
+  and many enhancements and bug fixes.
 - **2014-03-26:** BitWrk is making big progress towards a new release. Many user interface
   enhancements, both in BitWrk's browser-based client, as well as in the Blender add-on,
   make working with BitWrk smoother every day. A huge boost in performace comes from a
@@ -306,5 +312,5 @@ of now is not possible, but will be). As a trust-building measure, the
 server's source code is open-sourced, too.
 
 Have fun!
-2014-03-26, Jonas Eschenburg
+2014-04-25, Jonas Eschenburg
 
