@@ -25,7 +25,9 @@ the power of peer-to-peer computing.
 > *"I want BitWrk to become a true community project. You can support the project by
 > trying out the software and testing it for bugs! If you prefer to support BitWrk
 > financially, consider sending some milli-Bitcoins to* **tip4commit**. *They will be distributed
-> to everybody who contributes code to BitWrk."*
+> to everybody who contributes code to BitWrk. Alternatively, you could donate directly to
+> 1BiTWrKBPKT2yKdfEw77EAsCHgpjkqgPkv and help finance some servers providing Blender
+> rendering. Last but not least, BitWrk is in need of developers."*
 >
 >   -- Jonas Eschenburg, developer of Bitwrk
 
