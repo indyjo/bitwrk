@@ -14,7 +14,7 @@ function newMessageUpdater(alertbox, content) {
 				currentval = xhr.responseText;
 				if (currentval != lastval) {
 					var motd=JSON.parse(currentval)
-					content.text(motd.Text);
+					content.html(motd.Text);
 					
 					alertbox.removeClass("alert-info");
 					alertbox.removeClass("alert-warning");
