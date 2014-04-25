@@ -18,13 +18,15 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 )
 
 func handleMessageOfTheDay(w http.ResponseWriter, r *http.Request) {
 	type motd struct {
-		Text string
+		Text    string
 		Warning bool
 	}
 
@@ -40,7 +42,7 @@ func handleMessageOfTheDay(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var uaRegexp = regexp.MustCompile("^[^/]*/[0-9]+\\.[0-9]+\\.[0-9]+")
+var uaRegexp = regexp.MustCompile("^BitWrkGoClient/([0-9]{1,4})\\.([0-9]{1,4})\\.([0-9]{1,4})")
 
 func getMessageOfTheDay(r *http.Request) string {
 	ua := r.Header.Get("User-Agent")
@@ -48,5 +50,18 @@ func getMessageOfTheDay(r *http.Request) string {
 	if matches == nil {
 		return "Welcome, to the BitWrk network, stranger!"
 	}
-	return "Welcome to the BitWrk network!"
+
+	major, _ := strconv.ParseInt(matches[1], 10, 16)
+	minor, _ := strconv.ParseInt(matches[2], 10, 16)
+	micro, _ := strconv.ParseInt(matches[3], 10, 16)
+
+	if major > 0 || major == 0 && minor >= 3 {
+		return fmt.Sprintf("Welcome to the BitWrk network!"+
+			" Your client is up to date (version %d.%d.%d).", major, minor, micro)
+	} else {
+		return fmt.Sprintf("Welcome to the BitWrk network!"+
+			" You are currently running client version %d.%d.%d."+
+			" Please upgrade to 0.3.0 on <a href=\"http://bitwrk.net/\">the BitWrk homepage</a>.",
+			major, minor, micro)
+	}
 }
