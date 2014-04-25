@@ -67,13 +67,13 @@ func main() {
 	}
 
 	if ResourceDir == "auto" {
-		if dir, err := AutoFindResourceDir("bitwrk-client", "0.0.1"); err != nil {
+		if dir, err := AutoFindResourceDir("bitwrk-client", ClientVersion); err != nil {
 			log.Fatalf("Error finding resource directory: %v", err)
 		} else {
 			ResourceDir = dir
 		}
 	} else {
-		if err := TestResourceDir(ResourceDir, "bitwrk-client", "0.0.1"); err != nil {
+		if err := TestResourceDir(ResourceDir, "bitwrk-client", ClientVersion); err != nil {
 			log.Fatalf("Directory [%v] is not a valid resource directory: %v", err)
 		}
 	}

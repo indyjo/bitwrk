@@ -79,7 +79,6 @@ func AutoFindResourceDir(name, version string) (string, error) {
 		if err := TestResourceDir(dir, name, version); err != nil {
 			errors[i] = err
 		} else {
-			log.Printf("Found resource directory [%v]", dir)
 			return dir, nil
 		}
 	}
