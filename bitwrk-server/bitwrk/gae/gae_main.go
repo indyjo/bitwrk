@@ -116,6 +116,18 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
 	}
+	
+	// Attempt to match the new bid right away. If unsuccessful, that's no problem. A task has already
+	// been entered into the task queue that will repeat the operation.
+	time.Sleep(250 * time.Millisecond)
+	if txKey, err := TryMatchBid(c, bidKey); err != nil {
+		c.Warningf("Opportunistic matching failed: %v", err)
+	} else if txKey == nil {
+		c.Infof("Opportunistic matching yields no match")
+	} else {
+		c.Infof("Opportunistic matching yields txId %v", txKey.Encode())
+	}
+	
 	return bidKey, nil
 }
 
