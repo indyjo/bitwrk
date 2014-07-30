@@ -609,10 +609,11 @@ func (tx *Transaction) Book(dao CachedAccountingDao, buyerBid *Bid) error {
 		return nil
 	}
 
+	zero := money.Money{Currency: tx.Price.Currency, Amount: 0}
 	return PlaceAccountMovement(dao, tx.Matched, AccountMovementTransaction,
 		tx.Buyer, tx.Buyer,
 		delta, delta.Neg(),
-		money.Money{Currency: tx.Price.Currency, Amount: 0})
+		zero, zero)
 }
 
 var ErrTooYoung = fmt.Errorf("This transaction is too young to be retired")
@@ -634,16 +635,17 @@ func (tx *Transaction) Retire(dao AccountingDao, now time.Time) error {
 	}
 
 	var err error
+	zero := money.Money{Currency: tx.Price.Currency, Amount: 0}
 	if tx.Phase == PhaseFinished {
 		err = PlaceAccountMovement(dao, now, AccountMovementTransactionFinish,
 			tx.Seller, tx.Buyer,
 			tx.Price, tx.Price.Add(tx.Fee).Neg(),
-			tx.Fee)
+			tx.Fee, zero)
 	} else {
 		err = PlaceAccountMovement(dao, now, AccountMovementTransactionFinish,
 			tx.Buyer, tx.Buyer,
 			tx.Price.Add(tx.Fee), tx.Price.Add(tx.Fee).Neg(),
-			money.Money{Currency: tx.Price.Currency, Amount: 0})
+			money.Money{Currency: tx.Price.Currency, Amount: 0}, zero)
 	}
 	if err != nil {
 		return err

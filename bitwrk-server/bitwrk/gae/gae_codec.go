@@ -321,6 +321,7 @@ func (codec movementCodec) Load(c <-chan datastore.Property) error {
 	movement.AvailableDelta.Currency = money.BTC
 	movement.BlockedDelta.Currency = money.BTC
 	movement.Fee.Currency = money.BTC
+	movement.World.Currency = money.BTC
 	for p := range c {
 		switch p.Name {
 		case "Timestamp":
@@ -331,6 +332,7 @@ func (codec movementCodec) Load(c <-chan datastore.Property) error {
 			movement.AvailableDelta.Currency.MustParse(p.Value.(string))
 			movement.BlockedDelta.Currency = movement.AvailableDelta.Currency
 			movement.Fee.Currency = movement.AvailableDelta.Currency
+			movement.World.Currency = movement.AvailableDelta.Currency
 		case "AvailableDelta":
 			movement.AvailableDelta.Amount = p.Value.(int64)
 		case "AvailableAccount":
@@ -347,6 +349,8 @@ func (codec movementCodec) Load(c <-chan datastore.Property) error {
 			movement.BlockedPredecessorKey = &s
 		case "Fee":
 			movement.Fee.Amount = p.Value.(int64)
+		case "World":
+			movement.World.Amount = p.Value.(int64)
 		default:
 			return fmt.Errorf("Unknown property %s", p.Name)
 		}
@@ -382,6 +386,57 @@ func (codec movementCodec) Save(c chan<- datastore.Property) error {
 	}
 
 	c <- datastore.Property{Name: "Fee", Value: movement.Fee.Amount}
+	c <- datastore.Property{Name: "World", Value: movement.World.Amount}
 	close(c)
+	return nil
+}
+
+type depositCodec struct {
+	deposit *Deposit
+}
+
+
+func (codec depositCodec) Save(c chan<- datastore.Property) error {
+	deposit := codec.deposit
+	c <- datastore.Property{Name: "Account", Value: string(deposit.Account)}
+	c <- datastore.Property{Name: "Amount", Value: deposit.Amount.Amount}
+	c <- datastore.Property{Name: "Created", Value: deposit.Created}
+	c <- datastore.Property{Name: "Currency", Value: deposit.Amount.Currency.String()}
+	c <- datastore.Property{Name: "Document", Value: deposit.Document, NoIndex: true}
+	c <- datastore.Property{Name: "Reference", Value: deposit.Reference, NoIndex: true}
+	c <- datastore.Property{Name: "Signature", Value: deposit.Signature, NoIndex: true}
+	c <- datastore.Property{Name: "Type", Value: int64(deposit.Type)}
+	close(c)
+	return nil
+}
+
+
+func (codec depositCodec) Load(c <-chan datastore.Property) error {
+	deposit := codec.deposit
+	deposit.Amount.Currency = money.BTC
+
+	for p := range c {
+		switch p.Name {
+		case "Account":
+			deposit.Account = p.Value.(string)
+		case "Amount":
+			deposit.Amount.Amount = p.Value.(int64)
+		case "Created":
+			deposit.Created = p.Value.(time.Time)
+		case "Currency":
+			deposit.Amount.Currency.MustParse(p.Value.(string))
+		case "Document":
+			deposit.Document = p.Value.(string)
+		case "Reference":
+			deposit.Reference = p.Value.(string)
+		case "Signature":
+			deposit.Signature = p.Value.(string)
+		case "Type":
+			deposit.Type = DepositType(p.Value.(int64))
+		default:
+			return fmt.Errorf("Unknown property %s", p.Name)
+		}
+	}
+
 	return nil
 }

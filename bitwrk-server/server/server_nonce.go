@@ -73,12 +73,10 @@ func handleGetNonce(w http.ResponseWriter, r *http.Request) {
 
 	w.Write([]byte(nonce))
 
-	go func() {
-		// Delete expired nonces of a different shard
-		if err := deleteExpired(c, now, nonceShardKey(c, nonce[2:])); err != nil {
-			c.Warningf("deleteExpired failed: %v", err)
-		}
-	}()
+	// Delete expired nonces of a different shard
+	if err := deleteExpired(c, now, nonceShardKey(c, nonce[2:])); err != nil {
+		c.Warningf("deleteExpired failed: %v", err)
+	}
 }
 
 var errInvalidNonce = fmt.Errorf("Nonce invalid")

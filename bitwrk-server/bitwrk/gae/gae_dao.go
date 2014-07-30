@@ -90,6 +90,22 @@ func (dao *gaeAccountingDao) NewAccountMovementKey(participant string) (string, 
 	return datastore.NewKey(dao.c, "AccountMovement", "", r, parent).Encode(), nil
 }
 
+func (dao *gaeAccountingDao) GetDeposit(uid string) (Deposit, error) {
+	key := DepositKey(dao.c, uid)
+	deposit := Deposit{}
+	if err := datastore.Get(dao.c, key, depositCodec{&deposit}); err == datastore.ErrNoSuchEntity {
+		return Deposit{}, ErrNoSuchObject
+	} else {
+		return deposit, err
+	}
+}
+
+func (dao *gaeAccountingDao) SaveDeposit(uid string, deposit *Deposit) error {
+	key := DepositKey(dao.c, uid)
+	_, err := datastore.Put(dao.c, key, depositCodec{deposit})
+	return err
+}
+
 func NewGaeAccountingDao(c appengine.Context) CachedAccountingDao {
 	return NewCachedAccountingDao(&gaeAccountingDao{c: c})
 }

@@ -65,20 +65,22 @@ type AccountMovement struct {
 	BlockedAccount        string
 	BlockedPredecessorKey *string
 
-	Fee money.Money
+	Fee   money.Money // Money immediately collectable by site owner
+	World money.Money // Money delta for the rest of the world
 
 	//BidKey, TransactionKey *string
 }
 
 // Places a new account movement between the given accounts, in a
-// transaction-safe way. If amy error but occurs, the transaction must be rolled
+// transaction-safe way. If any error occurs, the transaction must be rolled
 // back.
 func PlaceAccountMovement(
 	dao AccountingDao,
 	now time.Time,
 	mType AccountMovementType,
 	availableParticipant, blockedParticipant string,
-	availableDelta, blockedDelta, fee money.Money,
+	availableDelta, blockedDelta,
+	fee money.Money, world money.Money,
 ) error {
 	m := new(AccountMovement)
 	m.Timestamp = now
@@ -88,6 +90,7 @@ func PlaceAccountMovement(
 	m.BlockedDelta = blockedDelta
 	m.BlockedAccount = blockedParticipant
 	m.Fee = fee
+	m.World = world
 
 	if err := m.Validate(); err != nil {
 		return err
@@ -142,8 +145,8 @@ type AccountMovementType int8
 const (
 	AccountMovementInvalid AccountMovementType = iota
 	AccountMovementPayIn
-	AccountMovementPayout
-	AccountMovementPayoutReimburse
+	AccountMovementPayOut
+	AccountMovementPayOutReimburse
 	AccountMovementBid
 	AccountMovementBidReimburse
 	AccountMovementTransaction
@@ -155,9 +158,9 @@ func (t AccountMovementType) String() string {
 	switch t {
 	case AccountMovementPayIn:
 		return "PAYIN"
-	case AccountMovementPayout:
+	case AccountMovementPayOut:
 		return "PAYOUT"
-	case AccountMovementPayoutReimburse:
+	case AccountMovementPayOutReimburse:
 		return "PAYOUT_REIMBURSE"
 	case AccountMovementBid:
 		return "BID"
@@ -170,15 +173,15 @@ func (t AccountMovementType) String() string {
 	case AccountMovementTransactionReimburse:
 		return "TRANSACTION_REIMBURSE"
 	}
-	return fmt.Sprintf("<Invalid Account Moment Type: %v>", int8(t))
+	return fmt.Sprintf("<Invalid Account Movement Type: %v>", int8(t))
 }
 
 func (m *AccountMovement) String() string {
-	return fmt.Sprintf("%v: %v/UNBLOCKED:%v %v/BLOCKED:%v fee:%v",
+	return fmt.Sprintf("%v: %v/UNBLOCKED:%v %v/BLOCKED:%v fee:%v world:%v",
 		m.Type,
 		m.AvailableAccount, m.AvailableDelta,
 		m.BlockedAccount, m.BlockedDelta,
-		m.Fee)
+		m.Fee, m.World)
 }
 
 func validateCurrency(currency *money.Currency, otherCurrency money.Currency) (*money.Currency, error) {
@@ -192,15 +195,21 @@ func validateCurrency(currency *money.Currency, otherCurrency money.Currency) (*
 }
 
 func checkFlowDirection(msg string, a int, b int64) error {
+	if a < -2 {
+		a = -2
+	} else if a > +2 {
+		a = 2
+	}
+	rel := []string{"<", "<=", "=", ">=", ">"}[a+2]
 	if a < 0 && b < 0 || a >= -1 && a <= 1 && b == 0 || a > 0 && b > 0 {
 		return nil
 	} else {
-		return fmt.Errorf("Wrong signedness in %v: %v contradicts %v", msg, a, b)
+		return fmt.Errorf("'%v' must be %v 0, but is %v", msg, rel, b)
 	}
 	return nil // never reached
 }
 
-func (m *AccountMovement) checkCashFlowDirection(available, blocked, fee int) error {
+func (m *AccountMovement) checkCashFlowDirection(available, blocked, fee, world int) error {
 	if err := checkFlowDirection("available", available, m.AvailableDelta.Amount); err != nil {
 		return err
 	}
@@ -208,6 +217,9 @@ func (m *AccountMovement) checkCashFlowDirection(available, blocked, fee int) er
 		return err
 	}
 	if err := checkFlowDirection("fee", fee, m.Fee.Amount); err != nil {
+		return err
+	}
+	if err := checkFlowDirection("world", world, m.World.Amount); err != nil {
 		return err
 	}
 	return nil
@@ -242,18 +254,30 @@ func (m *AccountMovement) Validate() (err error) {
 		sum += m.Fee.Amount
 	}
 
+	if m.World.Amount != 0 {
+		currency, err = validateCurrency(currency, m.World.Currency)
+		if err != nil {
+			return
+		}
+		sum += m.World.Amount
+	}
+
 	switch m.Type {
-	//checkCashFlowDirection(unblocked, blocked, fee int)
+	//checkCashFlowDirection(unblocked, blocked, fee, world int)
 	case AccountMovementBid:
-		err = m.checkCashFlowDirection(-2, 2, 0)
+		err = m.checkCashFlowDirection(-2, 2, 0, 0)
 	case AccountMovementBidReimburse:
-		err = m.checkCashFlowDirection(2, -2, 0)
+		err = m.checkCashFlowDirection(2, -2, 0, 0)
 	case AccountMovementTransaction:
-		err = m.checkCashFlowDirection(1, -1, 0)
+		err = m.checkCashFlowDirection(1, -1, 0, 0)
 	case AccountMovementTransactionFinish:
-		err = m.checkCashFlowDirection(2, -2, 1)
+		err = m.checkCashFlowDirection(2, -2, 1, 0)
 	case AccountMovementTransactionReimburse:
-		err = m.checkCashFlowDirection(2, -2, 0)
+		err = m.checkCashFlowDirection(2, -2, 0, 0)
+	case AccountMovementPayIn:
+		err = m.checkCashFlowDirection(2, 0, 0, -2)
+	case AccountMovementPayOut:
+		err = m.checkCashFlowDirection(-2, 0, 0, 2)
 	default:
 		err = fmt.Errorf("Invalid account movement type %v", m.Type)
 	}

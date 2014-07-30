@@ -43,6 +43,10 @@ func BidKey(c appengine.Context, bidId string) (key *datastore.Key, err error) {
 	return
 }
 
+func DepositKey(c appengine.Context, uid string) *datastore.Key {
+	return datastore.NewKey(c, "Deposit", uid, 0, nil)
+}
+
 // While in state "Placed", bid's have a corresponding entry in the
 // so-called "hot" zone, which allows for better transactional locality.
 //

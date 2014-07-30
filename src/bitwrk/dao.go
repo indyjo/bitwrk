@@ -33,6 +33,9 @@ type AccountingDao interface {
 	SaveMovement(*AccountMovement) error
 
 	NewAccountMovementKey(participant string) (string, error)
+
+	GetDeposit(uid string) (Deposit, error)
+	SaveDeposit(uid string, deposit *Deposit) error
 }
 
 type CachedAccountingDao interface {
@@ -50,10 +53,15 @@ type CachedAccountingDao interface {
 // This type is not thread-safe. If used in a multi-threaded context,
 // proper synchronisation must be applied.
 type cachedAccountingDao struct {
-	delegate       AccountingDao
-	accounts       map[string]ParticipantAccount
-	movements      map[string]AccountMovement
+	// Underlying uncached DAO implementation.
+	delegate AccountingDao
+	// Cache all objects read _and_ written since the creation of the cached DAO.
+	accounts  map[string]ParticipantAccount
+	deposits  map[string]Deposit
+	movements map[string]AccountMovement
+	// Store which objects have changed and must be written back to the delegate.
 	savedAccounts  map[string]bool
+	savedDeposits  map[string]bool
 	savedMovements map[string]bool
 }
 
@@ -61,8 +69,10 @@ func NewCachedAccountingDao(delegate AccountingDao) CachedAccountingDao {
 	result := new(cachedAccountingDao)
 	result.delegate = delegate
 	result.accounts = make(map[string]ParticipantAccount)
+	result.deposits = make(map[string]Deposit)
 	result.movements = make(map[string]AccountMovement)
 	result.savedAccounts = make(map[string]bool)
+	result.savedDeposits = make(map[string]bool)
 	result.savedMovements = make(map[string]bool)
 	return result
 }
@@ -117,6 +127,25 @@ func (c *cachedAccountingDao) NewAccountMovementKey(participant string) (string,
 	return c.delegate.NewAccountMovementKey(participant)
 }
 
+func (c *cachedAccountingDao) GetDeposit(uid string) (Deposit, error) {
+	if deposit, ok := c.deposits[uid]; ok {
+		return deposit, nil
+	}
+
+	if deposit, err := c.delegate.GetDeposit(uid); err != nil {
+		return Deposit{}, err
+	} else {
+		c.deposits[uid] = deposit
+		return deposit, nil
+	}
+}
+
+func (c *cachedAccountingDao) SaveDeposit(uid string, deposit *Deposit) error {
+	c.deposits[uid] = *deposit
+	c.savedDeposits[uid] = true
+	return nil
+}
+
 func (c *cachedAccountingDao) Flush() error {
 	for k, _ := range c.savedAccounts {
 		account := c.accounts[k]
@@ -124,6 +153,13 @@ func (c *cachedAccountingDao) Flush() error {
 			return err
 		}
 		delete(c.savedAccounts, k)
+	}
+	for k, _ := range c.savedDeposits {
+		deposit := c.deposits[k]
+		if err := c.delegate.SaveDeposit(k, &deposit); err != nil {
+			return err
+		}
+		delete(c.savedDeposits, k)
 	}
 	for k, _ := range c.savedMovements {
 		movement := c.movements[k]

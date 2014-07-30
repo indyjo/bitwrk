@@ -184,10 +184,11 @@ func (bid *Bid) Book(dao CachedAccountingDao) error {
 	}
 
 	priceIncludingFee := bid.Price.Add(bid.Fee)
+	zero := money.Money{Currency: bid.Price.Currency, Amount: 0}
 	return PlaceAccountMovement(dao, bid.Created, AccountMovementBid,
 		bid.Participant, bid.Participant,
 		priceIncludingFee.Neg(), priceIncludingFee,
-		money.Money{Currency: bid.Price.Currency, Amount: 0})
+		zero, zero)
 }
 
 func (bid *Bid) Retire(dao AccountingDao, now time.Time) error {
@@ -202,10 +203,11 @@ func (bid *Bid) Retire(dao AccountingDao, now time.Time) error {
 
 	price := bid.Price.Add(bid.Fee)
 
+	zero := money.Money{Currency: bid.Price.Currency, Amount: 0}
 	if err := PlaceAccountMovement(dao, now, AccountMovementBidReimburse,
 		bid.Participant, bid.Participant,
 		price, price.Neg(),
-		money.Money{Currency: bid.Price.Currency, Amount: 0}); err != nil {
+		zero, zero); err != nil {
 		return err
 	}
 
