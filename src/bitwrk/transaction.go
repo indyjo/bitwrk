@@ -130,12 +130,12 @@ func (o Origin) String() string {
 // Tmessage objects are associated 1:N with transactions
 type Tmessage struct {
 	Received            time.Time
-	Document            string
-	Signature           string
-	From                Origin
-	Accepted            bool
-	RejectMessage       string
-	PrePhase, PostPhase TxPhase
+	Document            string  `datastore:",noindex"`
+	Signature           string  `datastore:",noindex"`
+	From                Origin  `datastore:",noindex"`
+	Accepted            bool    `datastore:",noindex"`
+	RejectMessage       string  `datastore:",noindex"`
+	PrePhase, PostPhase TxPhase `datastore:",noindex"`
 }
 
 type TxPhase int8

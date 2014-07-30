@@ -103,14 +103,14 @@ func (codec bidCodec) Save(c chan<- datastore.Property) error {
 	c <- datastore.Property{Name: "Price", Value: bid.Price.Amount}
 	c <- datastore.Property{Name: "Fee", Value: bid.Fee.Amount}
 	c <- datastore.Property{Name: "Participant", Value: string(bid.Participant)}
-	c <- datastore.Property{Name: "Document", Value: string(bid.Document)}
-	c <- datastore.Property{Name: "Signature", Value: string(bid.Signature)}
+	c <- datastore.Property{Name: "Document", Value: string(bid.Document), NoIndex: true}
+	c <- datastore.Property{Name: "Signature", Value: string(bid.Signature), NoIndex: true}
 	c <- datastore.Property{Name: "Created", Value: time.Time(bid.Created)}
 	c <- datastore.Property{Name: "Expires", Value: time.Time(bid.Expires)}
 	if bid.Matched != nil {
 		c <- datastore.Property{Name: "Matched", Value: *bid.Matched}
 	}
-	c <- datastore.Property{Name: "Transaction", Value: mustDecodeKey(bid.Transaction)}
+	c <- datastore.Property{Name: "Transaction", Value: mustDecodeKey(bid.Transaction), NoIndex: true}
 	close(c)
 	return nil
 }
@@ -150,7 +150,7 @@ func (codec hotBidCodec) Save(c chan<- datastore.Property) error {
 		c <- datastore.Property{Name: "Currency", Value: bid.Price.Currency.String()}
 	}
 	c <- datastore.Property{Name: "Price", Value: bid.Price.Amount}
-	c <- datastore.Property{Name: "Expires", Value: time.Time(bid.Expires)}
+	c <- datastore.Property{Name: "Expires", Value: time.Time(bid.Expires), NoIndex: true}
 	close(c)
 	return nil
 }
@@ -232,8 +232,8 @@ func (codec txCodec) Load(c <-chan datastore.Property) error {
 func (codec txCodec) Save(c chan<- datastore.Property) error {
 	tx := codec.tx
 	c <- datastore.Property{Name: "Revision", Value: int64(tx.Revision)}
-	c <- datastore.Property{Name: "BuyerBid", Value: mustDecodeKey(&tx.BuyerBid)}
-	c <- datastore.Property{Name: "SellerBid", Value: mustDecodeKey(&tx.SellerBid)}
+	c <- datastore.Property{Name: "BuyerBid", Value: mustDecodeKey(&tx.BuyerBid), NoIndex: true}
+	c <- datastore.Property{Name: "SellerBid", Value: mustDecodeKey(&tx.SellerBid), NoIndex: true}
 	c <- datastore.Property{Name: "Buyer", Value: string(tx.Buyer)}
 	c <- datastore.Property{Name: "Seller", Value: string(tx.Seller)}
 	c <- datastore.Property{Name: "Article", Value: string(tx.Article)}
@@ -247,7 +247,7 @@ func (codec txCodec) Save(c chan<- datastore.Property) error {
 	c <- datastore.Property{Name: "Phase", Value: int64(tx.Phase)}
 	c <- datastore.Property{Name: "Timeout", Value: time.Time(tx.Timeout)}
 	if tx.WorkerURL != nil {
-		c <- datastore.Property{Name: "WorkerURL", Value: *tx.WorkerURL}
+		c <- datastore.Property{Name: "WorkerURL", Value: *tx.WorkerURL, NoIndex: true}
 	}
 	if tx.WorkHash != nil {
 		c <- datastore.Property{Name: "WorkHash", Value: tx.WorkHash[:], NoIndex: true}
@@ -395,7 +395,6 @@ type depositCodec struct {
 	deposit *Deposit
 }
 
-
 func (codec depositCodec) Save(c chan<- datastore.Property) error {
 	deposit := codec.deposit
 	c <- datastore.Property{Name: "Account", Value: string(deposit.Account)}
@@ -409,7 +408,6 @@ func (codec depositCodec) Save(c chan<- datastore.Property) error {
 	close(c)
 	return nil
 }
-
 
 func (codec depositCodec) Load(c <-chan datastore.Property) error {
 	deposit := codec.deposit
