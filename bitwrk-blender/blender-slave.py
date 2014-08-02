@@ -307,8 +307,11 @@ def get_blender_version():
         return "2.69"
     elif b"Blender 2.70 (sub 0)" in output:
         return "2.70"
+    elif b"Blender 2.71 (sub 0)" in output:
+        return "2.71"
     else:
-        raise RuntimeError("Blender version could not be detected")
+        raise RuntimeError("Blender version could not be detected.\n"
+                           + "This version of blender-slave.py will detect Blender versions 2.69 till 2.71.")
 
 
 def parse_args():

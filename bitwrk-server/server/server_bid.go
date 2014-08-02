@@ -177,7 +177,11 @@ func enqueueBid(w http.ResponseWriter, r *http.Request) (err error) {
 		"net.bitwrk/blender/0/2.70/512M",
 		"net.bitwrk/blender/0/2.70/2G",
 		"net.bitwrk/blender/0/2.70/8G",
-		"net.bitwrk/blender/0/2.70/32G":
+		"net.bitwrk/blender/0/2.70/32G",
+		"net.bitwrk/blender/0/2.71/512M",
+		"net.bitwrk/blender/0/2.71/2G",
+		"net.bitwrk/blender/0/2.71/8G",
+		"net.bitwrk/blender/0/2.71/32G":
 		// TODO: add real article management
 	default:
 		return fmt.Errorf("Article not traded here: %#v", bidArticle)

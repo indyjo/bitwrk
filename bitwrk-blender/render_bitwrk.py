@@ -260,7 +260,7 @@ class Tile:
         self.result = engine.begin_result(self.minx, self.miny, self.resx, self.resy)
         self.conn = http.client.HTTPConnection(
             settings.bitwrk_client_host, settings.bitwrk_client_port,
-            strict=True, timeout=600)
+            timeout=600)
         try:
             self.conn.putrequest("POST", "/buy/" + get_article_id(settings.complexity))
             self.conn.putheader('Transfer-Encoding', 'chunked')
