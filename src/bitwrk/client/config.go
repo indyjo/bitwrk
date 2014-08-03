@@ -18,5 +18,5 @@ package client
 
 var BitwrkUserAgent string = "BitWrkGoClient/0.0.1"
 var BitwrkUrl string = "http://bitwrk.appspot.com/"
-
 //var BitwrkUrl string = "http://localhost:8080/"
+var MaxNumberOfChunksInWorkFile int64 = 65536

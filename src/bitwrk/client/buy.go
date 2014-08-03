@@ -280,8 +280,8 @@ func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client
 	} else {
 		defer r.Close()
 		numChunks := a.workFile.NumChunks()
-		if numChunks > 16384 {
-			return nil, fmt.Errorf("Work file too big: %d chunks.", numChunks)
+		if numChunks > MaxNumberOfChunksInWorkFile {
+			return nil, fmt.Errorf("Work file too big: %d chunks (only %d allowed).", numChunks, MaxNumberOfChunksInWorkFile)
 		}
 		wishList := make([]byte, int(numChunks+7)/8)
 		if _, err := io.ReadFull(r, wishList); err != nil {

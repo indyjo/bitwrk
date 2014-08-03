@@ -81,7 +81,7 @@ var activityManager = ActivityManager{
 	make(map[ActivityKey]*Mandate),
 	make([]Activity, 0, 5), //history
 	1,
-	cafs.NewRamStorage(64 * 1024 * 1024), // 64 MByte
+	cafs.NewRamStorage(512 * 1024 * 1024), // 512 MByte
 	make(map[string]chan bool),
 }
 
