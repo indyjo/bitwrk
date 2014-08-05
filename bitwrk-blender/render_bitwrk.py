@@ -13,6 +13,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http:#www.gnu.org/licenses/>.
+import subprocess
 
 bl_info = {
     "name": "BitWrk Distributed Rendering",
@@ -27,6 +28,7 @@ bl_info = {
 
 import bpy, os, sys, http.client, select, struct, tempfile, urllib.request, colorsys, math
 import webbrowser, time, traceback
+import hashlib
 from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty
 
 def get_article_id(complexity):
@@ -205,6 +207,47 @@ class Tagged:
     """Produces an IFF-like stream"""
     def __init__(self, out):
         self.out = out
+        self.aliases = {}
+        
+    def writeResource(self, file, origpath, abspath):
+        """Writes a resource linked by the blend file into the stream.
+        Chunk format is:
+         'rsrc' CHUNKLENGTH
+                ALIASLENGTH alias...
+                ORIGLENGTH origpath...
+                FILELENGTH filedata...
+        """
+         
+        if type(origpath) != bytes:
+            origpath = origpath.encode('utf-8')
+         
+        if origpath in self.aliases:
+            # Only write resources not written yet
+            return
+        
+        alias = resource_id(abspath).encode('utf-8')
+        
+        file.seek(0, os.SEEK_END)
+        filelength = file.tell()
+        file.seek(0, os.SEEK_SET)
+
+        # chunk size must not exceed MAX_INT
+        chunklength = filelength + len(origpath) + len(alias) + 12
+        if chunklength > 0x8fffffff:
+            raise RuntimeError('File is too big to be written: %d bytes' % length)
+        
+        self.aliases[origpath] = alias
+        self.out.write(struct.pack('>4sI', b'rsrc', chunklength))
+        self.out.write(struct.pack('>I', len(alias)))
+        self.out.write(alias)
+        self.out.write(struct.pack('>I', len(origpath)))
+        self.out.write(origpath)
+        self.out.write(struct.pack('>I', filelength))
+        while filelength > 0:
+            data = file.read(min(filelength, 4096))
+            filelength = filelength - len(data)
+            self.out.write(data)
+        return alias
         
     def writeFile(self, tag, f):
         """Writes the contents of a file into the stream"""
@@ -251,7 +294,10 @@ class Tile:
         self.color = color
         self.success = False
         
-    def dispatch(self, settings, filename, engine):
+    def dispatch(self, settings, data, filepath, engine):
+        """Dispatches one tile to the bitwrk client.
+        The complete blender data is packed into the transmission.
+        """ 
         # draw rect in preview color
         tile = engine.begin_result(self.minx, self.miny, self.resx, self.resy)
         tile.layers[0].rect = [self.color] * (self.resx*self.resy)
@@ -273,7 +319,17 @@ class Tile:
                 tagged.writeInt('xmax', self.minx+self.resx-1)
                 tagged.writeInt('ymax', self.miny+self.resy-1)
                 tagged.writeInt('fram', self.frame)
-                with open(filename, "rb") as file:
+                for path, abspath in zip(bpy.utils.blend_paths(absolute=False, packed=True),
+                                         bpy.utils.blend_paths(absolute=True, packed=True)):
+                    try:
+                        with open(abspath, "rb") as file:
+                            alias = tagged.writeResource(file, path, abspath)
+                            engine.report({'INFO'}, "Successfully bundled resource {} = {}".format(alias, path))
+                    except FileNotFoundError:
+                        engine.report({'WARNING'}, "Error bundling resource {}".format(path))
+                    except IsADirectoryError:
+                        pass
+                with open(filepath, "rb") as file:
                     tagged.writeFile('blen', file)
             finally:
                 chunked.close()
@@ -351,14 +407,24 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
     
     def render(self, scene):
         try:
-            self._doRender(scene)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                self._doRender(scene, tmpdir)
         except:
             self.report({'ERROR'}, "Exception while rendering: {}".format(traceback.format_exc()))
             
-            
-    def _doRender(self, scene):
-        # Make sure the .blend file has been saved
-        filename = bpy.data.filepath
+        
+    def _doRender(self, scene, tmpdir):
+        # Export the file to a temporary directory and call this script
+        # in a separate blender session for remapping all paths. This
+        # seems to be the only way to change paths on the temp file only,
+        # without affecting the original file.
+        filename = os.path.join(tmpdir, "mainfile.blend")
+        bpy.ops.wm.save_as_mainfile(filepath=filename, check_existing=False, copy=True, relative_remap=True)
+        ret = subprocess.call([sys.argv[0], "-b", "-noaudio", filename, "-P", __file__, "--", "repath"])
+        if ret != 0:
+            raise RuntimeError("Calling blender returned code {}".format(ret))
+        self.report({'INFO'}, "mainfile.blend successfully exported: {}".format(filename))
+        
         if scene.cycles.progressive == 'PATH':
             cost_per_bounce = scene.cycles.samples
         elif scene.cycles.progressive == 'BRANCHED_PATH':
@@ -371,12 +437,9 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
                 scene.cycles.subsurface_samples)
         else:
             raise RuntimeError("Unknows sampling type: %s" % (scene.cycles.progressive))
-        if not os.path.exists(filename):
-            raise RuntimeError("Current file path not defined\nSave your file before sending a job")
-        bpy.ops.wm.save_mainfile(filepath=filename, check_existing=False)
         
         settings = scene.bitwrk_settings
-        percentage = max(1, min(100, scene.render.resolution_percentage))
+        percentage = max(1, min(10000, scene.render.resolution_percentage))
         resx = int(scene.render.resolution_x * percentage / 100)
         resy = int(scene.render.resolution_y * percentage / 100)
         num_layers = 0
@@ -401,10 +464,10 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
                 self.report({'INFO'}, "Successfully rendered {} tiles on BitWrk.".format(len(tiles)))
                 break
                 
-            # Dispatch some unfinished tiless
+            # Dispatch some unfinished tiles
             for tile in remaining:
                 if tile.conn is None and num_active < settings.concurrency:
-                    if tile.dispatch(settings, filename, self):
+                    if tile.dispatch(settings, bpy.data, filename, self):
                         num_active += 1
             
             # Poll from all tiles currently active
@@ -458,6 +521,57 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
             result.extend(self._makeTiles(settings, frame, minx, miny+top, resx, resy-top, max_pixels))
             return result
 
+def resource_id(path):
+    abspath = os.path.abspath(bpy.path.abspath(path))
+    if type(abspath) != bytes:
+        abspath = abspath.encode('utf-8')
+    return hashlib.md5(abspath).hexdigest()
+
+def resource_path(path):
+    return"//rsrc." + resource_id(path) + ".data"
+
+def object_abspath(obj):
+    """Returns the absolute path of an object that is used to compute its
+    resource id. Takes linked libraries into account, recursively."""
+    if hasattr(obj, 'packed_file') and obj.packed_file:
+        return
+    if not obj.filepath:
+        return
+    path = obj.filepath
+    while hasattr(obj, 'library') and obj.library:
+        lib = obj.library
+        if not lib.filepath:
+            raise RuntimeExeption("Library without a filepath: " + lib)
+        path = bpy.path.abspath(path, lib.filepath)
+        obj = lib
+    os.path.abspath(bpy.path.abspath(path))
+    return path
+    
+
+# Called when this script is called as a main file with special parameters.
+# Modifies all included paths to point to files named by the pattern
+# '//rsrc.' + md5(absolute original path) + '.data'
+# This method is called in a special blender session. 
+def repath():
+    def repath_obj(obj):
+        obj.filepath = resource_path(object_abspath(p))
+            
+    for img in bpy.data.images:
+        repath_obj(img)
+        print("Image: "+img.filepath)
+    for snd in bpy.data.sounds:
+        repath_obj(snd)
+        print("Sound: "+snd.filepath)
+    for txt in bpy.data.texts:
+        repath_obj(txt)
+        print("Text: "+txt.filepath)
+    for vid in bpy.data.movieclips:
+        repath_obj(vid)
+        print("Video: "+vid.filepath)
+    for lib in bpy.data.libraries:
+        repath_obj(lib)
+        print("Library: "+lib.filepath)
+
 def register():
     print("Registered BitWrk renderer")
     bpy.utils.register_class(BitWrkRenderEngine)
@@ -485,7 +599,22 @@ def unregister():
     bpy.utils.unregister_class(BitWrkRenderEngine)
 
 
-# This allows you to run the script directly from blenders text editor
-# to test the addon without having to install it.
 if __name__ == "__main__":
-    register()
+    try:
+        idx = sys.argv.index("--")
+    except:
+        idx = -1
+    
+    if idx < 0:
+        # This allows us to run the addon script directly from blender's
+        # text editor without having to install it.
+        register()
+    else:
+        try:
+            args = sys.argv[idx+1:]
+            print("Args:", args)
+            if len(args) > 0 and args[0] == 'repath':
+                repath()
+                bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath, check_existing=False)
+        except:
+            sys.exit(-1)

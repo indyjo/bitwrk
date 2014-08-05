@@ -19,7 +19,7 @@
 # Blender-slave.py - Offers Blender rendering to the BitWrk service
 
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory, http.server)
-import sys, os
+import sys
 if sys.version_info[:2] < (3,2):
     raise RuntimeError("Python >= 3.2 required. Detected: %s" % sys.version_info)
 
@@ -156,6 +156,10 @@ except:
 
 """
 
+def checkRange(val, min, max):
+    if val < min or val > max:
+        raise RuntimeError("Value %d not in range [%d, %d]", val, min, max)
+
 class BlenderHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path != "/work":
@@ -167,17 +171,19 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
         elif self.headers["Content-Length"] != "0":
             stream = self.rfile
         try:
-            self._work(stream)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                self._work(stream, tmpdir)
         except:
             self.send_error(500)
             raise
         finally:
             register_with_bitwrk_client()
             
-    def _work(self, rfile):
+    def _work(self, rfile, tmpdir):
         xmin,ymin,xmax,ymax = 0,0,63,63
         frame=1
         seen_tags = {}
+        resourceCount = 0
         done = False
         while True:
             tag = rfile.read(4)
@@ -190,7 +196,7 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
             if done:
                 raise RuntimeError("Done rendering but tag %s seen", tag)
             
-            if tag in seen_tags:
+            if tag not in [b'rsrc'] and tag in seen_tags:
                 raise RuntimeError("Tag already seen: %s" % tag)
             seen_tags[tag] = tag
             
@@ -207,8 +213,13 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
                 ymax = self._readInt(rfile, tag, length)
             elif tag == b'fram':
                 frame = self._readInt(rfile, tag, length)
+            elif tag == b'rsrc':
+                if resourceCount==1000:
+                    raise RuntimeError("Too many resource files")
+                resourceCount += 1
+                self._readResource(rfile, length, tmpdir)
             elif tag == b'blen':
-                self._callBlender(rfile, length, frame, xmin, xmax, ymin, ymax)
+                self._callBlender(rfile, length, tmpdir, frame, xmin, xmax, ymin, ymax)
                 done = True
             else:
                 raise RuntimeError("Unknown tag: %s of length %d" % (tag, length))
@@ -225,55 +236,95 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
             raise RuntimeError("Illegal length %d for tag %s" % (length, tag))
         data = self._read(rfile, length)
         return struct.unpack(">i", data)[0]
+    
+    def _readResource(self, rfile, length, tmpdir):
+        checkRange(length, 12, 0x8fffffff)
         
-    def _callBlender(self, rfile, length, frame, xmin, xmax, ymin, ymax):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            blendfile = os.path.join(tmpdir, 'input.blend')
-            pythonfile = os.path.join(tmpdir, 'setup.py')
-            with open(pythonfile, 'w') as f:
-                f.write(PYTHONSCRIPT.format(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax, maxcost=MAX_COST))
+        aliasLength = struct.unpack('>I', self._read(rfile, 4))[0]
+        checkRange(aliasLength, 1, 127)
+        length -= 4 + aliasLength
+        if length < 0:
+            raise RuntimeError("Inconsistent lengths in resource chunk")
+        
+        alias = self._read(rfile, aliasLength)
+        for c in alias:
+            if ((c < ord('a') or c > ord('z')) and
+                (c < ord('0') or c > ord('9'))):
+                raise RuntimeError("Illegal characters in alias name")
+        alias = alias.decode('ascii')
+        
+        origNameLength = struct.unpack('>I', self._read(rfile, 4))[0]
+        checkRange(origNameLength, 1, 1023)
+        length -= 4 + origNameLength
+        if length < 0:
+            raise RuntimeError("Inconsistent lengths in resource chunk")
+        
+        origName = self._read(rfile, origNameLength).decode('utf-8')
+        
+        print("Mapping", alias, "to", origName)
+        
+        resourceLength = struct.unpack('>I', self._read(rfile, 4))[0]
+        checkRange(resourceLength, 0, 0x8fffffff)
+        length -= 4 + resourceLength
+        if length < 0:
+            raise RuntimeError("Inconsistent lengths in resource chunk")
+        
+        with open(os.path.join(tmpdir, "rsrc." + alias + ".name"), "w") as f:
+            f.write(origName)
+        
+        with open(os.path.join(tmpdir, "rsrc." + alias + ".data"), 'wb') as f:
+            f.write(self._read(rfile, resourceLength))
             
-            with open(blendfile, 'wb') as f:
-                f.write(self._read(rfile, length))
-            args = [BLENDER_BIN,
-                '--background', blendfile,
-                '-F', 'EXR',
-                '--render-output', os.path.join(tmpdir, 'output#'),
-                '-Y',
-                '-noaudio',
-                '-E', 'CYCLES',
-                '-P', pythonfile,
-                '--render-frame', '%d' % frame,
-                ]
-            print("Calling", args)
-            #subprocess.check_call(args)
-            with subprocess.Popen(args) as proc:
-                while True:
-                    retcode = proc.poll()
-                    if retcode == 0:
-                        break
-                    elif retcode is not None:
-                        self.send_response(500)
-                        return
-                    rl, _, _ = select([self.rfile], [], [], .1)
-                    if self.rfile in rl:
-                        print("ERROR request cancelled")
-                        proc.kill()
-                        return
-                
-            #subprocess.check_call(['/bin/sleep','120'])
+        checkRange(length, 0, 0)
             
-            self.send_response(200)
-            with open(os.path.join(tmpdir, 'output%d.exr' % frame), 'rb') as f:
-                f.seek(0, os.SEEK_END)
-                self.send_header("Content-Length", "%d" % f.tell())
-                self.end_headers()
-                
-                f.seek(0, os.SEEK_SET)
+        
+    def _callBlender(self, rfile, length, tmpdir, frame, xmin, xmax, ymin, ymax):
+        blendfile = os.path.join(tmpdir, 'input.blend')
+        pythonfile = os.path.join(tmpdir, 'setup.py')
+        with open(pythonfile, 'w') as f:
+            f.write(PYTHONSCRIPT.format(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax, maxcost=MAX_COST))
+        
+        with open(blendfile, 'wb') as f:
+            f.write(self._read(rfile, length))
+        args = [BLENDER_BIN,
+            '--background', blendfile,
+            '-F', 'EXR',
+            '--render-output', os.path.join(tmpdir, 'output#'),
+            '-Y',
+            '-noaudio',
+            '-E', 'CYCLES',
+            '-P', pythonfile,
+            '--render-frame', '%d' % frame,
+            ]
+        print("Calling", args)
+        #subprocess.check_call(args)
+        with subprocess.Popen(args) as proc:
+            while True:
+                retcode = proc.poll()
+                if retcode == 0:
+                    break
+                elif retcode is not None:
+                    self.send_response(500)
+                    return
+                rl, _, _ = select([self.rfile], [], [], .1)
+                if self.rfile in rl:
+                    print("ERROR request cancelled")
+                    proc.kill()
+                    return
+            
+        #subprocess.check_call(['/bin/sleep','120'])
+        
+        self.send_response(200)
+        with open(os.path.join(tmpdir, 'output%d.exr' % frame), 'rb') as f:
+            f.seek(0, os.SEEK_END)
+            self.send_header("Content-Length", "%d" % f.tell())
+            self.end_headers()
+            
+            f.seek(0, os.SEEK_SET)
+            data = f.read(32768)
+            while len(data) > 0:
+                self.wfile.write(data)
                 data = f.read(32768)
-                while len(data) > 0:
-                    self.wfile.write(data)
-                    data = f.read(32768)
 
 def register_with_bitwrk_client():
     query = urllib.parse.urlencode({
