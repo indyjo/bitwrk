@@ -554,23 +554,27 @@ def object_abspath(obj):
 # This method is called in a special blender session. 
 def repath():
     def repath_obj(obj):
-        obj.filepath = resource_path(object_abspath(p))
+        path = object_abspath(obj)
+        if path:
+            obj.filepath = resource_path(path)
+        else:
+            print("...skipped")
             
     for img in bpy.data.images:
-        repath_obj(img)
         print("Image: "+img.filepath)
+        repath_obj(img)
     for snd in bpy.data.sounds:
-        repath_obj(snd)
         print("Sound: "+snd.filepath)
+        repath_obj(snd)
     for txt in bpy.data.texts:
-        repath_obj(txt)
         print("Text: "+txt.filepath)
+        repath_obj(txt)
     for vid in bpy.data.movieclips:
-        repath_obj(vid)
         print("Video: "+vid.filepath)
+        repath_obj(vid)
     for lib in bpy.data.libraries:
-        repath_obj(lib)
         print("Library: "+lib.filepath)
+        repath_obj(lib)
 
 def register():
     print("Registered BitWrk renderer")
