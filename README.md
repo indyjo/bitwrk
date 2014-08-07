@@ -297,6 +297,11 @@ Bitcoin address.
 **It is also very important that neither the private key file, nor the backup be visible
 to others.**
 
+License
+-------
+
+See the license [here](COPYING)
+
 Server
 ------
 
