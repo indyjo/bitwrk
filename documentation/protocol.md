@@ -1,4 +1,4 @@
-This document describes the key concepts involved in the BitWrk service protocols.
+*This document describes the key concepts involved in the BitWrk service protocols.*
 
 Bids
 ====
