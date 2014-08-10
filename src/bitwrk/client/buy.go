@@ -121,14 +121,34 @@ func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (ca
 	if err := a.decryptResult(); err != nil {
 		return nil, fmt.Errorf("Error decrypting result: %v", err)
 	}
-	
-	if err := SendTxMessageAcceptResult(a.txId, a.identity); err != nil {
-		return nil, fmt.Errorf("Failed to send 'accept result' message: %v", err)
-	}
-	
-	a.waitWhile(func() bool { return a.tx.State == bitwrk.StateActive })
+
+	// In normal buys (without verifying), we can leave the rest as homework
+	// for a goroutine and exit here.
+	go func() {
+		if err := a.finishBuy(log); err != nil {
+			log.Printf("Error finishing buy: %v", err)
+		}
+	}()
 
 	return a.resultFile, nil
+}
+
+func (a *BuyActivity) finishBuy(log bitwrk.Logger) error {
+	// Start polling for transaction state changes in background
+	abortPolling := make(chan bool)
+	defer func() {
+		abortPolling <- true // Stop polling when sell has ended
+	}()
+	go func() {
+		a.pollTransaction(log, abortPolling)
+	}()
+
+	if err := SendTxMessageAcceptResult(a.txId, a.identity); err != nil {
+		return fmt.Errorf("Failed to send 'accept result' message: %v", err)
+	}
+
+	a.waitWhile(func() bool { return a.tx.State == bitwrk.StateActive })
+	return nil
 }
 
 func (a *BuyActivity) testSellerForChunkedCapability(log bitwrk.Logger, client *http.Client) (bool, error) {
@@ -165,10 +185,10 @@ func (a *BuyActivity) testSellerForChunkedCapability(log bitwrk.Logger, client *
 // the result data encrypted with a key that the seller will hand out after we have signed
 // a receipt for the encrypted result.
 func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
-    // Use a watchdog to make sure that all connnections created in the call time of this
-    // function are closed when the transaction leaves the active state or the allowed
-    // phases.
-    // Transaction polling is guaranteed by the calling function.
+	// Use a watchdog to make sure that all connnections created in the call time of this
+	// function are closed when the transaction leaves the active state or the allowed
+	// phases.
+	// Transaction polling is guaranteed by the calling function.
 	exitChan := make(chan bool)
 	connChan := make(chan io.Closer)
 	go a.watchdog(log, exitChan, connChan, func() bool {
@@ -185,7 +205,7 @@ func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
 	connChan <- st
 	defer st.Close()
 	scopedClient := NewClient(&st.Transport)
-	
+
 	chunked := false
 	if a.workFile.IsChunked() {
 		if supported, err := a.testSellerForChunkedCapability(log, scopedClient); err != nil {

@@ -26,7 +26,7 @@ bl_info = {
 
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory)
 
-import bpy, os, sys, http.client, select, struct, tempfile, urllib.request, colorsys, math
+import bpy, os, io, sys, http.client, select, struct, tempfile, urllib.request, colorsys, math
 import webbrowser, time, traceback
 import hashlib
 from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty
@@ -52,6 +52,16 @@ def get_max_cost(settings):
         print(dir(settings), settings)
         print(settings.complexity)
         raise RuntimeError()
+
+# Features enabled beginning with certain Blender versions
+FEATURE_BUNDLE_RESOURCES = bpy.app.version >= (2, 71, 0)
+
+# Running save_as_mainfile breaks relative texture paths from textures linked from a library
+# https://developer.blender.org/T41328
+BUG_SAVE_AS_COPY = bpy.app.version < (2, 71, 1)
+
+# Collections under bpy.data which contain linkable resources
+RESOURCE_COLLECTIONS = ["images", "sounds", "texts", "movieclips"]
 
 # Functions for probing host:port settings for a running BitWrk client
 LAST_PROBE_TIME = time.time()
@@ -217,6 +227,9 @@ class Tagged:
                 ORIGLENGTH origpath...
                 FILELENGTH filedata...
         """
+        
+        if abspath in self.aliases:
+            return self.aliases[abspath]
          
         if type(origpath) != bytes:
             origpath = origpath.encode('utf-8')
@@ -247,6 +260,7 @@ class Tagged:
             data = file.read(min(filelength, 4096))
             filelength = filelength - len(data)
             self.out.write(data)
+        self.aliases[abspath] = alias
         return alias
         
     def writeFile(self, tag, f):
@@ -281,6 +295,27 @@ class Tagged:
         
     def writeInt(self, tag, value):
         self.writeData(tag, struct.pack(">i", value))
+        
+    def bundleResources(self, engine, data):
+        for collection_name in RESOURCE_COLLECTIONS:
+            collection = getattr(data, collection_name)
+            for obj in collection:
+                try:
+                    if hasattr(obj, 'packed_file') and obj.packed_file is not None:
+                        file = io.BytesIO(obj.packed_file.data)
+                    else:
+                        path = object_filepath(obj)
+                        if path:
+                            file = open(path, "rb")
+                        else:
+                            continue
+                    
+                    with file:
+                        alias = self.writeResource(file, obj.filepath, object_uniqpath(obj))
+                        engine.report({'INFO'}, "Successfully bundled {} resource {} = {}".format(collection_name, alias, obj.name))
+                except (FileNotFoundError, NotADirectoryError) as e:
+                    engine.report({'WARNING'}, "Error bundling {} resource {}: {}".format(collection_name, obj.name, e))
+
         
 class Tile:
     def __init__(self, frame, minx, miny, resx, resy, color):
@@ -319,16 +354,8 @@ class Tile:
                 tagged.writeInt('xmax', self.minx+self.resx-1)
                 tagged.writeInt('ymax', self.miny+self.resy-1)
                 tagged.writeInt('fram', self.frame)
-                for path, abspath in zip(bpy.utils.blend_paths(absolute=False, packed=True),
-                                         bpy.utils.blend_paths(absolute=True, packed=True)):
-                    try:
-                        with open(abspath, "rb") as file:
-                            alias = tagged.writeResource(file, path, abspath)
-                            engine.report({'INFO'}, "Successfully bundled resource {} = {}".format(alias, path))
-                    except FileNotFoundError:
-                        engine.report({'WARNING'}, "Error bundling resource {}".format(path))
-                    except IsADirectoryError:
-                        pass
+                if FEATURE_BUNDLE_RESOURCES:
+                    tagged.bundleResources(engine, bpy.data)
                 with open(filepath, "rb") as file:
                     tagged.writeFile('blen', file)
             finally:
@@ -411,7 +438,6 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
                 self._doRender(scene, tmpdir)
         except:
             self.report({'ERROR'}, "Exception while rendering: {}".format(traceback.format_exc()))
-            
         
     def _doRender(self, scene, tmpdir):
         # Export the file to a temporary directory and call this script
@@ -419,10 +445,8 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         # seems to be the only way to change paths on the temp file only,
         # without affecting the original file.
         filename = os.path.join(tmpdir, "mainfile.blend")
-        bpy.ops.wm.save_as_mainfile(filepath=filename, check_existing=False, copy=True, relative_remap=True)
-        ret = subprocess.call([sys.argv[0], "-b", "-noaudio", filename, "-P", __file__, "--", "repath"])
-        if ret != 0:
-            raise RuntimeError("Calling blender returned code {}".format(ret))
+        save_copy(filename)
+        repath_file(filename)
         self.report({'INFO'}, "mainfile.blend successfully exported: {}".format(filename))
         
         if scene.cycles.progressive == 'PATH':
@@ -522,17 +546,21 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
             return result
 
 def resource_id(path):
-    abspath = os.path.abspath(bpy.path.abspath(path))
-    if type(abspath) != bytes:
-        abspath = abspath.encode('utf-8')
-    return hashlib.md5(abspath).hexdigest()
+    if type(path) != bytes:
+        path = path.encode('utf-8')
+    return hashlib.md5(path).hexdigest()
 
 def resource_path(path):
     return"//rsrc." + resource_id(path) + ".data"
 
-def object_abspath(obj):
-    """Returns the absolute path of an object that is used to compute its
-    resource id. Takes linked libraries into account, recursively."""
+def object_filepath(obj):
+    """Returns a file system path for an object that is suitable for opening the file.
+    Takes linked resources and libraries into account.
+    
+    Returns None if no such path exists.
+    """
+    if not obj.filepath:
+        return
     if hasattr(obj, 'packed_file') and obj.packed_file:
         return
     if not obj.filepath:
@@ -542,35 +570,100 @@ def object_abspath(obj):
         lib = obj.library
         if not lib.filepath:
             raise RuntimeExeption("Library without a filepath: " + lib)
-        path = bpy.path.abspath(path, lib.filepath)
+        path = bpy.path.abspath(path, os.path.dirname(lib.filepath))
         obj = lib
-    os.path.abspath(bpy.path.abspath(path))
-    return path
-    
+    return bpy.path.abspath(path)
 
-# Called when this script is called as a main file with special parameters.
-# Modifies all included paths to point to files named by the pattern
-# '//rsrc.' + md5(absolute original path) + '.data'
-# This method is called in a special blender session. 
+def object_type(obj):
+    if hasattr(obj, "type"):
+        return obj.type
+    t = type(obj)
+    for typename in dir(bpy.types):
+        typeclass = getattr(bpy.types, typename)
+        if t == typeclass:
+            return typename.upper()
+    return "__UNKNOWN__"
+    
+def object_uniqpath(obj):
+    """Returns a special path that is suitable to identify an object uniquely
+    and to derive a resource id. Takes linked resources and libraries into account
+    in the following way:
+      - A referenced file (no packed data) is assigned its absolute, normalized path
+      - Files packed into the main blend file are assigned a path that looks like this:
+        object_uniqpath(library):IMAGE(the_image_name)
+      - The main blend file itself has uniqpath "" (empty)
+    """
+    if obj is None:
+        return ""
+    if hasattr(obj, 'packed_file') and obj.packed_file:
+        return "{}:{}({})".format(object_uniqpath(obj.library), object_type(obj), obj.name)
+    else:
+        path = object_filepath(obj)
+        return os.path.abspath(path) if path else None
+    
+def save_filepaths():
+    """Workaround for T41328
+    Save filepaths before save_as_copy operation"""
+    result = {}
+    for collection_name in RESOURCE_COLLECTIONS:
+        saved = {}
+        result[collection_name] = saved
+        collection = getattr(bpy.data, collection_name)
+        for obj in collection:
+            saved[obj.name] = obj.filepath
+    return result
+
+def restore_filepaths(saved):
+    """Workaround for T41328
+    Restore filepaths after save_as_copy operation"""
+    for collection_name, saved_filepaths in saved.items():
+        collection = getattr(bpy.data, collection_name)
+        for obj in collection:
+            obj.filepath = saved_filepaths[obj.name]
+
+def save_copy(filepath):
+    """Workaround for T41328
+    save_as_mainfile(copy=True) messes up filepaths, so we need to restore them afterwards."""
+    if BUG_SAVE_AS_COPY:
+        saved = save_filepaths()
+    bpy.ops.wm.save_as_mainfile(filepath=filepath, check_existing=False, copy=True, relative_remap=True)
+    if BUG_SAVE_AS_COPY:
+        restore_filepaths(saved)
+
+def repath_file(filepath):
+    """Opens the given blend file in a separate Blender process and substitutes
+    file paths to those which will exist on the worker side."""
+    ret = subprocess.call([sys.argv[0], "-b", "-noaudio", filepath, "-P", __file__, "--", "repath"])
+    if ret != 0:
+        raise RuntimeError("Error repathing file '{}': Calling blender returned code {}".format(filepath, ret))
+
 def repath():
+    """Modifies all included paths to point to files named by the pattern
+    '//rsrc.' + md5(absolute original path) + '.data'
+    This method is called in a special blender session.
+    """
+    
+    # Switch to object mode for make_local
+    bpy.ops.object.mode_set(mode='OBJECT')
+    # Make linked objects local to current blend file.
+    bpy.ops.object.make_local(type='ALL')
+    
     def repath_obj(obj):
-        obj.filepath = resource_path(object_abspath(p))
+        path = object_uniqpath(obj)
+        if path:
+            obj.filepath = resource_path(path)
+        else:
+            print("...skipped")
             
-    for img in bpy.data.images:
-        repath_obj(img)
-        print("Image: "+img.filepath)
-    for snd in bpy.data.sounds:
-        repath_obj(snd)
-        print("Sound: "+snd.filepath)
-    for txt in bpy.data.texts:
-        repath_obj(txt)
-        print("Text: "+txt.filepath)
-    for vid in bpy.data.movieclips:
-        repath_obj(vid)
-        print("Video: "+vid.filepath)
-    for lib in bpy.data.libraries:
-        repath_obj(lib)
-        print("Library: "+lib.filepath)
+    # Iterate over all resource types (including libraries) and assign paths
+    # to them that will correspond to valid files on the remote side.
+    for collection_name in RESOURCE_COLLECTIONS:
+        collection = getattr(bpy.data, collection_name)
+        print("Repathing {}:".format(collection_name))
+        for obj in collection:
+            print("  {} ({})".format(obj.filepath, object_filepath(obj)))
+            repath_obj(obj)
+            print("   -> " + obj.filepath)
 
 def register():
     print("Registered BitWrk renderer")
@@ -617,4 +710,5 @@ if __name__ == "__main__":
                 repath()
                 bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath, check_existing=False)
         except:
+            traceback.print_exc()
             sys.exit(-1)
