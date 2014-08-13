@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2014  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -36,6 +36,9 @@ const accountViewHtml = `
 <tr><th>Participant</th><td>{{.Participant}}</td></tr>
 <tr><th>Available</th><td>{{.Available}}</td></tr>
 <tr><th>Blocked</th><td>{{.Blocked}}</td></tr>
+{{if .LastMovementKey}}
+<tr><th></th><td><a href="/ledger/{{.LastMovementKey}}">Last ledger entry</a></td></tr>
+{{end}}
 </table>
 <script src="/js/getjson.js" ></script>
 </body>

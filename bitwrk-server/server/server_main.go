@@ -26,6 +26,7 @@ func init() {
 	http.HandleFunc("/nonce", handleGetNonce)
 	http.HandleFunc("/tx/", handleTx)
 	http.HandleFunc("/account/", handleAccount)
+	http.HandleFunc("/ledger/", handleAccountMovement)
 	http.HandleFunc("/myip", handleMyIp)
 	http.HandleFunc("/motd", handleMessageOfTheDay)
 	http.HandleFunc("/deposit", handleCreateDeposit)

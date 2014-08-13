@@ -64,12 +64,16 @@ const bidViewHtml = `
 <body>
 <table>
 <tr><th>Bid</th><td>{{.Id}}</td></tr>
+<tr><th>Participant</th><td><a href="/account/{{.Bid.Participant}}">{{.Bid.Participant}}</a></td></tr>
 <tr><th>Type</th><td>{{.Bid.Type}}</td></tr>
 <tr><th>Article</th><td>{{.Bid.Article}}</td></tr>
 <tr><th>Price</th><td>{{.Bid.Price}}</td></tr>
+<tr><th>Fee</th><td>{{.Bid.Fee}}</td></tr>
 <tr><th>State</th><td>{{.Bid.State}}</td></tr>
-<tr><th>Participant</th><td><a href="/account/{{.Bid.Participant}}">{{.Bid.Participant}}</a></td></tr>
+<tr><th>Created</th><td>{{.Bid.Created}}</td></tr>
+<tr><th>Expires</th><td>{{.Bid.Expires}}</td></tr>
 {{if .Bid.Transaction}}
+<tr><th>Matched</th><td>{{.Bid.Matched}}</td></tr>
 <tr><th>Transaction</th><td><a href="/tx/{{.Bid.Transaction}}">Matched</a></td></tr>
 {{end}}
 </table>
