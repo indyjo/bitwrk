@@ -31,6 +31,9 @@ the power of peer-to-peer computing.
 >
 >   -- Jonas Eschenburg, developer of Bitwrk
 
+**Facebook:** https://www.facebook.com/bitwrk
+**Twitter:** https://twitter.com/BitWrk
+
 tip4commit: [![tip for next commit](http://tip4commit.com/projects/541.svg)](http://tip4commit.com/projects/541)
 master: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=master)](https://travis-ci.org/indyjo/bitwrk)
 experimental: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=experimental)](https://travis-ci.org/indyjo/bitwrk)
@@ -180,6 +183,8 @@ Every new client account starts with **1 BTC virtual starting capital**.
 News
 ----
 
+- **2014-08-13:** Making progress towards a 0.4.0 release, with support for Blender 2.71,
+  including linked resources, and work data up to 512MB!
 - **2014-04-25:** Release of **BitWrk 0.3.0 (Mercury)** featuring support for Blender 2.70a
   and many enhancements and bug fixes.
 - **2014-03-26:** BitWrk is making big progress towards a new release. Many user interface
@@ -319,5 +324,5 @@ of now is not possible, but will be). As a trust-building measure, the
 server's source code is open-sourced, too.
 
 Have fun!
-2014-04-25, Jonas Eschenburg
+2014-08-13, Jonas Eschenburg
 
