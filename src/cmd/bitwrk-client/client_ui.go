@@ -46,6 +46,7 @@ func getHomeTemplate() *template.Template {
 
 type clientContext struct {
 	ParticipantId string
+	ServerURL     string
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request) {
@@ -59,9 +60,12 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	getHomeTemplate().Execute(w, &clientContext{
+	if err := getHomeTemplate().Execute(w, &clientContext{
 		BitcoinIdentity.GetAddress(),
-	})
+		BitwrkUrl,
+	}); err != nil {
+		fmt.Print("Error rendering UI: ", err)
+	}
 }
 
 type activityInfo struct {

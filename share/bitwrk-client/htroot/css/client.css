@@ -10,8 +10,11 @@ header {
     padding-right: 20px;
 }
 
-#account-info .available {
+#account-info .available, #account-info .participant a {
     color: #ffd7c0;
+}
+
+#account-info .blocked, #account-info .available {
     float: right;
 }
 
