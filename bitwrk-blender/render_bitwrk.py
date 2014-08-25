@@ -29,7 +29,7 @@ bl_info = {
 import bpy, os, io, sys, http.client, select, struct, tempfile, urllib.request, colorsys, math
 import webbrowser, time, traceback
 import hashlib
-from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty
+from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty, FloatProperty
 
 def get_article_id(complexity):
     major, minor, micro = bpy.app.version
@@ -140,6 +140,14 @@ class BitWrkSettings(bpy.types.PropertyGroup):
             default=4,
             min=1,
             max=256)
+        settings.boost_factor = FloatProperty(
+            name="Boost factor",
+            description="Makes rendering faster (and more expensive) by making tiles smaller than they need to be",
+            default=1.0,
+            min=1.0,
+            max=64.0,
+            precision=2,
+            subtype='FACTOR')
         
         bpy.types.Scene.bitwrk_settings = PointerProperty(type=BitWrkSettings, name="BitWrk Settings", description="Settings for using the BitWrk service")
 
@@ -194,6 +202,9 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
         row.label(get_article_id(settings.complexity))
         
         self.layout.prop(settings, "concurrency")
+        self.layout.prop(settings, "boost_factor")
+        if settings.boost_factor > 1:
+            self.layout.label("A boost factor greater than 1.0 makes rendering more expensive!", icon='ERROR')
 
 class Chunked:
     """Wraps individual write()s into http chunked encoding."""
@@ -475,7 +486,7 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         is_multilayer = len(scene.render.layers) > 1 and not scene.render.use_single_layer
         cost_per_pixel = max(1, num_layers) * scene.cycles.max_bounces * cost_per_bounce
         
-        max_pixels_per_tile = int(math.floor(get_max_cost(settings) / cost_per_pixel))
+        max_pixels_per_tile = int(math.floor(get_max_cost(settings) / cost_per_pixel / settings.boost_factor))
         tiles = self._makeTiles(settings, scene.frame_current, 0, 0, resx, resy, max_pixels_per_tile)
         # Sort by distance to center
         tiles.sort(key=lambda t: abs(t.minx + t.resx/2 - resx/2) + abs(t.miny + t.resy/2 - resy/2))
