@@ -131,7 +131,7 @@ class BitWrkSettings(bpy.types.PropertyGroup):
                 ('2G',  " 2 Giga-rays", "", 0),
                 ('8G',  " 8 Giga-rays", "", 1),
                 ('32G', "32 Giga-rays", "", 2)],
-            default='8G',
+            default='512M',
             set=set_complexity,
             get=lambda value: value['complexity'])
         settings.concurrency = IntProperty(
