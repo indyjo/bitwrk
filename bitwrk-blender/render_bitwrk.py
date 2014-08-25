@@ -174,7 +174,7 @@ class StartBrowserOperator(bpy.types.Operator):
 
 
 class RENDER_PT_bitwrk_settings(bpy.types.Panel):
-    bl_label = "BitWrk Settings Panel"
+    bl_label = "BitWrk distributed rendering"
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
     bl_context = "render"
