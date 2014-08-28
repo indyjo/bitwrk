@@ -139,31 +139,29 @@ func handleCreateBid(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if r.Method == "POST" {
 		c := appengine.NewContext(r)
-		bidType := r.FormValue("type")
-		bidAddress := strings.TrimSpace(r.FormValue("address"))
-		bidNonce := r.FormValue("nonce")
-		if err := enqueueBid(w, r); err != nil {
-			c := appengine.NewContext(r)
-			c.Errorf("enqueueBid failed: %v, %v %v %v", err, bidType, bidAddress, bidNonce)
+		if err := r.ParseForm(); err != nil {
+			c.Errorf("Couldn't parse form data: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		c.Infof("enqueueBid successful: %v %v %v", bidType, bidAddress, bidNonce)
+		c.Infof("Bid: %v", r.PostForm)
+		if err := enqueueBid(c, w, r); err != nil {
+			c.Errorf("enqueueBid failed: %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	} else {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
-func enqueueBid(w http.ResponseWriter, r *http.Request) (err error) {
+func enqueueBid(c appengine.Context, w http.ResponseWriter, r *http.Request) (err error) {
 	bidType := r.FormValue("type")
 	bidArticle := r.FormValue("article")
 	bidPrice := r.FormValue("price")
 	bidAddress := strings.TrimSpace(r.FormValue("address"))
 	bidNonce := r.FormValue("nonce")
 	bidSignature := r.FormValue("signature")
-
-	c := appengine.NewContext(r)
-	c.Infof("Enqueuing: %v %v %v", bidType, bidAddress, bidNonce)
 
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
 	err = checkNonce(c, bidNonce)

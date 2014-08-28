@@ -120,7 +120,7 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
 		return nil, err
 	}
-	
+
 	// Attempt to match the new bid right away. If unsuccessful, that's no problem. A task has already
 	// been entered into the task queue that will repeat the operation.
 	time.Sleep(250 * time.Millisecond)
@@ -131,7 +131,7 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 	} else {
 		c.Infof("Opportunistic matching yields txId %v", txKey.Encode())
 	}
-	
+
 	return bidKey, nil
 }
 
@@ -224,8 +224,9 @@ func RetireTransaction(c appengine.Context, key *datastore.Key) error {
 // Transactional function called by queue handler.
 // Queries for matching "hot" bids.
 // When a matching bid exists, creates the corresponding
-// transaction and marks the bid as MATCHED. Otherwise, the
-// bid is marked as PLACED, waiting for other bids to match it.
+// transaction and marks both bids as MATCHED. Otherwise, the
+// bid is marked as PLACED, and a "hot waiting for other bids
+// to match it.
 func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, error) {
 	var txKey *datastore.Key
 
@@ -240,7 +241,7 @@ func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, er
 		}
 		if bid.State != InQueue {
 			// Nothing to do anymore! Can happen under some circumstances.
-			c.Warningf("Bid %v already matched.", bidKey.Encode())
+			c.Infof("Bid %v already placed.", bidKey.Encode())
 			return nil
 		}
 		query := datastore.NewQuery("HotBid")
