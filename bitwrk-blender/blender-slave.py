@@ -374,7 +374,7 @@ def parse_args():
     parser.add_argument('--bitwrk-host', metavar='HOST', help="BitWrk client host", default="localhost")
     parser.add_argument('--bitwrk-port', metavar='PORT', help="BitWrk client port", type=int, default=8081)
     parser.add_argument('--max-cost', metavar='CLASS', help="Maximum cost of one task (in mega- and giga-rays)",
-        choices=["512M", "2G", "8G", "32G"], default="8G")
+        choices=["512M", "2G", "8G", "32G"], default="512M")
     args = parser.parse_args()
     
     BLENDER_BIN=args.blender
