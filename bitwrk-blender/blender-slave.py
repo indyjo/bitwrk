@@ -133,16 +133,18 @@ render.border_max_y = (ymax+1.5) / resy
 try:
     if xmax < xmin or ymax < ymin:
         raise RuntimeError("Illegal tile dimensions")
+        
+    f = lambda x: x*x if scene.cycles.use_square_samples else x
     if scene.cycles.progressive == 'PATH':
-        cost_per_bounce = scene.cycles.samples
+        cost_per_bounce = f(scene.cycles.samples)
     elif scene.cycles.progressive == 'BRANCHED_PATH':
-        cost_per_bounce = scene.cycles.aa_samples * (
-            scene.cycles.diffuse_samples +
-            scene.cycles.glossy_samples +
-            scene.cycles.transmission_samples +
-            scene.cycles.ao_samples +
-            scene.cycles.mesh_light_samples +
-            scene.cycles.subsurface_samples)
+        cost_per_bounce = f(scene.cycles.aa_samples) * (
+            f(scene.cycles.diffuse_samples) +
+            f(scene.cycles.glossy_samples) +
+            f(scene.cycles.transmission_samples) +
+            f(scene.cycles.ao_samples) +
+            f(scene.cycles.mesh_light_samples) +
+            f(scene.cycles.subsurface_samples))
     else:
         raise RuntimeError("Unknown sampling")
 
