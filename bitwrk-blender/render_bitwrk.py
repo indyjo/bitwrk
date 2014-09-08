@@ -457,7 +457,7 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         # without affecting the original file.
         filename = os.path.join(tmpdir, "mainfile.blend")
         save_copy(filename)
-        repath_file(filename)
+        process_file(filename)
         self.report({'INFO'}, "mainfile.blend successfully exported: {}".format(filename))
         
         f = lambda x: x*x if scene.cycles.use_square_samples else x
@@ -642,12 +642,12 @@ def save_copy(filepath):
     if BUG_SAVE_AS_COPY:
         restore_filepaths(saved)
 
-def repath_file(filepath):
+def process_file(filepath):
     """Opens the given blend file in a separate Blender process and substitutes
     file paths to those which will exist on the worker side."""
-    ret = subprocess.call([sys.argv[0], "-b", "-noaudio", filepath, "-P", __file__, "--", "repath"])
+    ret = subprocess.call([sys.argv[0], "-b", "--enable-autoexec", "-noaudio", filepath, "-P", __file__, "--", "process"])
     if ret != 0:
-        raise RuntimeError("Error repathing file '{}': Calling blender returned code {}".format(filepath, ret))
+        raise RuntimeError("Error processing file '{}': Calling blender returned code {}".format(filepath, ret))
 
 def repath():
     """Modifies all included paths to point to files named by the pattern
@@ -677,6 +677,30 @@ def repath():
             repath_obj(obj)
             print("   -> " + obj.filepath)
 
+def remove_scripted_drivers():
+    """Removes Python drivers which will not execute on the seller side.
+    Removing them has the benefit of materializing the values they have evaluate to
+    in the current context."""
+
+    for collection_name in dir(bpy.data):
+        collection = getattr(bpy.data, collection_name)
+        if not isinstance(collection, type(bpy.data.objects)):
+            continue
+        
+        # Iterate through ID objects with animation data
+        for id in collection:
+            if not isinstance(id, bpy.types.ID) or not hasattr(id, "animation_data"):
+                break
+            anim = id.animation_data
+            if not anim:
+                continue
+            for fcurve in anim.drivers:
+                driver = fcurve.driver
+                if not driver or driver.type != 'SCRIPTED':
+                    continue
+                print("Removing SCRIPTED driver '{}' for {}['{}'].{}".format(driver.expression, collection_name, id.name, fcurve.data_path))
+                id.driver_remove(fcurve.data_path)
+            
 def register():
     print("Registered BitWrk renderer")
     bpy.utils.register_class(BitWrkRenderEngine)
@@ -718,8 +742,9 @@ if __name__ == "__main__":
         try:
             args = sys.argv[idx+1:]
             print("Args:", args)
-            if len(args) > 0 and args[0] == 'repath':
+            if len(args) > 0 and args[0] == 'process':
                 repath()
+                remove_scripted_drivers()
                 bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath, check_existing=False)
         except:
             traceback.print_exc()
