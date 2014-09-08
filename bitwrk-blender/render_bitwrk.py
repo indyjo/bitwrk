@@ -699,7 +699,10 @@ def remove_scripted_drivers():
                 if not driver or driver.type != 'SCRIPTED':
                     continue
                 print("Removing SCRIPTED driver '{}' for {}['{}'].{}".format(driver.expression, collection_name, id.name, fcurve.data_path))
-                id.driver_remove(fcurve.data_path)
+                try:
+                    id.driver_remove(fcurve.data_path)
+                except TypeError as e:
+                    print("  -> {}".format(e))
             
 def register():
     print("Registered BitWrk renderer")
