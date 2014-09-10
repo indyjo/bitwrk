@@ -55,8 +55,8 @@ func getMessageOfTheDay(r *http.Request) motd {
 	micro, _ := strconv.ParseInt(matches[3], 10, 16)
 
 	if major > 0 || major == 0 && minor >= 4 {
-		return fmt.Sprintf("Welcome to the BitWrk network!"+
-			" Your client is up to date (version %d.%d.%d).", major, minor, micro)
+		return motd{fmt.Sprintf("Welcome to the BitWrk network!"+
+			" Your client is up to date (version %d.%d.%d).", major, minor, micro), false}
 	} else {
 		return motd{fmt.Sprintf("BitWrk proudly announces version 0.4.0!"+
 			" You are currently running client version %d.%d.%d."+
