@@ -33,8 +33,10 @@ development kit using the system's package manager.
 
 ### Mac OS X
 - **Step 1:** Download the binary file from https://github.com/indyjo/bitwrk/releases into your *Downloads* folder
+        
         bitwrk-x.y.z-osx-x64.tar.gz
 - **Step 2:** Open a Terminal and type:
+        
         cd ~/Downloads/
         tar xzf bitwrk.x.y.z-osx-x64.tar.gz
         cd bitwrk-x.y.y/bin
@@ -43,6 +45,7 @@ development kit using the system's package manager.
         
 ### Windows 7 or 8
 - **Step 1:** Download the binary file from https://github.com/indyjo/bitwrk/releases
+        
         bitwrk-x.y.z-windows.x64.zip
 - **Step 2:** Open the downloaded .zip file and drag the contained folder "bitwrk-x.y.z" on your desktop.
 - **Step 3:** In the extracted folder, double-click the file called "bitwrk-client.exe".
