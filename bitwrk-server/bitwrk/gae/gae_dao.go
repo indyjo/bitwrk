@@ -35,7 +35,7 @@ func (dao *gaeAccountingDao) GetAccount(participant string) (account Participant
 	if err == datastore.ErrNoSuchEntity {
 		dao.c.Infof("Pulling account out of thin air: %v", participant)
 		account.Participant = participant
-		account.Available = money.MustParse("BTC 1")
+		account.Available = money.MustParse("BTC 0")
 		account.Blocked = money.MustParse("BTC 0")
 		err = nil
 	}

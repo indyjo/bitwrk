@@ -54,14 +54,11 @@ func getMessageOfTheDay(r *http.Request) motd {
 	minor, _ := strconv.ParseInt(matches[2], 10, 16)
 	micro, _ := strconv.ParseInt(matches[3], 10, 16)
 
-	if major > 0 || major == 0 && minor >= 4 {
-		return motd{fmt.Sprintf("Welcome to the BitWrk network!"+
-			" Your client is up to date (version %d.%d.%d).", major, minor, micro), false}
-	} else {
-		return motd{fmt.Sprintf("BitWrk proudly announces version 0.4.0!"+
-			" You are currently running client version %d.%d.%d."+
-			" For information on what's new and how to upgrade please visit"+
-			" <a target=\"_blank\" href=\"http://bitwrk.net/\">bitwrk.net</a>.",
-			major, minor, micro), true}
-	}
+	return motd{fmt.Sprintf("There will be a test of BitWrk today, between 14:00 and 16:00 UTC."+
+		" Bitcoins earned during this time period will actually be paid out."+
+		" That's why all accounts have been reset to zero - except <a target=\"_blank\" href=\"http://bitwrk.appspot.com/account/1MwvTNehPz7U5XYn3h1G7LVPANv3GFq6JR\">this one</a>."+
+		" Please help the BitWrk project and take part in the test!"+
+		" For more information <a target=\"_blank\" href=\"https://bitcointalk.org/index.php?topic=780506.0\">click here.</a>"+
+		" You are currently running client version %d.%d.%d.",
+		major, minor, micro), true}
 }
