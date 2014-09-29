@@ -34,7 +34,10 @@ import (
 	"time"
 )
 
-var defaultClient = NewClient(&http.Transport{Dial: timedDial})
+var defaultClient = NewClient(&http.Transport{
+	Dial: timedDial,
+	ResponseHeaderTimeout: 10 * time.Second,
+})
 
 // Disallow redirects (or explicitly handle them)
 func disallowRedirects(r *http.Request, _ []*http.Request) error {
@@ -50,6 +53,7 @@ func NewClient(transport *http.Transport) *http.Client {
 	return &http.Client{
 		CheckRedirect: disallowRedirects,
 		Transport:     transport,
+		Timeout:       15 * time.Minute,
 	}
 }
 
