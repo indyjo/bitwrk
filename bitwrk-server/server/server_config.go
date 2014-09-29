@@ -19,6 +19,7 @@ package server
 const CfgBitcoinNetworkId byte = 0
 const CfgRequireValidNonce = true
 const CfgRequireValidSignature = true
+const CfgRequireValidWorkerURL = true
 
 // Account ID that is trusted when receiving a deposit
 const CfgTrustedAccount = "1TrsjuCvBch1D9h6nRkadGKakv9KyaiP6"
