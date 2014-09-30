@@ -71,8 +71,7 @@ In order to use BitWrk to accelerate Blender's "Cycles" rendering engine, perfor
 the following steps: 
 - Setup the BitWrk client as described in the previous section.
 - Start Blender (at least version 2.69). Select a scene you like. Verify that it looks
-  good when rendered with the "Cycles" rendering engine, and that it doesn't import
-  any assets from external library files.
+  good when rendered with the "Cycles" rendering engine.
 - Go to **User Preferences -> Addons -> Install From File**
 - Select **render_bitwrk.py**. You find it in BitWrk's **bitwrk-blender** folder.
 - An add-on called "Render: BitWrk Distributed Rendering" should show up. If not,
