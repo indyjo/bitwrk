@@ -265,7 +265,7 @@ class Tagged:
         # chunk size must not exceed MAX_INT
         chunklength = filelength + len(origpath) + len(alias) + 12
         if chunklength > 0x8fffffff:
-            raise RuntimeError('File is too big to be written: %d bytes' % length)
+            raise RuntimeError('File is too big to be written: %d bytes' % chunklength)
         
         self.aliases[origpath] = alias
         self.out.write(struct.pack('>4sI', b'rsrc', chunklength))
