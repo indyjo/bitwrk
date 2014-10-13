@@ -371,7 +371,6 @@ def optimal_tiling(W, H, C):
                 found = True
                 uv = candidate
                 u, v = uv
-                print(u, v, math.ceil(W / u) * math.ceil(H / v)) 
                 break
     return uv
 
@@ -634,7 +633,7 @@ def object_filepath(obj):
     while hasattr(obj, 'library') and obj.library:
         lib = obj.library
         if not lib.filepath:
-            raise RuntimeExeption("Library without a filepath: " + lib)
+            raise RuntimeError("Library without a filepath: " + lib)
         path = bpy.path.abspath(path, os.path.dirname(lib.filepath))
         obj = lib
     return bpy.path.abspath(path)
@@ -758,7 +757,6 @@ def remove_scripted_drivers():
                     print("  -> {}".format(e))
             
 def register():
-    print("Registered BitWrk renderer")
     bpy.utils.register_class(BitWrkRenderEngine)
     bpy.utils.register_class(RENDER_PT_bitwrk_settings)
     bpy.utils.register_class(BitWrkSettings)
@@ -771,10 +769,6 @@ def register():
             continue
         if 'BITWRK_RENDER' not in klass.COMPAT_ENGINES:
             klass.COMPAT_ENGINES.add('BITWRK_RENDER')
-            print("Adding BITWRK_RENDER support to",name)
-        else:
-            print("Type",name,"already supports BITWRK_BLENDER")
-        
         
     
 def unregister():
@@ -797,7 +791,6 @@ if __name__ == "__main__":
     else:
         try:
             args = sys.argv[idx+1:]
-            print("Args:", args)
             if len(args) > 0 and args[0] == 'process':
                 repath()
                 remove_scripted_drivers()
