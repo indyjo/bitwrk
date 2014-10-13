@@ -201,11 +201,18 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
         row.label("Article id: ", icon="RNDCURVE")
         row.label(get_article_id(settings.complexity))
         
+        resx, resy = render_resolution(context.scene)
+        max_pixels = max_tilesize(context.scene)
+        u,v = optimal_tiling(resx, resy, max_pixels)
+        row = self.layout.split(0.333)
+        row.label("Tiles per frame", icon='MESH_GRID')
+        row.label("{}   (efficiency: {:.1%})".format(u*v, resx*resy/u/v/max_pixels))
+        
         self.layout.prop(settings, "concurrency")
         self.layout.prop(settings, "boost_factor")
         if settings.boost_factor > 1:
             self.layout.label("A boost factor greater than 1.0 makes rendering more expensive!", icon='ERROR')
-
+        
 class Chunked:
     """Wraps individual write()s into http chunked encoding."""
     def __init__(self, conn):
@@ -327,6 +334,47 @@ class Tagged:
                 except (FileNotFoundError, NotADirectoryError) as e:
                     engine.report({'WARNING'}, "Error bundling {} resource {}: {}".format(collection_name, obj.name, e))
 
+""" Calculates an optimal regular tiling for a BitWrk render of specified resolution.
+    A regular tiling of a surface of dimensions WxH is specified by numbers u,v > 0
+    denoting the number of tiles along the X and Y axis, respectively. An optimal
+    tiling minimizes the sum of edge lengths, H*(u+1) + W*(v+1), and thereby also
+    minimizes Hu+Wv.
+    A tiling is feasible if the largest tile has area w*h <= C, with
+    w = ceil(W/u) and h = ceil(H/v)
+"""
+def optimal_tiling(W, H, C):
+    cc = math.sqrt(C)
+    uv = (int(math.ceil(W / cc) + 1), int(math.ceil(H / cc) + 1))
+    def is_feasible(uv):
+        u, v = uv
+        return u > 0 and v > 0 and math.ceil(W / u) * math.ceil(H / v) <= C
+    if H > W:
+        def walk(uv):
+            u, v = uv
+            yield (u - 1, v)
+            yield (u, v - 1)
+    else:
+        def walk(uv):
+            u, v = uv
+            yield (u, v - 1)
+            yield (u - 1, v)
+            
+    if not is_feasible(uv):
+        raise RuntimeError(uv)
+        
+    found = True
+    while found:
+        # print("Evaluating", uv)
+        found = False
+        for candidate in walk(uv):
+            if is_feasible(candidate):
+                found = True
+                uv = candidate
+                u, v = uv
+                print(u, v, math.ceil(W / u) * math.ceil(H / v)) 
+                break
+    return uv
+
         
 class Tile:
     def __init__(self, frame, minx, miny, resx, resy, color):
@@ -436,7 +484,37 @@ class Tile:
         finally:
             self.conn = None
 
+def max_tilesize(scene):
+    f = lambda x: x*x if scene.cycles.use_square_samples else x
+    if scene.cycles.progressive == 'PATH':
+        cost_per_bounce = f(scene.cycles.samples)
+    elif scene.cycles.progressive == 'BRANCHED_PATH':
+        cost_per_bounce = f(scene.cycles.aa_samples) * (
+            f(scene.cycles.diffuse_samples) +
+            f(scene.cycles.glossy_samples) +
+            f(scene.cycles.transmission_samples) +
+            f(scene.cycles.ao_samples) +
+            f(scene.cycles.mesh_light_samples) +
+            f(scene.cycles.subsurface_samples))
+    else:
+        raise RuntimeError("Unknows sampling type: %s" % (scene.cycles.progressive))
+    
+    settings = scene.bitwrk_settings
+    num_layers = 0
+    for layer in scene.render.layers:
+        if layer.use:
+            num_layers += 1
+    if scene.render.use_single_layer:
+        num_layers=1
+    cost_per_pixel = max(1, num_layers) * scene.cycles.max_bounces * cost_per_bounce
+    return int(math.floor(get_max_cost(settings) / cost_per_pixel / settings.boost_factor))
 
+def render_resolution(scene):
+    percentage = max(1, min(10000, scene.render.resolution_percentage))
+    resx = int(scene.render.resolution_x * percentage / 100)
+    resy = int(scene.render.resolution_y * percentage / 100)
+    return (resx, resy)
+    
 class BitWrkRenderEngine(bpy.types.RenderEngine):
     """BitWrk Rendering Engine"""
     bl_idname = "BITWRK_RENDER"
@@ -460,38 +538,15 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         process_file(filename)
         self.report({'INFO'}, "mainfile.blend successfully exported: {}".format(filename))
         
-        f = lambda x: x*x if scene.cycles.use_square_samples else x
-        if scene.cycles.progressive == 'PATH':
-            cost_per_bounce = f(scene.cycles.samples)
-        elif scene.cycles.progressive == 'BRANCHED_PATH':
-            cost_per_bounce = f(scene.cycles.aa_samples) * (
-                f(scene.cycles.diffuse_samples) +
-                f(scene.cycles.glossy_samples) +
-                f(scene.cycles.transmission_samples) +
-                f(scene.cycles.ao_samples) +
-                f(scene.cycles.mesh_light_samples) +
-                f(scene.cycles.subsurface_samples))
-        else:
-            raise RuntimeError("Unknows sampling type: %s" % (scene.cycles.progressive))
-        
-        settings = scene.bitwrk_settings
-        percentage = max(1, min(10000, scene.render.resolution_percentage))
-        resx = int(scene.render.resolution_x * percentage / 100)
-        resy = int(scene.render.resolution_y * percentage / 100)
-        num_layers = 0
-        for layer in scene.render.layers:
-            if layer.use:
-                num_layers += 1
-        if scene.render.use_single_layer:
-            num_layers=1
+        max_pixels_per_tile = max_tilesize(scene)
         is_multilayer = len(scene.render.layers) > 1 and not scene.render.use_single_layer
-        cost_per_pixel = max(1, num_layers) * scene.cycles.max_bounces * cost_per_bounce
+        resx, resy = render_resolution(scene)
         
-        max_pixels_per_tile = int(math.floor(get_max_cost(settings) / cost_per_pixel / settings.boost_factor))
-        tiles = self._makeTiles(settings, scene.frame_current, 0, 0, resx, resy, max_pixels_per_tile)
+        tiles = self._makeTiles(scene.frame_current, resx, resy, max_pixels_per_tile)
         # Sort by distance to center
         tiles.sort(key=lambda t: abs(t.minx + t.resx/2 - resx/2) + abs(t.miny + t.resy/2 - resy/2))
         
+        settings = scene.bitwrk_settings
         num_active = 0
         while not self.test_break():        
         
@@ -539,23 +594,21 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         
         
     
-    def _makeTiles(self, settings, frame, minx, miny, resx, resy, max_pixels):
+    def _makeTiles(self, frame, resx, resy, max_pixels):
         #print("make tiles:", minx, miny, resx, resy, max_pixels)
-        pixels = resx*resy
-        if pixels <= max_pixels:
-            c = BitWrkRenderEngine._getcolor()
-            tile = Tile(frame, minx, miny, resx, resy, [c[0], c[1], c[2], 1])
-            return [tile]
-        elif resx >= resy:
-            left = resx // 2
-            result = self._makeTiles(settings, frame, minx, miny, left, resy, max_pixels)
-            result.extend(self._makeTiles(settings, frame, minx+left, miny, resx-left, resy, max_pixels))
-            return result
-        else:
-            top = resy // 2
-            result = self._makeTiles(settings, frame, minx, miny, resx, top, max_pixels)
-            result.extend(self._makeTiles(settings, frame, minx, miny+top, resx, resy-top, max_pixels))
-            return result
+        U, V = optimal_tiling(resx, resy, max_pixels)
+        
+        result = []
+        for v in range(V):
+            ymin = resy * v // V
+            ymax = resy * (v+1) // V 
+            for u in range(U):
+                xmin = resx * u // U
+                xmax = resx * (u+1) // U
+                c = BitWrkRenderEngine._getcolor()
+                result.append(Tile(frame, xmin, ymin, xmax-xmin, ymax-ymin, [c[0], c[1], c[2], 1]))
+        
+        return result
 
 def resource_id(path):
     if type(path) != bytes:
