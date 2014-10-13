@@ -26,7 +26,7 @@ bl_info = {
 
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory)
 
-import bpy, os, io, sys, http.client, select, struct, tempfile, urllib.request, colorsys, math
+import bpy, os, io, sys, http.client, select, struct, tempfile, urllib.request, colorsys, math, re
 import webbrowser, time, traceback
 import hashlib
 from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty, FloatProperty
@@ -97,7 +97,7 @@ def do_probe_bitwrk_client(settings):
         if resp.status != http.client.OK:
             return False
         data = resp.read(256)
-        if not data.startswith(b"0.3."):
+        if not re.match(b"[0-9]+\\.[0-9]+\\.[0-9]+", data):
             return False
         return True
     except:
@@ -370,7 +370,6 @@ def optimal_tiling(W, H, C):
             if is_feasible(candidate):
                 found = True
                 uv = candidate
-                u, v = uv
                 break
     return uv
 
