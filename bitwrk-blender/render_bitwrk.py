@@ -206,7 +206,7 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
         u,v = optimal_tiling(resx, resy, max_pixels)
         row = self.layout.split(0.333)
         row.label("Tiles per frame", icon='MESH_GRID')
-        row.label("{}   (efficiency: {:.1%})".format(u*v, resx*resy/u/v/max_pixels))
+        row.label("{}   ({}x{}, efficiency: {:.1%})".format(u*v, u, v, resx*resy/u/v/max_pixels))
         
         self.layout.prop(settings, "concurrency")
         self.layout.prop(settings, "boost_factor")
