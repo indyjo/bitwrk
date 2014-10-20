@@ -23,7 +23,8 @@ import sys
 if sys.version_info[:2] < (3,2):
     raise RuntimeError("Python >= 3.2 required. Detected: %s" % sys.version_info)
 
-import http.server, urllib.request, urllib.parse, struct, os, tempfile, subprocess
+import urllib.request, urllib.parse, urllib.error
+import http.server, struct, os, tempfile, subprocess
 from select import select
 
 # decode http chunked encoding
@@ -328,22 +329,47 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(data)
                 data = f.read(32768)
 
-def register_with_bitwrk_client():
+def register_with_bitwrk_client(addr):
     query = urllib.parse.urlencode({
         'id' : 'blender-%d' % addr[1],
         'article' : ARTICLE_ID,
         'pushurl' : 'http://%s:%d/work' % addr
     })
-    urllib.request.urlopen("http://%s:%d/registerworker" % (BITWRK_HOST, BITWRK_PORT), query.encode('ascii'), 10)
-
-def serve():
-    httpd = http.server.HTTPServer(('127.0.0.1', 0), BlenderHandler)
     
-    # Advertise worker to bitwrk
-    global addr
+    bitwrkurl = "http://%s:%d" % (BITWRK_HOST, BITWRK_PORT)
+    try:
+        id_resp = urllib.request.urlopen(bitwrkurl + "/id", None, 10)
+        vrs_resp = urllib.request.urlopen(bitwrkurl + "/version", None, 10)
+        print(" > Connected to '{}' version {} on {}"
+              .format(id_resp.read(80).decode('ascii'),
+                      vrs_resp.read(80).decode('ascii'),
+                      bitwrkurl))
+    except urllib.error.HTTPError as ex:
+        print(" > Got a {} ({}) error when trying to probe BitWrk client on {}"
+              .format(ex.code, ex.reason, bitwrkurl))
+        if ex.code == 404:
+            print("   This usually means that another application is listening on port ({}).".format(BITWRK_PORT))
+        return False
+    except urllib.error.URLError as ex:
+        print(" > Couldn't connect to BitWrk client on", bitwrkurl)
+        print("   Reason:", ex.reason)
+        print("   This usually means that the BitWrk client is not running.")
+        print("   It could also be listening on another port.")
+        return False
+        
+    try:
+        urllib.request.urlopen(bitwrkurl + "/registerworker", query.encode('ascii'), 10)
+    except urllib.error.HTTPError as ex:
+        print(" > Got a {} ({}) error when trying to register on {}"
+              .format(ex.code, ex.reason, bitwrkurl + "/registerworker"))
+        if ex.code == 404:
+            print("   This usually means that the BitWrk client does not accept workers.")
+            print("   Please start it with the -extport argument!")
+        return False
+    return True
+
+def serve(httpd):
     addr = httpd.server_address
-    print("Serving on", addr)
-    register_with_bitwrk_client()
     try:
         httpd.serve_forever()
     finally:
@@ -403,9 +429,15 @@ if __name__ == "__main__":
         print(e)
         sys.exit(2)
     
-    print("Detected Blender", BLENDER_VERSION)
-    print("Serving to BitWrk client on {}:{}".format(BITWRK_HOST, BITWRK_PORT))
-    print("Maximum number of rays is", MAX_COST)
-    print("Article ID is", ARTICLE_ID)
+    print(" > Detected Blender", BLENDER_VERSION)
+    print(" > Maximum number of rays is", MAX_COST)
+    print(" > Article ID is", ARTICLE_ID)
+    
+    httpd = http.server.HTTPServer(('127.0.0.1', 0), BlenderHandler)
+    
+    if not register_with_bitwrk_client(httpd.server_address):
+        sys.exit(3)
+    
+    print(" > Listening on", httpd.server_address)
     print("------------------------------------------------")
-    serve()
+    serve(httpd)
