@@ -180,7 +180,7 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(500)
             raise
         finally:
-            register_with_bitwrk_client()
+            reregister_with_bitwrk_client()
             
     def _work(self, rfile, tmpdir):
         xmin,ymin,xmax,ymax = 0,0,63,63
@@ -388,9 +388,12 @@ def get_blender_version():
         return "2.70"
     elif b"Blender 2.71 (sub 0)" in output:
         return "2.71"
+    elif b"Blender 2.72 (sub 0)" in output:
+        return "2.72"
     else:
         raise RuntimeError("Blender version could not be detected.\n"
-                           + "This version of blender-slave.py will detect Blender versions 2.69 till 2.71.")
+                           + "This version of blender-slave.py will detect Blender versions "
+                           + "2.69 up to 2.72.")
 
 
 def parse_args():
@@ -437,6 +440,10 @@ if __name__ == "__main__":
     
     if not register_with_bitwrk_client(httpd.server_address):
         sys.exit(3)
+    
+    global reregister_with_bitwrk_client
+    def reregister_with_bitwrk_client():
+        return register_with_bitwrk_client(httpd.server_address)
     
     print(" > Listening on", httpd.server_address)
     print("------------------------------------------------")
