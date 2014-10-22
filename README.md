@@ -226,7 +226,8 @@ Every new client account starts with **1 BTC virtual starting capital**.
 
 News
 ----
-
+- **2014-10-22:** Release of **BitWrk 0.4.1** concentrating on Blender 2.72, featuring an
+  optimal tiling algorithm and some usability enhancements.  
 - **2014-09-10:** Release of **BitWrk 0.4.0 (Venus)** featuring a nicer user interface and
   several advanced enhancements to the Blender add-on. 
 - **2014-08-13:** Making progress towards a 0.4.0 release, with support for Blender 2.71,
