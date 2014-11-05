@@ -7,9 +7,27 @@
 <link href="css/bootstrap-theme.min.css" rel="stylesheet" media="screen" />
 <link href="css/bootstrap.min.css" rel="stylesheet" media="screen" />
 <link href="css/client.css" rel="stylesheet" />
+<link rel="shortcut icon" href="/img/favicon.ico" />
+<link rel="icon" href="/img/favicon.ico" />
 <body>
+<script>
+function showAccountInfo() {
+	showIframeDialog('{{.ServerURL}}account/{{.ParticipantId}}');
+}
+</script>
 <header>
-<div id="account-info"></div>
+<div id="account-info">
+<div class="logo"><a href="http://bitwrk.net/" rel="noreferrer"><img src="/img/bitwrk.png"></a></div>
+<div class="balance">
+<div class="blocked">+Blocked <span></span></div>
+<div class="available"><span></span></div>
+</div>
+<div class="participant">Welcome to BitWrk! Your account ID is:
+  <br><a onclick="showAccountInfo()">{{.ParticipantId}}</a>
+  <br>You are connected to: {{.ServerURL}}
+</div>
+<div style="clear:both;display:block"></div>
+</div>
 </header>
 <script src="/js/jquery-1.10.2.js" ></script>
 <script src="/js/jquery.cookie.js" ></script>
@@ -75,9 +93,9 @@ The BitWrk client is asking for your permission to perform a trade.</div>
 <div class="modal-content">
 <div class="modal-header">
 <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-<h4 class="modal-title">Bid/Transaction Detail</h4>This dialog shows detailed information about bids, transactions and accounts.</div>
+<h4 class="modal-title">Account/Bid/Transaction Detail</h4>This dialog shows detailed information about bids, transactions and accounts.</div>
 <div class="modal-body">
-<iframe id="iframe" src="#" width="100%" height="360">
+<iframe id="iframe" src="about:blank" width="100%" height="360" style="border: 0px">
 <p>Your web browser must be able to show &lt;iframe&gt; elements for this to work.
 </iframe>
 </div>
@@ -94,8 +112,8 @@ setInterval(updateMOTD, 60 * 60 * 1000);
 updateMOTD();
 setInterval(updateAccountInfo, 30000);
 updateAccountInfo();
-setInterval(updateActivities, 500);
-updateActivities();
+setInterval(function() {updateActivities("{{.ServerURL}}");}, 500);
+updateActivities("{{.ServerURL}}");
 setInterval(updateWorkers, 500);
 updateWorkers();
 setInterval(updateMandates, 500);

@@ -1,4 +1,4 @@
-function setActivities(node, activitiesjson) {
+function setActivities(node, activitiesjson, serverUrl) {
     var activities = JSON.parse(activitiesjson);
 //     while (node.hasChildNodes()) {
 //         node.removeChild(node.lastChild);
@@ -91,12 +91,12 @@ function setActivities(node, activitiesjson) {
             item.childNodes[childIdx++].textContent = info.Article;
             if (info.BidId) {
             	childIdx++; // Skip text
-            	var url="http://" + document.location.host + "/bid/" + info.BidId
+            	var url= serverUrl + "/bid/" + info.BidId
                 item.childNodes[childIdx++].setAttribute("onclick", "showIframeDialog('" + url + "')");
             }
             if (info.TxId) {
             	childIdx++; // Skip text
-            	var url="http://" + document.location.host + "/tx/" + info.TxId
+            	var url= serverUrl + "/tx/" + info.TxId
                 item.childNodes[childIdx++].setAttribute("onclick", "showIframeDialog('" + url + "')");
             }
         } else {
@@ -118,13 +118,14 @@ function setActivities(node, activitiesjson) {
     }
 }
 
-function updateActivities() {
+function updateActivities(serverUrl) {
     var xhr = new XMLHttpRequest();
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4 && xhr.status == 200 ){
             setActivities(
                 document.getElementById("activities"),
-                xhr.responseText);
+                xhr.responseText,
+                serverUrl);
         }
     };
     xhr.open("GET", "/activities");

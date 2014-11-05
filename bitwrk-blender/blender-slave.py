@@ -23,7 +23,8 @@ import sys
 if sys.version_info[:2] < (3,2):
     raise RuntimeError("Python >= 3.2 required. Detected: %s" % sys.version_info)
 
-import http.server, urllib.request, urllib.parse, struct, os, tempfile, subprocess
+import urllib.request, urllib.parse, urllib.error
+import http.server, struct, os, tempfile, subprocess
 from select import select
 
 # decode http chunked encoding
@@ -133,16 +134,18 @@ render.border_max_y = (ymax+1.5) / resy
 try:
     if xmax < xmin or ymax < ymin:
         raise RuntimeError("Illegal tile dimensions")
+        
+    f = lambda x: x*x if scene.cycles.use_square_samples else x
     if scene.cycles.progressive == 'PATH':
-        cost_per_bounce = scene.cycles.samples
+        cost_per_bounce = f(scene.cycles.samples)
     elif scene.cycles.progressive == 'BRANCHED_PATH':
-        cost_per_bounce = scene.cycles.aa_samples * (
-            scene.cycles.diffuse_samples +
-            scene.cycles.glossy_samples +
-            scene.cycles.transmission_samples +
-            scene.cycles.ao_samples +
-            scene.cycles.mesh_light_samples +
-            scene.cycles.subsurface_samples)
+        cost_per_bounce = f(scene.cycles.aa_samples) * (
+            f(scene.cycles.diffuse_samples) +
+            f(scene.cycles.glossy_samples) +
+            f(scene.cycles.transmission_samples) +
+            f(scene.cycles.ao_samples) +
+            f(scene.cycles.mesh_light_samples) +
+            f(scene.cycles.subsurface_samples))
     else:
         raise RuntimeError("Unknown sampling")
 
@@ -177,7 +180,7 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
             self.send_error(500)
             raise
         finally:
-            register_with_bitwrk_client()
+            reregister_with_bitwrk_client()
             
     def _work(self, rfile, tmpdir):
         xmin,ymin,xmax,ymax = 0,0,63,63
@@ -326,22 +329,47 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(data)
                 data = f.read(32768)
 
-def register_with_bitwrk_client():
+def register_with_bitwrk_client(addr):
     query = urllib.parse.urlencode({
         'id' : 'blender-%d' % addr[1],
         'article' : ARTICLE_ID,
         'pushurl' : 'http://%s:%d/work' % addr
     })
-    urllib.request.urlopen("http://%s:%d/registerworker" % (BITWRK_HOST, BITWRK_PORT), query.encode('ascii'), 10)
-
-def serve():
-    httpd = http.server.HTTPServer(('127.0.0.1', 0), BlenderHandler)
     
-    # Advertise worker to bitwrk
-    global addr
+    bitwrkurl = "http://%s:%d" % (BITWRK_HOST, BITWRK_PORT)
+    try:
+        id_resp = urllib.request.urlopen(bitwrkurl + "/id", None, 10)
+        vrs_resp = urllib.request.urlopen(bitwrkurl + "/version", None, 10)
+        print(" > Connected to '{}' version {} on {}"
+              .format(id_resp.read(80).decode('ascii'),
+                      vrs_resp.read(80).decode('ascii'),
+                      bitwrkurl))
+    except urllib.error.HTTPError as ex:
+        print(" > Got a {} ({}) error when trying to probe BitWrk client on {}"
+              .format(ex.code, ex.reason, bitwrkurl))
+        if ex.code == 404:
+            print("   This usually means that another application is listening on port ({}).".format(BITWRK_PORT))
+        return False
+    except urllib.error.URLError as ex:
+        print(" > Couldn't connect to BitWrk client on", bitwrkurl)
+        print("   Reason:", ex.reason)
+        print("   This usually means that the BitWrk client is not running.")
+        print("   It could also be listening on another port.")
+        return False
+        
+    try:
+        urllib.request.urlopen(bitwrkurl + "/registerworker", query.encode('ascii'), 10)
+    except urllib.error.HTTPError as ex:
+        print(" > Got a {} ({}) error when trying to register on {}"
+              .format(ex.code, ex.reason, bitwrkurl + "/registerworker"))
+        if ex.code == 404:
+            print("   This usually means that the BitWrk client does not accept workers.")
+            print("   Please start it with the -extport argument!")
+        return False
+    return True
+
+def serve(httpd):
     addr = httpd.server_address
-    print("Serving on", addr)
-    register_with_bitwrk_client()
     try:
         httpd.serve_forever()
     finally:
@@ -360,9 +388,12 @@ def get_blender_version():
         return "2.70"
     elif b"Blender 2.71 (sub 0)" in output:
         return "2.71"
+    elif b"Blender 2.72 (sub 0)" in output:
+        return "2.72"
     else:
         raise RuntimeError("Blender version could not be detected.\n"
-                           + "This version of blender-slave.py will detect Blender versions 2.69 till 2.71.")
+                           + "This version of blender-slave.py will detect Blender versions "
+                           + "2.69 up to 2.72.")
 
 
 def parse_args():
@@ -374,7 +405,7 @@ def parse_args():
     parser.add_argument('--bitwrk-host', metavar='HOST', help="BitWrk client host", default="localhost")
     parser.add_argument('--bitwrk-port', metavar='PORT', help="BitWrk client port", type=int, default=8081)
     parser.add_argument('--max-cost', metavar='CLASS', help="Maximum cost of one task (in mega- and giga-rays)",
-        choices=["512M", "2G", "8G", "32G"], default="8G")
+        choices=["512M", "2G", "8G", "32G"], default="512M")
     args = parser.parse_args()
     
     BLENDER_BIN=args.blender
@@ -401,9 +432,19 @@ if __name__ == "__main__":
         print(e)
         sys.exit(2)
     
-    print("Detected Blender", BLENDER_VERSION)
-    print("Serving to BitWrk client on {}:{}".format(BITWRK_HOST, BITWRK_PORT))
-    print("Maximum number of rays is", MAX_COST)
-    print("Article ID is", ARTICLE_ID)
+    print(" > Detected Blender", BLENDER_VERSION)
+    print(" > Maximum number of rays is", MAX_COST)
+    print(" > Article ID is", ARTICLE_ID)
+    
+    httpd = http.server.HTTPServer(('127.0.0.1', 0), BlenderHandler)
+    
+    if not register_with_bitwrk_client(httpd.server_address):
+        sys.exit(3)
+    
+    global reregister_with_bitwrk_client
+    def reregister_with_bitwrk_client():
+        return register_with_bitwrk_client(httpd.server_address)
+    
+    print(" > Listening on", httpd.server_address)
     print("------------------------------------------------")
-    serve()
+    serve(httpd)

@@ -1,18 +1,8 @@
 function setAccountInfo(node, accountjson) {
     var account = JSON.parse(accountjson);
-    while (node.hasChildNodes()) {
-        node.removeChild(node.lastChild);
-    }
     
-    var item = document.createElement("div");
-    item.setAttribute("class", "participant");
-    item.innerHTML = account["Participant"];
-    node.appendChild(item);
-    
-    var item = document.createElement("div");
-    item.setAttribute("class", "available");
-    item.innerHTML = account["Available"];
-    node.appendChild(item);
+    $(node).find(".available span").text(account["Available"])
+    $(node).find(".blocked span").text(account["Blocked"])
 }
 
 function updateAccountInfoFor(participantId) {
