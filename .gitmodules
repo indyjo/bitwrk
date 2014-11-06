@@ -1,0 +1,3 @@
+[submodule "src/github.com/indyjo/cafs"]
+	path = src/github.com/indyjo/cafs
+	url = https://github.com/indyjo/cafs.git
