@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<launchConfiguration type="com.googlecode.goclipse.debug.launchConfig">
-<stringAttribute key="BUILD_CONFIG" value="RELEASE"/>
-<stringAttribute key="MAIN_FILE" value="src/cmd/bitwrk-client/client_main.go"/>
-<stringAttribute key="PROGRAM_ARGS" value="-extport 8082 "/>
-<stringAttribute key="PROJECT_NAME" value="bitwrk"/>
-</launchConfiguration>
