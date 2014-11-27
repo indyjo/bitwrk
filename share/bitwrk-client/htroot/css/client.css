@@ -1,19 +1,54 @@
 /* Color style: http://colorschemedesigner.com/#3951YckGrp9Iu */
 
 body {
-	padding-top: 40px;
+	padding-top: 100px;
 }
 
 header {
     color: #999;
-}
-
-#account-info {
+	background-color: #444;
 	position: fixed;
 	top: 0;
 	width: 100%;
-	background-color: #444;
 	z-index: 1;
+	padding: 0px 0px 1px 0px;
+}
+
+header nav ul {
+	width: 100%;
+	margin: 8px 0px 0px 0px;
+	padding: 0px 0px 0px 12px;
+}
+
+header nav ul li {
+	display: inline-block;
+	list-style-type: none;
+	font-family: "helvetica neue", "helvetica", "arial";
+	font-weight: lighter;
+	font-size: 30px;
+	padding-bottom: 2px;
+	border-bottom: 5px hidden;
+	line-height: 90%;
+	margin-right: 12px;
+	margin-left: 1px;
+}
+
+header nav ul li.active {
+	border-bottom: 5px solid #79b4e1;
+}
+
+header nav ul li a {
+	color: #777;
+	text-decoration: none;
+}
+
+header nav ul li a:hover {
+	color: #79b4e1;
+	text-decoration: none;
+}
+
+header nav ul li.active a {
+	color: #aaa;
 }
 
 header div.logo {
@@ -23,7 +58,11 @@ header div.logo {
 header div.logo img {
 	height: 39px;
 	width: auto;
-	padding-left: 2px;
+	padding-left: 6px;
+}
+
+header > ul {
+	display: block;
 }
 
 #account-info div {
@@ -33,6 +72,7 @@ header div.logo img {
 #account-info .available, #account-info .participant a {
     color: #79b4e1;
     cursor: pointer;
+    font-weight: lighter;
 }
 
 #account-info .blocked, #account-info .available {

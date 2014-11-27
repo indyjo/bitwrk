@@ -18,24 +18,58 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	client "github.com/indyjo/bitwrk-client"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"html/template"
+	"log"
 	"net/http"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
 var _templatesInitialized = sync.Once{}
 var _homeTemplate *template.Template
+var _translations = map[string]string{
+	"page.home": "Home",
+	"page.account": "Account",
+}
 
 func initTemplates() {
 	_templatesInitialized.Do(func() {
 		p := path.Join(ResourceDir, "templates", "index.html")
-		_homeTemplate = template.Must(template.ParseFiles(p))
+		
+		// see http://stackoverflow.com/questions/18276173
+		_homeTemplate = template.Must(template.New("").Funcs(template.FuncMap{
+			"dict": func(values ...interface{}) (map[string]interface{}, error) {
+				if len(values)%2 != 0 {
+					return nil, errors.New("invalid dict call")
+				}
+				dict := make(map[string]interface{}, len(values)/2)
+				for i := 0; i < len(values); i += 2 {
+					key, ok := values[i].(string)
+					if !ok {
+						return nil, errors.New("dict keys must be strings")
+					}
+					dict[key] = values[i+1]
+				}
+				return dict, nil
+			},
+			"text": func(values ...interface{})(string, error) {
+				if len(values) != 1 {
+					return "", errors.New("text() needs exatly one argument")
+				}
+				if s, ok := values[0].(string); !ok {
+					return "", errors.New("text() takes a string as first argument")
+				} else {
+					return _translations[s], nil
+				}
+			},
+		}).ParseFiles(p)).Lookup("index.html")
 	})
 }
 
@@ -47,6 +81,7 @@ func getHomeTemplate() *template.Template {
 type clientContext struct {
 	ParticipantId string
 	ServerURL     string
+	Page          string
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request) {
@@ -60,11 +95,19 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var page string
+	if strings.HasPrefix(r.URL.Path, "/ui/") {
+		page = r.URL.Path[4:]
+	} else {
+		page = "home"
+	}
+
 	if err := getHomeTemplate().Execute(w, &clientContext{
 		BitcoinIdentity.GetAddress(),
 		BitwrkUrl,
+		page,
 	}); err != nil {
-		fmt.Print("Error rendering UI: ", err)
+		log.Println("Error rendering UI:", err)
 	}
 }
 

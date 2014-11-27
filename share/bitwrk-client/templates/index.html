@@ -1,20 +1,63 @@
-<!doctype html>
-<html>
+{{define "pagename"}}{{text (printf "page.%v" .)}}{{end}}
+{{define "pagepath"}}{{if eq . "home"}}/{{else}}/ui/{{.}}{{end}}{{end}}
+{{define "pagelink"}}<a href="{{template "pagepath" .}}">{{template "pagename" .}}</a>{{end}}
+{{define "pageitem"}}<li {{if eq .Current .Page}}class="active"{{end}}>{{template "pagelink" .Page}}</li>{{end}}
+{{define "head"}}
 <head>
 <meta charset="utf-8" />
-<title>BitWrk Client</title>
+<title>{{template "pagename" .}} - BitWrk Client</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="css/bootstrap-theme.min.css" rel="stylesheet" media="screen" />
-<link href="css/bootstrap.min.css" rel="stylesheet" media="screen" />
-<link href="css/client.css" rel="stylesheet" />
+<link href="/css/bootstrap-theme.min.css" rel="stylesheet" media="screen" />
+<link href="/css/bootstrap.min.css" rel="stylesheet" media="screen" />
+<link href="/css/client.css" rel="stylesheet" />
 <link rel="shortcut icon" href="/img/favicon.ico" />
 <link rel="icon" href="/img/favicon.ico" />
-<body>
+</head>
+{{end}}
+{{define "js"}}
+<script src="/js/jquery-1.10.2.js" ></script>
+<script src="/js/jquery.cookie.js" ></script>
+<script src="/js/bootstrap.min.js" ></script>
+<script src="/js/js-iso8601.js" ></script>
+<script src="/js/accountinfo.js" ></script>
+<script src="/js/mandate-dialog.js" ></script>
+<script src="/js/iframe-dialog.js" ></script>
+<script src="/js/activity.js" ></script>
+<script src="/js/workers.js" ></script>
+<script src="/js/mandates.js" ></script>
+<script src="/js/motd.js" ></script>
 <script>
 function showAccountInfo() {
 	showIframeDialog('{{.ServerURL}}account/{{.ParticipantId}}');
 }
+function updateAccountInfo() {
+    updateAccountInfoFor("{{.ParticipantId}}");
+}
+$(document).ready(function() {
+	setInterval(updateAccountInfo, 30000);
+	updateAccountInfo();
+	$("#motd").hide()
+	var updateMOTD = newMessageUpdater($("#motd"), $("#motd-content"));
+	setInterval(updateMOTD, 60 * 60 * 1000);
+	updateMOTD();
+});
+{{if .Page | eq "home"}}
+$(document).ready(function() {
+	setInterval(function() {updateActivities("{{.ServerURL}}");}, 500);
+	updateActivities("{{.ServerURL}}");
+	setInterval(updateWorkers, 500);
+	updateWorkers();
+	setInterval(updateMandates, 500);
+	updateMandates();
+});
+{{end}}
 </script>
+{{end}}{{/*define "js"*/}}
+<!doctype html>
+<html>
+{{template "head" .Page}}
+<body>
+{{template "js" .}}
 <header>
 <div id="account-info">
 <div class="logo"><a href="http://bitwrk.net/" rel="noreferrer"><img src="/img/bitwrk.png"></a></div>
@@ -28,22 +71,19 @@ function showAccountInfo() {
 </div>
 <div style="clear:both;display:block"></div>
 </div>
+<nav>
+<ul><!--
+-->{{template "pageitem" dict "Current" .Page "Page" "home"}}<!--
+-->{{template "pageitem" dict "Current" .Page "Page" "account"}}<!--
+--></ul>
+</nav>
 </header>
-<script src="/js/jquery-1.10.2.js" ></script>
-<script src="/js/jquery.cookie.js" ></script>
-<script src="/js/bootstrap.min.js" ></script>
-<script src="/js/js-iso8601.js" ></script>
-<script src="/js/accountinfo.js" ></script>
-<script src="/js/mandate-dialog.js" ></script>
-<script src="/js/iframe-dialog.js" ></script>
-<script src="/js/activity.js" ></script>
-<script src="/js/workers.js" ></script>
-<script src="/js/mandates.js" ></script>
-<script src="/js/motd.js" ></script>
 <div id="motd" class="alert alert-dismissable alert-info">Message from server: <span id="motd-content"></span><button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button></div>
+{{if .Page | eq "home"}}
 <div class="col-sm-4"><h3>Activities</h3><div id="activities"></div></div>
 <div class="col-sm-4"><h3>Workers</h3><div id="workers"></div></div>
 <div class="col-sm-4"><h3>Mandates</h3><div id="mandates"></div></div>
+{{end}}
 <div id="mandateModal" class="modal fade">
 <div class="modal-dialog">
 <div class="modal-content">
@@ -102,21 +142,5 @@ The BitWrk client is asking for your permission to perform a trade.</div>
 </div><!-- modal-body -->
 </div><!-- modal-dialog -->
 </div><!-- modal -->
-<script>
-function updateAccountInfo() {
-    updateAccountInfoFor("{{.ParticipantId}}");
-}
-$("#motd").hide()
-var updateMOTD = newMessageUpdater($("#motd"), $("#motd-content"));
-setInterval(updateMOTD, 60 * 60 * 1000);
-updateMOTD();
-setInterval(updateAccountInfo, 30000);
-updateAccountInfo();
-setInterval(function() {updateActivities("{{.ServerURL}}");}, 500);
-updateActivities("{{.ServerURL}}");
-setInterval(updateWorkers, 500);
-updateWorkers();
-setInterval(updateMandates, 500);
-updateMandates();
-</script></body>
+</body>
 </html>

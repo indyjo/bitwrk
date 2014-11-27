@@ -188,6 +188,7 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux.HandleFunc("/buy/", handleBuy)
 	mux.HandleFunc("/file/", handleFile)
 	mux.HandleFunc("/", handleHome)
+	mux.HandleFunc("/ui/", handleHome)
 	mux.HandleFunc("/activities", handleActivities)
 	if ExternalPort > 0 {
 		mux.HandleFunc("/registerworker", func(w http.ResponseWriter, r *http.Request) {
