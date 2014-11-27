@@ -61,9 +61,10 @@ header div.logo img {
 	padding-left: 6px;
 }
 
-header > ul {
-	display: block;
-}
+header div.alert {
+	margin: 1px 0px 0px 0px;
+	border-radius: 0;
+} 
 
 #account-info div {
     display: inline;

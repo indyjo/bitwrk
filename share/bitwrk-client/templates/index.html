@@ -77,8 +77,11 @@ $(document).ready(function() {
 -->{{template "pageitem" dict "Current" .Page "Page" "account"}}<!--
 --></ul>
 </nav>
+<div id="motd" class="alert alert-dismissable alert-info">Message from server:
+<span id="motd-content"></span>
+<button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+</div>
 </header>
-<div id="motd" class="alert alert-dismissable alert-info">Message from server: <span id="motd-content"></span><button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button></div>
 {{if .Page | eq "home"}}
 <div class="col-sm-4"><h3>Activities</h3><div id="activities"></div></div>
 <div class="col-sm-4"><h3>Workers</h3><div id="workers"></div></div>
