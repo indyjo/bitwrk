@@ -173,12 +173,15 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 		Handler: mux,
 		// No timeouts!
 	}
-	relay := &HttpRelay{"/", protocol.BitwrkUrl, protocol.NewClient(&http.Transport{})}
+	relay := NewHttpRelay("/", protocol.BitwrkUrl, protocol.NewClient(&http.Transport{}))
 	mux.Handle("/account/", relay)
-	mux.Handle("/bid", relay)
 	mux.Handle("/bid/", relay)
+	mux.Handle("/deposit/", relay)
 	mux.Handle("/tx/", relay)
 	mux.Handle("/motd", relay)
+
+	myAccountUrl := fmt.Sprintf("%s/account/%s", protocol.BitwrkUrl, BitcoinIdentity.GetAddress())
+	mux.Handle("/myaccount", NewHttpRelay("/myaccount", myAccountUrl, relay.client))
 
 	resource := http.FileServer(http.Dir(path.Join(ResourceDir, "htroot")))
 	mux.Handle("/js/", resource)

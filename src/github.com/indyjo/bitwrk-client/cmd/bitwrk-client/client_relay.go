@@ -18,15 +18,34 @@ package main
 
 import (
 	"github.com/indyjo/bitwrk-common/protocol"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 )
+
+type cacheEntry struct {
+	key  string
+	data []byte
+	time time.Time
+}
 
 type HttpRelay struct {
 	localPathPrefix string
 	remoteUrlPrefix string
 	client          *http.Client
+	// Cache the last recently updated data
+	cached   *cacheEntry
+	duration time.Duration
+}
+
+func NewHttpRelay(localPathPrefix, remoteUrlPrefix string, client *http.Client) *HttpRelay {
+	return &HttpRelay{localPathPrefix, remoteUrlPrefix, client, nil, 30 * time.Second}
+}
+
+func (r *HttpRelay) CacheFor(d time.Duration) *HttpRelay {
+	r.duration = d
+	return r
 }
 
 func (r *HttpRelay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -36,19 +55,29 @@ func (r *HttpRelay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	target := r.remoteUrlPrefix + path[len(r.localPathPrefix):]
+
+	key := target + "-" + req.Header.Get("Accept")
+	cached := r.cached
+	if cached != nil && cached.key == key && cached.time.Add(r.duration).Before(time.Now()) {
+		w.Write(cached.data)
+		return
+	}
+
 	if remoteReq, err := protocol.NewRequest(req.Method, target, req.Body); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		remoteReq.Header.Set("Accept", req.Header.Get("Accept"))
-		remoteResp, err := r.client.Do(remoteReq)
-		if remoteResp != nil && remoteResp.Body != nil {
-			defer remoteResp.Body.Close()
-		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		reqTime := time.Now()
+		if remoteResp, err := r.client.Do(remoteReq); err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+		} else if data, err := ioutil.ReadAll(remoteResp.Body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
 		} else {
+			if remoteResp.StatusCode == http.StatusOK {
+				r.cached = &cacheEntry{key, data, reqTime}
+			}
 			w.WriteHeader(remoteResp.StatusCode)
-			io.Copy(w, remoteResp.Body)
+			w.Write(data)
 		}
 	}
 }
