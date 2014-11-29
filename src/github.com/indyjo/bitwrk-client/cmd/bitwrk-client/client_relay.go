@@ -58,7 +58,7 @@ func (r *HttpRelay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	key := target + "-" + req.Header.Get("Accept")
 	cached := r.cached
-	if cached != nil && cached.key == key && cached.time.Add(r.duration).Before(time.Now()) {
+	if cached != nil && cached.key == key && cached.time.Add(r.duration).After(time.Now()) {
 		w.Write(cached.data)
 		return
 	}
