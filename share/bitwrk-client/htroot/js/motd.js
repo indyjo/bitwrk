@@ -4,7 +4,8 @@ function newMessageUpdater(alertbox, content) {
 	alertbox.bind('closed.bs.alert', function() {
 		lastval = currentval;
 		$.cookie("lastmotd", currentval, {
-			'expires' : 1
+			'expires' : 1,
+			'path' : '/',
 		});
 	});
 	return function() {
@@ -13,9 +14,9 @@ function newMessageUpdater(alertbox, content) {
 			if (xhr.readyState === 4 && xhr.status == 200) {
 				currentval = xhr.responseText;
 				if (currentval != lastval) {
-					var motd=JSON.parse(currentval)
+					var motd = JSON.parse(currentval)
 					content.html(motd.Text);
-					
+
 					alertbox.removeClass("alert-info");
 					alertbox.removeClass("alert-warning");
 					alertbox.removeClass("alert-danger");

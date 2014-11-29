@@ -86,7 +86,6 @@ $(document).ready(function() {
 <div class="col-sm-4"><h3>Activities</h3><div id="activities"></div></div>
 <div class="col-sm-4"><h3>Workers</h3><div id="workers"></div></div>
 <div class="col-sm-4"><h3>Mandates</h3><div id="mandates"></div></div>
-{{end}}
 <div id="mandateModal" class="modal fade">
 <div class="modal-dialog">
 <div class="modal-content">
@@ -131,6 +130,62 @@ The BitWrk client is asking for your permission to perform a trade.</div>
 </div><!-- modal-body -->
 </div><!-- modal-dialog -->
 </div><!-- modal -->
+{{else if .Page | eq "account"}}
+<div class="col-md-8">
+<div class="panel panel-default">
+<div class="panel-heading">Deposits</div>
+<div class="panel-body">
+<div class="alert alert-warning" role="alert">This functionality hasn't been implemented yet.</div>
+<p class="lead">In order to buy on BitWrk, you need to deposit some amount of <a href="http://bitcoin.org">Bitcoin</a>.</p>
+<p class="help-block">Deposits must be BTC 0.001 minimum. Smaller deposits will be ignored.</p>
+<p>There is currently no Bitcoin deposit address associated with your account.
+<p><a href="?action=requestdepositaddress" class="btn btn-default">Request a new deposit address</a>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">Withdrawals</div>
+<div class="panel-body">
+<div class="alert alert-warning" role="alert">This functionality hasn't been implemented yet.</div>
+<p class="lead">By withdrawing from BitWrk, you can transfer money into your private Bitcoin wallet.</p>
+<p class="help-block">
+You may withdraw Bitcoin once every 24 hours.
+Withdrawals must be BTC 0.001 minimum.
+Processing the transaction may take a couple of hours.</p>
+<form role="form" class="form-horizontal">
+<input type="hidden" name="action" value="requestwithdrawal" />
+<div class="form-group">
+<label for="withdrawalAmount" class="col-md-3 control-label">Withdrawal amount:</label>
+<div class="col-md-9">
+<input id="withdrawalAmount" type="text" name="amount" class="form-control" value="BTC 0.01"/>
+</div>
+</div>
+<div class="form-group">
+<label for="withdrawalDestinationAddress" class="col-md-3 control-label">Destination Address:</label>
+<div class="col-md-9">
+<input id="withdrawalDestinationAddress" type="text" name="destaddress" class="form-control" value="{{.ParticipantId}}"/>
+</div>
+</div>
+<div class="form-group">
+<div class="col-md-offset-3 col-md-9">
+<input class="btn btn-default" type="submit" value="Withdraw to this address">
+</div>
+</div>
+</form>
+</div>
+</div>
+</div>
+<div class="col-md-4">
+<div class="panel panel-default">
+<div class="panel-heading">General Information</div>
+<div class="panel-body">
+<p>You are accessing account <a href="#" onclick="showAccountInfo()">{{.ParticipantId}}</a>
+on BitWrk service <em>{{.ServerURL}}</em>.</p>
+<p>BitWrk is currently in development. Some functionality is not implemented yet.</p>
+<p>Please see <a href="http://bitwrk.net/">bitwrk.net</a> for further information.</p>
+</div>
+</div>
+</div>
+{{end}}
 <div id="iframeModal" class="modal fade">
 <div class="modal-dialog">
 <div class="modal-content">
