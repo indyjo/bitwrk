@@ -35,14 +35,14 @@ import (
 var _templatesInitialized = sync.Once{}
 var _homeTemplate *template.Template
 var _translations = map[string]string{
-	"page.home": "Home",
+	"page.home":    "Home",
 	"page.account": "Account",
 }
 
 func initTemplates() {
 	_templatesInitialized.Do(func() {
 		p := path.Join(ResourceDir, "templates", "index.html")
-		
+
 		// see http://stackoverflow.com/questions/18276173
 		_homeTemplate = template.Must(template.New("").Funcs(template.FuncMap{
 			"dict": func(values ...interface{}) (map[string]interface{}, error) {
@@ -59,7 +59,7 @@ func initTemplates() {
 				}
 				return dict, nil
 			},
-			"text": func(values ...interface{})(string, error) {
+			"text": func(values ...interface{}) (string, error) {
 				if len(values) != 1 {
 					return "", errors.New("text() needs exatly one argument")
 				}
@@ -92,6 +92,9 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 			// Success! Send back to home page
 			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 		}
+		return
+	} else if action != "" {
+		http.Error(w, fmt.Sprintf("Unrecognized form request: %v", r.Form), http.StatusBadRequest)
 		return
 	}
 
