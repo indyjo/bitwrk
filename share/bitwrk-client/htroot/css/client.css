@@ -1,6 +1,12 @@
 /* Color style: http://colorschemedesigner.com/#3951YckGrp9Iu */
 body {
-	padding-top: 120px;
+	padding-top: 130px;
+}
+
+@media ( min-width : 768px) {
+	body {
+		padding-top: 90px;
+	}
 }
 
 header {
