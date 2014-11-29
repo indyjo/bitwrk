@@ -30,9 +30,6 @@
 function showAccountInfo() {
 	showIframeDialog('{{.ServerURL}}account/{{.ParticipantId}}');
 }
-function updateAccountInfo() {
-    updateAccountInfoFor("{{.ParticipantId}}");
-}
 $(document).ready(function() {
 	setInterval(updateAccountInfo, 30000);
 	updateAccountInfo();
@@ -150,7 +147,7 @@ The BitWrk client is asking for your permission to perform a trade.</div>
 <p class="help-block">
 You may withdraw Bitcoin once every 24 hours.
 Withdrawals must be BTC 0.001 minimum.
-Processing the transaction may take a couple of hours.</p>
+</p>
 <form role="form" class="form-horizontal">
 <input type="hidden" name="action" value="requestwithdrawal" />
 <div class="form-group">

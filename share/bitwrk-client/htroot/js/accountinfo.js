@@ -5,7 +5,7 @@ function setAccountInfo(node, accountjson) {
     $(node).find(".blocked span").text(account["Blocked"])
 }
 
-function updateAccountInfoFor(participantId) {
+function updateAccountInfo() {
     var xhr = new XMLHttpRequest();
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4 && xhr.status == 200 ){
@@ -14,7 +14,7 @@ function updateAccountInfoFor(participantId) {
                 xhr.responseText);
         }
     };
-    xhr.open("GET", "/account/"+participantId);
+    xhr.open("GET", "/myaccount");
     xhr.setRequestHeader("Accept", "application/json");
     xhr.send();
 }
