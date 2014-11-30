@@ -17,7 +17,11 @@ package bitwrk
 
 import (
 	"fmt"
+	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/money"
+	"io"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -28,10 +32,73 @@ type Account interface {
 	GetLastMovementKey() *string
 }
 
+// Message placed in a participant's account by the payment processor.
+// It states that monetary transactions sent to a specific deposit address
+// will be credited that particpant.
+// When URL-encoding, fields names are converted to lower-case and ordered alphabetically.
+type DepositAddressMessage struct {
+	Nonce          string // A nonce requested from the BitWrk service
+	DepositAddress string // The monetary address
+	Participant    string // The participant whose account is credited
+	Signer         string // The participant who signed this message
+	Reference      string // Aditional data the signer wished to place in the message
+	Signature      string // Signature over the URL-encoded message (except the "Signature" field)
+}
+
+// Reads fields from an url.Values object. Does not perform any checking
+func (m *DepositAddressMessage) FromValues(values url.Values) {
+	m.Nonce = values.Get("nonce")
+	m.DepositAddress = values.Get("depositaddress")
+	m.Participant = values.Get("participant")
+	m.Signer = values.Get("signer")
+	m.Reference = values.Get("reference")
+	m.Signature = values.Get("signature")
+}
+
+// Places fields in an url.Values object.
+func (m *DepositAddressMessage) ToValues(values url.Values) {
+	values.Set("nonce", m.Nonce)
+	values.Set("depositaddress", m.DepositAddress)
+	values.Set("participant", m.Participant)
+	values.Set("signer", m.Signer)
+	values.Set("reference", m.Reference)
+	values.Set("signature", m.Signature)
+}
+
+// Returns the URL-encoded part of the message that is signed.
+// The "+" sign is encoded as "%20" to resolve an ambiguity with
+// javascript's encodeURIComponent.
+func (m *DepositAddressMessage) document() string {
+	values := url.Values{}
+	m.ToValues(values)
+	values.Del("signature")
+	return strings.Replace(values.Encode(), "+", "%20", -1)
+}
+
+// Signs the message using the specified key pair. Fields "Signer" and "Signature"
+// are modified.
+func (m *DepositAddressMessage) SignWith(key *bitcoin.KeyPair, rand io.Reader) error {
+	m.Signer = key.GetAddress()
+	if s, err := key.SignMessage(m.document(), rand); err != nil {
+		return err
+	} else {
+		m.Signature = s
+		return nil
+	}
+}
+
+// Verifies authenticity (or if fed with m.Signer, only integrity) of the message.
+func (m *DepositAddressMessage) VerifyWith(signer string) error {
+	return bitcoin.VerifySignatureBase64(m.document(), signer, m.Signature)
+}
+
+// Data stored once for each participant
 type ParticipantAccount struct {
 	Participant        string
 	LastMovementKey    *string
 	Available, Blocked money.Money
+	// Document containing URL-encoded DepositAddressMessage
+	DepositInfo string
 }
 
 func (a *ParticipantAccount) GetAvailable() Account {
