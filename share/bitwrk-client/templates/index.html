@@ -47,6 +47,11 @@ $(document).ready(function() {
 	setInterval(updateMandates, 500);
 	updateMandates();
 });
+{{else if .Page | eq "account"}}
+$(document).ready(function() {
+	setInterval(updateDepositInfo, 30000)
+	updateDepositInfo()
+})
 {{end}}
 </script>
 {{end}}{{/*define "js"*/}}
@@ -151,8 +156,12 @@ on BitWrk service <em class="btn btn-default btn-xs">{{.ServerURL}}</em>.</p>
 <input type="hidden" name="action" value="requestdepositaddress">
 <div class="form-group">
 <label class="col-md-3 control-label">Deposit address:</label>
-<div class="col-md-9"><p class="form-control-static text-warning">There is currently no deposit address associated with your account.</p></div>
+<div class="col-md-9">
+<!-- JavaScript makes one visible, the other one invisible -->
+<div class="depositaddress-yes hidden"><p class="form-control-static"><a href="#" class="depositaddress text-info">_DEPOSIT_ADDRESS_</a></p></div>
+<div class="depositaddress-no"><p class="form-control-static text-warning">There is currently no deposit address associated with your account.</p></div>
 </div>
+</div><!-- form-group -->
 <div class="form-group">
 <div class="col-md-offset-3 col-md-9"><button type="submit" class="btn btn-default">Request a new deposit address</button></div>
 </div>

@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	client "github.com/indyjo/bitwrk-client"
@@ -28,6 +29,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"runtime/pprof"
@@ -41,6 +43,7 @@ var InternalPort int
 var BitcoinIdentity *bitcoin.KeyPair
 var ResourceDir string
 var BitwrkUrl string
+var TrustedAccount string
 
 func main() {
 	protocol.BitwrkUserAgent = "BitWrkGoClient/" + ClientVersion
@@ -59,6 +62,8 @@ func main() {
 		"Enable logging for content-addressable file storage")
 	flags.IntVar(&client.NumUnmatchedBids, "num-unmatched-bids", client.NumUnmatchedBids,
 		"Mamimum number of unmatched bids for an article on server")
+	flags.StringVar(&TrustedAccount, "trusted-account", "1TrsjuCvBch1D9h6nRkadGKakv9KyaiP6",
+		"Account to trust when verifying deposit information.")
 	err := flags.Parse(os.Args[1:])
 	if err == flag.ErrHelp {
 		flags.Usage()
@@ -94,7 +99,8 @@ func main() {
 	receiveManager := startReceiveManager()
 
 	log.Printf("Internal port: %v\n", InternalPort)
-	log.Printf("Bitcoin address: %v\n", BitcoinIdentity.GetAddress())
+	log.Printf("Own BitWrk account: %v\n", BitcoinIdentity.GetAddress())
+	log.Printf("Trusted account: %v", TrustedAccount)
 
 	workerManager := client.NewWorkerManager(client.GetActivityManager(), receiveManager)
 
@@ -180,8 +186,34 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux.Handle("/tx/", relay)
 	mux.Handle("/motd", relay)
 
-	myAccountUrl := fmt.Sprintf("%s/account/%s", protocol.BitwrkUrl, BitcoinIdentity.GetAddress())
-	mux.Handle("/myaccount", NewHttpRelay("/myaccount", myAccountUrl, relay.client))
+	accountFilter := func(data []byte) ([]byte, error) {
+		var account bitwrk.ParticipantAccount
+		if err := json.Unmarshal(data, &account); err != nil {
+			return data, nil
+		} else {
+			// Pass data about validation results into the template so it doesn't
+			// have to be done in JavaScript.
+			type result struct {
+				Account             bitwrk.ParticipantAccount
+				Updated             time.Time
+				TrustedAccount      string
+				DepositAddress      string
+				DepositAddressValid bool
+			}
+			r := result{account, time.Now(), TrustedAccount, "", false}
+			if v, err := url.ParseQuery(account.DepositInfo); err == nil {
+				m := bitwrk.DepositAddressMessage{}
+				m.FromValues(v)
+				if m.VerifyWith(TrustedAccount) == nil {
+					r.DepositAddress = m.DepositAddress
+					r.DepositAddressValid = true
+				}
+			}
+			return json.Marshal(r)
+		}
+	}
+	myAccountUrl := fmt.Sprintf("%saccount/%s", protocol.BitwrkUrl, BitcoinIdentity.GetAddress())
+	mux.Handle("/myaccount", NewHttpRelay("/myaccount", myAccountUrl, relay.client).WithFilterFunc(accountFilter))
 
 	resource := http.FileServer(http.Dir(path.Join(ResourceDir, "htroot")))
 	mux.Handle("/js/", resource)
