@@ -289,6 +289,8 @@ func (codec accountCodec) Load(c <-chan datastore.Property) error {
 			account.Available.Amount = p.Value.(int64)
 		case "Blocked":
 			account.Blocked.Amount = p.Value.(int64)
+		case "DepositInfo":
+			account.DepositInfo = p.Value.(string)
 		default:
 			return fmt.Errorf("Unknown property %s", p.Name)
 		}
@@ -308,6 +310,7 @@ func (codec accountCodec) Save(c chan<- datastore.Property) error {
 	}
 	c <- datastore.Property{Name: "Available", Value: account.Available.Amount}
 	c <- datastore.Property{Name: "Blocked", Value: account.Blocked.Amount}
+	c <- datastore.Property{Name: "DepositInfo", Value: account.DepositInfo, NoIndex: true}
 	close(c)
 	return nil
 }
