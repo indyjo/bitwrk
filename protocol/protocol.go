@@ -189,6 +189,23 @@ func postFormToServer(relpath, query string) (*http.Response, error) {
 	return defaultClient.Do(req)
 }
 
+func postFormToServerExpectRedirect(relpath, query string) error {
+	if r, err := postFormToServer(relpath, query); r != nil {
+		defer r.Body.Close()
+		if r.StatusCode == http.StatusFound || r.StatusCode == http.StatusSeeOther {
+			// Success!
+			return nil
+		} else {
+			buf := make([]byte, 1024)
+			n, _ := io.ReadFull(r.Body, buf)
+			return fmt.Errorf("Unexpected reply status posting form to server: %v (%v)",
+				r.Status, string(buf[:n]))
+		}
+	} else {
+		return fmt.Errorf("Error posting form to server: %v", err)
+	}
+}
+
 func getStringFromServer(relpath string, limit int64) (string, error) {
 	r, err := getFromServer(relpath)
 	if err != nil {
@@ -276,21 +293,7 @@ func SendTxMessage(txId string, identity *bitcoin.KeyPair, arguments map[string]
 	query := string(document) +
 		"&signature=" + url.QueryEscape(signature) +
 		"&address=" + url.QueryEscape(identity.GetAddress())
-	if r, err := postFormToServer("tx/"+txId, query); r != nil {
-		defer r.Body.Close()
-		if r.StatusCode == http.StatusSeeOther {
-			// Success! Do nothing.
-		} else {
-			buf := make([]byte, 1024)
-			n, _ := io.ReadFull(r.Body, buf)
-			return fmt.Errorf("Unexpected reply status posting form to server: %v (%v)",
-				r.Status, string(buf[:n]))
-		}
-	} else {
-		return fmt.Errorf("Error posting form to server: %v", err)
-	}
-
-	return nil
+	return postFormToServerExpectRedirect("tx/"+txId, query)
 }
 
 func SendTxMessageEstablishBuyer(txId string, identity *bitcoin.KeyPair, workHash, workSecretHash bitwrk.Thash) error {
@@ -334,4 +337,15 @@ func SendTxMessageAcceptResult(txId string, identity *bitcoin.KeyPair) error {
 
 func normalize(s string) string {
 	return url.QueryEscape(strings.Replace(s, " ", "", -1))
+}
+
+func SendDepositAddressMessage(msg *bitwrk.DepositAddressMessage) error {
+	values := url.Values{}
+	msg.ToValues(values)
+	return postFormToServerExpectRedirect("account/"+msg.Participant, values.Encode())
+}
+
+func SendDeposit(deposit *bitwrk.Deposit) error {
+	msg := fmt.Sprintf("%v&signature=%v", deposit.Document, url.QueryEscape(deposit.Signature))
+	return postFormToServerExpectRedirect("deposit", msg)
 }

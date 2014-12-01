@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/money"
+	"io"
 	"strconv"
 	"time"
 )
@@ -113,6 +114,25 @@ func ParseDeposit(depositType, depositAccount, depositAmount, depositNonce, depo
 	}
 
 	return &deposit, nil
+}
+
+// Signs the deposit using the given key and random number sources.
+func (deposit *Deposit) SignWith(key *bitcoin.KeyPair, rand io.Reader, uid, nonce string) error {
+	doc := fmt.Sprintf(
+		"account=%s&amount=%s&nonce=%s&ref=%s&type=%v&uid=%s",
+		normalize(deposit.Account),
+		normalize(deposit.Amount.String()),
+		normalize(nonce),
+		normalize(deposit.Reference),
+		deposit.Type,
+		normalize(uid))
+	if sig, err := key.SignMessage(doc, rand); err != nil {
+		return err
+	} else {
+		deposit.Document = doc
+		deposit.Signature = sig
+		return nil
+	}
 }
 
 func (deposit *Deposit) Verify(trustedAccount string) error {
