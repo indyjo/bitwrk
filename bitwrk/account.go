@@ -92,6 +92,59 @@ func (m *DepositAddressMessage) VerifyWith(signer string) error {
 	return bitcoin.VerifySignatureBase64(m.document(), signer, m.Signature)
 }
 
+// Message placed in a participant's account by the participant himself.
+// It states that the particiant wishes to receive a new deposit address.
+// When URL-encoding, fields names are converted to lower-case and ordered alphabetically.
+type DepositAddressRequest struct {
+	Nonce       string // A nonce requested from the BitWrk service
+	Participant string // The account owner
+	Signer      string // The participant who signed the message, usually the account owner
+	Signature   string // Signature over the URL-encoded message (except the "Signature" field)
+}
+
+// Reads fields from an url.Values object. Does not perform any checking
+func (r *DepositAddressRequest) FromValues(values url.Values) {
+	r.Nonce = values.Get("nonce")
+	r.Participant = values.Get("participant")
+	r.Signer = values.Get("signer")
+	r.Signature = values.Get("signature")
+}
+
+// Places fields in an url.Values object.
+func (r *DepositAddressRequest) ToValues(values url.Values) {
+	values.Set("nonce", r.Nonce)
+	values.Set("participant", r.Participant)
+	values.Set("signer", r.Signer)
+	values.Set("signature", r.Signature)
+}
+
+// Returns the URL-encoded part of the request that is signed.
+// The "+" sign is encoded as "%20" to resolve an ambiguity with
+// javascript's encodeURIComponent.
+func (r *DepositAddressRequest) document() string {
+	values := url.Values{}
+	r.ToValues(values)
+	values.Del("signature")
+	return strings.Replace(values.Encode(), "+", "%20", -1)
+}
+
+// Signs the request using the specified key pair. Fields "Signer" and "Signature"
+// are modified.
+func (r *DepositAddressRequest) SignWith(key *bitcoin.KeyPair, rand io.Reader) error {
+	r.Signer = key.GetAddress()
+	if s, err := key.SignMessage(r.document(), rand); err != nil {
+		return err
+	} else {
+		r.Signature = s
+		return nil
+	}
+}
+
+// Verifies authenticity (or if fed with m.Signer, only integrity) of the request.
+func (r *DepositAddressRequest) VerifyWith(signer string) error {
+	return bitcoin.VerifySignatureBase64(r.document(), signer, r.Signature)
+}
+
 // Data stored once for each participant
 type ParticipantAccount struct {
 	Participant        string
@@ -99,6 +152,10 @@ type ParticipantAccount struct {
 	Available, Blocked money.Money
 	// Document containing URL-encoded DepositAddressMessage
 	DepositInfo string
+	// Timestamp of last DepositAddressMessage
+	LastDepositInfo time.Time
+	// Document containing URL-encoded DepositAddressRequest
+	DepositAddressRequest string
 }
 
 func (a *ParticipantAccount) GetAvailable() Account {
