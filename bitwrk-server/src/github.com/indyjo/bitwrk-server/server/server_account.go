@@ -27,13 +27,14 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 const accountViewHtml = `
 <!doctype html>
 <html>
 <head><title>View Account</title></head>
-<body {{if .DeveloperMode}}onload="getnonce()"{{end}}>
+<body>
 <table>
 <tr><th>Participant</th><td>{{.Account.Participant}}</td></tr>
 <tr><th>Available</th><td>{{.Account.Available}}</td></tr>
@@ -45,7 +46,17 @@ const accountViewHtml = `
 {{if .DeveloperMode}}
 <script src="/js/getnonce.js" ></script>
 <script src="/js/createdepositinfo.js" ></script>
+<script src="/js/requestdepositaddress.js" ></script>
 <script src="/js/getjson.js" ></script>
+<h1>Request Deposit Address</h1>
+<form method="post">
+<input id="rda_participant" type="text" name="participant" size="64" value="{{.Account.Participant}}" onchange="update()" /> &larr; Participant for whom to request a deposit address<br>
+<input id="rda_signer" type="text" name="signer" size="64" value="{{.Account.Participant}}" onclick="select()" onchange="update()" /> &larr; The signer of this request.<br>
+<input id="rda_nonce" type="hidden" name="nonce" onchange="update()"/> <br/>
+<input type="rda_text" name="signature" size="64" placeholder="Signature of parameters" />
+<button type="submit" name="action" value="requestdepositaddress">Request new deposit address</button>
+</form>
+<input id="rda_query" type="text" size="64" value="" onclick="select()" readonly/> &larr; Sign this text<br />
 <h1>Store Deposit Info</h1>
 <form method="post">
 <input id="depositaddress" type="text" name="depositaddress" size="64" placeholder="A Bitcoin address" onfocus="select()" onchange="update()" /> &larr; Bitcoin address for deposits<br>
@@ -53,11 +64,19 @@ const accountViewHtml = `
 <input id="signer" type="text" name="signer" size="64" value="{{.TrustedAccount}}" onclick="select()" onchange="update()" /> &larr; The signer of this message.<br>
 <input id="reference" type="text" name="reference" size="64" onclick="select()" onchange="update()" /> &larr; Reference information.<br>
 <input id="nonce" type="hidden" name="nonce" onchange="update()"/> <br/>
-<input type="text" name="signature" size="64" placeholder="Signature of query parameters" />
+<input type="text" name="signature" size="64" placeholder="Signature of parameters" />
 <button type="submit" name="action" value="storedepositinfo">Store deposit info</button>
 </form>
 <input id="query" type="text" size="64" value="" onclick="select()" readonly/> &larr; Sign this text<br />
-<script>update();</script>
+<script>
+	function update() {
+		updateDepositInfoSignature(document.getElementById("query"))
+		updateRequestDepositAddressSignature(document.getElementById("rda_query"))
+	}
+	update();
+	getNonceFor(document.getElementById("nonce"));
+	getNonceFor(document.getElementById("rda_nonce"));
+</script>
 {{else}}
 <form><button type="submit" name="developermode" value="on">Enable developer features</button></form>
 {{end}}
@@ -112,10 +131,21 @@ func handleAccount(w http.ResponseWriter, r *http.Request) {
 	} else if r.Method == "POST" {
 		c := appengine.NewContext(r)
 		c.Infof("Got POST for account: %v", accountId)
-		if err := storeDepositInfo(c, r, accountId); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		action := r.FormValue("action")
+		if action == "storedepositinfo" {
+			if err := storeDepositInfo(c, r, accountId); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			} else {
+				http.Redirect(w, r, r.RequestURI, http.StatusSeeOther)
+			}
+		} else if action == "requestdepositaddress" {
+			if err := requestDepositAddress(c, r, accountId); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			} else {
+				http.Redirect(w, r, r.RequestURI, http.StatusSeeOther)
+			}
 		} else {
-			http.Redirect(w, r, r.RequestURI, http.StatusFound)
+			http.Error(w, "invalid action: "+action, http.StatusInternalServerError)
 		}
 	} else {
 		http.Error(w, "Method not allowed: "+r.Method, http.StatusMethodNotAllowed)
@@ -132,6 +162,60 @@ func renderAccountHtml(w http.ResponseWriter, account *bitwrk.ParticipantAccount
 
 func renderAccountJson(w http.ResponseWriter, account *bitwrk.ParticipantAccount) (err error) {
 	return json.NewEncoder(w).Encode(*account)
+}
+
+func requestDepositAddress(c appengine.Context, r *http.Request, participant string) (err error) {
+	// Important: checking (and invalidating) the nonce must be the first thing we do!
+	err = checkNonce(c, r.FormValue("nonce"))
+	if CfgRequireValidNonce && err != nil {
+		return fmt.Errorf("Error in checkNonce: %v", err)
+	}
+
+	m := bitwrk.DepositAddressRequest{}
+	m.FromValues(r.Form)
+
+	if m.Participant != participant {
+		return fmt.Errorf("Participant must be %#v", participant)
+	}
+
+	if m.Signer != CfgTrustedAccount && m.Signer != participant {
+		return fmt.Errorf("Signer must be participant or %#v", CfgTrustedAccount)
+	}
+
+	// Verify that the request was indeed signed correctly
+	if CfgRequireValidSignature {
+		if err := m.VerifyWith(m.Signer); err != nil {
+			return fmt.Errorf("After verifying %#v against %v: %v", m, m.Signer, err)
+		}
+	}
+
+	f := func(c appengine.Context) error {
+		dao := db.NewGaeAccountingDao(c)
+		if account, err := dao.GetAccount(participant); err != nil {
+			return err
+		} else if account.DepositAddressRequest != "" {
+			return fmt.Errorf("There is a pending address request already.")
+		} else if account.LastDepositInfo.Add(24 * time.Hour).After(time.Now()) {
+			return fmt.Errorf("Next deposit address can be requested %v", account.LastDepositInfo.Add(24*time.Hour))
+		} else {
+			v := url.Values{}
+			m.ToValues(v)
+			account.DepositAddressRequest = v.Encode()
+			c.Infof("New deposit address request: %v", account.DepositAddressRequest)
+			if err := dao.SaveAccount(&account); err != nil {
+				return err
+			}
+		}
+		return dao.Flush()
+	}
+
+	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
+		// Transaction failed
+		c.Errorf("Transaction failed: %v", err)
+		return err
+	}
+
+	return
 }
 
 func storeDepositInfo(c appengine.Context, r *http.Request, participant string) (err error) {
@@ -175,6 +259,8 @@ func storeDepositInfo(c appengine.Context, r *http.Request, participant string) 
 			v := url.Values{}
 			m.ToValues(v)
 			account.DepositInfo = v.Encode()
+			account.LastDepositInfo = time.Now()
+			account.DepositAddressRequest = ""
 			c.Infof("New deposit info: %v", account.DepositInfo)
 			if err := dao.SaveAccount(&account); err != nil {
 				return err

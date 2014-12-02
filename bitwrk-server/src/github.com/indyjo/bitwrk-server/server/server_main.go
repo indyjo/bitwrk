@@ -31,6 +31,7 @@ func init() {
 	http.HandleFunc("/motd", handleMessageOfTheDay)
 	http.HandleFunc("/deposit", handleCreateDeposit)
 	http.HandleFunc("/deposit/", handleRenderDeposit)
+	http.HandleFunc("/query/accounts", handleQueryAccounts)
 	http.HandleFunc("/_ah/queue/place-bid", handlePlaceBid)
 	http.HandleFunc("/_ah/queue/retire-tx", handleRetireTransaction)
 	http.HandleFunc("/_ah/queue/retire-bid", handleRetireBid)

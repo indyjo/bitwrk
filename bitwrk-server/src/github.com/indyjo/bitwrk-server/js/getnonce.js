@@ -1,13 +1,15 @@
-function getnonce() {
+function getNonceFor(element) {
     var xhr = new XMLHttpRequest();
     xhr.open("GET", "/nonce");
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4){
-            var nonce = document.getElementById("nonce")
-            nonce.value = xhr.responseText
-            nonce.readOnly = true
+            element.value = xhr.responseText
+            element.readOnly = true
             update()
         }
     };
     xhr.send();
+}
+function getnonce() {
+    getNonceFor(document.getElementById("nonce"))
 }
