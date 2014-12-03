@@ -12,7 +12,7 @@ function showAlertBox(alertbox, alertcontent, alertclass, htmlcontent) {
 function newMessageUpdater(alertbox, content) {
 	var lastval = $.cookie("lastmotd");
 	var currentval = "";
-	alertbox.bind('closed.bs.alert', function() {
+	alertbox.find('button.close').on('click', function() {
 		lastval = currentval;
 		$.cookie("lastmotd", currentval, {
 			'expires' : 1,
