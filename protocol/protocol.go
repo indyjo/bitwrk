@@ -17,6 +17,7 @@
 package protocol
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -339,13 +340,39 @@ func normalize(s string) string {
 	return url.QueryEscape(strings.Replace(s, " ", "", -1))
 }
 
+func SendDepositAddressRequest(req *bitwrk.DepositAddressRequest) error {
+	values := url.Values{}
+	req.ToValues(values)
+	query := fmt.Sprintf("%s&action=requestdepositaddress", values.Encode())
+	return postFormToServerExpectRedirect("account/"+req.Participant, query)
+}
+
 func SendDepositAddressMessage(msg *bitwrk.DepositAddressMessage) error {
 	values := url.Values{}
 	msg.ToValues(values)
-	return postFormToServerExpectRedirect("account/"+msg.Participant, values.Encode())
+	query := fmt.Sprintf("%s&action=storedepositinfo", values.Encode())
+	return postFormToServerExpectRedirect("account/"+msg.Participant, query)
 }
 
 func SendDeposit(deposit *bitwrk.Deposit) error {
 	msg := fmt.Sprintf("%v&signature=%v", deposit.Document, url.QueryEscape(deposit.Signature))
 	return postFormToServerExpectRedirect("deposit", msg)
+}
+
+func GetParticipantsWithDepositAddressRequest(limit int) ([]string, error) {
+	if resp, err := getFromServer(fmt.Sprintf("query/accounts?requestdepositaddress=yes&limit=%v", limit)); resp != nil {
+		defer resp.Body.Close()
+		result := make([]string, 0, limit)
+		reader := bufio.NewReaderSize(resp.Body, 256)
+		for {
+			if line, _, err := reader.ReadLine(); err != nil {
+				break
+			} else {
+				result = append(result, string(line))
+			}
+		}
+		return result, nil
+	} else {
+		return nil, fmt.Errorf("Error GETting from server: %v", err)
+	}
 }
