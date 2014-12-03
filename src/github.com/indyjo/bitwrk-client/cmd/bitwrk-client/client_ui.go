@@ -17,11 +17,13 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	client "github.com/indyjo/bitwrk-client"
 	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-common/protocol"
 	"html/template"
 	"log"
 	"net/http"
@@ -37,6 +39,14 @@ var _homeTemplate *template.Template
 var _translations = map[string]string{
 	"page.home":    "Home",
 	"page.account": "Account",
+}
+
+func TEXT(s string) string {
+	if text, ok := _translations[s]; !ok {
+		return "¡" + s + "!"
+	} else {
+		return text
+	}
 }
 
 func initTemplates() {
@@ -66,7 +76,7 @@ func initTemplates() {
 				if s, ok := values[0].(string); !ok {
 					return "", errors.New("text() takes a string as first argument")
 				} else {
-					return _translations[s], nil
+					return TEXT(s), nil
 				}
 			},
 		}).ParseFiles(p)).Lookup("index.html")
@@ -85,16 +95,21 @@ type clientContext struct {
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request) {
+	var actionFunc func(*http.Request) error
 	if action := r.FormValue("action"); action == "permit" {
-		if err := handleGrantMandate(r); err != nil {
+		actionFunc = handleGrantMandate
+	} else if action != "" {
+		http.Error(w, fmt.Sprintf("Unrecognized form request: %v", action), http.StatusBadRequest)
+		return
+	}
+
+	if actionFunc != nil {
+		if err := actionFunc(r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		} else {
 			// Success! Send back to home page
 			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 		}
-		return
-	} else if action != "" {
-		http.Error(w, fmt.Sprintf("Unrecognized form request: %v", r.Form), http.StatusBadRequest)
 		return
 	}
 
@@ -177,6 +192,24 @@ func handleRevokeMandate(r *http.Request) error {
 		client.GetActivityManager().UnregisterMandate(client.ActivityKey(key))
 	}
 	return nil
+}
+
+
+// Simply forward the request to the BitWrk service
+func handleRequestDepositAddress(r *http.Request) error {
+	if nonce, err := protocol.GetNonce(); err != nil {
+		return err
+	} else {
+		req := &bitwrk.DepositAddressRequest{
+			Nonce:       nonce,
+			Participant: BitcoinIdentity.GetAddress(),
+		}
+		if err := req.SignWith(BitcoinIdentity, rand.Reader); err != nil {
+			return err
+		} else {
+			return protocol.SendDepositAddressRequest(req)
+		}
+	}
 }
 
 func handleWorkers(workerManager *client.WorkerManager, w http.ResponseWriter, r *http.Request) {

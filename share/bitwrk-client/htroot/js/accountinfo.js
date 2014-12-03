@@ -21,22 +21,36 @@ function updateAccountInfo() {
 function updateDepositInfo() {
 	var xhr = new XMLHttpRequest();
 	xhr.onreadystatechange = function() {
-		if (xhr.readyState === 4 && xhr.status == 200) {
+		if (xhr.readyState !== 4) {
+			return
+
+		}
+
+		$(".depositaddress-yes").addClass("hidden")
+		$(".depositaddress-no").addClass("hidden")
+		$(".depositaddressrequest-yes").addClass("hidden")
+		$(".depositaddressrequest-no").addClass("hidden")
+		if (xhr.status == 200) {
 			var myaccount = JSON.parse(xhr.responseText);
+
+			// Update state of deposit address display
 			if (myaccount.DepositAddressValid) {
 				$(".depositaddress-yes").removeClass("hidden")
-				$(".depositaddress-no").addClass("hidden")
 				$(".depositaddress").html(myaccount.DepositAddress)
 				$("a.depositaddress").attr("href",
 						"bitcoin:" + myaccount.DepositAddress)
 			} else {
-				$(".depositaddress-yes").addClass("hidden")
 				$(".depositaddress-no").removeClass("hidden")
 			}
+
+			// Update state of deposit address request display
+			if (myaccount.Account.DepositAddressRequest) {
+				$(".depositaddressrequest-yes").removeClass("hidden")
+			} else {
+				$(".depositaddressrequest-no").removeClass("hidden")
+			}
+
 			$(".trustedaccount").html(myaccount.TrustedAccount)
-		} else if (xhr.readyState === 4) {
-			$(".depositaddress-yes").addClass("hidden")
-			$(".depositaddress-no").removeClass("hidden")
 		}
 	};
 	xhr.open("GET", "/myaccount");

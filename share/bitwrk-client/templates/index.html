@@ -17,6 +17,7 @@
 {{define "js"}}
 <script src="/js/jquery-1.10.2.js" ></script>
 <script src="/js/jquery.cookie.js" ></script>
+<script src="/js/jquery.form.js" ></script>
 <script src="/js/bootstrap.min.js" ></script>
 <script src="/js/js-iso8601.js" ></script>
 <script src="/js/accountinfo.js" ></script>
@@ -31,12 +32,17 @@ function showAccountInfo() {
 	showIframeDialog('{{.ServerURL}}account/{{.ParticipantId}}');
 }
 $(document).ready(function() {
+	// correctly hide alerts
+	$("[data-hide]").on("click", function(){
+		$(this).closest("." + $(this).attr("data-hide")).hide();
+	});
 	setInterval(updateAccountInfo, 30000);
 	updateAccountInfo();
 	$("#motd").hide()
 	var updateMOTD = newMessageUpdater($("#motd"), $("#motd-content"));
 	setInterval(updateMOTD, 60 * 60 * 1000);
 	updateMOTD();
+	$("#alertbox").hide()
 });
 {{if .Page | eq "home"}}
 $(document).ready(function() {
@@ -51,6 +57,15 @@ $(document).ready(function() {
 $(document).ready(function() {
 	setInterval(updateDepositInfo, 30000)
 	updateDepositInfo()
+	var options = {
+		success: function() {
+			updateDepositInfo();
+		},
+		error: function(xhr) {
+			showAlertBox($('#alertbox'), $('#alertbox-content'), 'alert-danger', xhr.responseText);
+		}
+	};
+	$('#requestDepositAddressForm').ajaxForm(options);
 })
 {{end}}
 </script>
@@ -81,7 +96,11 @@ $(document).ready(function() {
 </nav>
 <div id="motd" class="alert alert-dismissable alert-info">Message from server:
 <span id="motd-content"></span>
-<button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+<button type="button" class="close" data-hide="alert" aria-hidden="true">&times;</button>
+</div>
+<div id="alertbox" class="alert alert-dismissable alert-info">
+<span id="alertbox-content"></span>
+<button type="button" class="close" data-hide="alert" aria-hidden="true">&times;</button>
 </div>
 </header>
 {{if .Page | eq "home"}}
@@ -148,22 +167,22 @@ on BitWrk service <em class="btn btn-default btn-xs">{{.ServerURL}}</em>.</p>
 <div class="panel panel-default">
 <div class="panel-heading">Deposits</div>
 <div class="panel-body">
-<div class="alert alert-warning" role="alert">This functionality hasn't been implemented yet.</div>
-<p class="lead">In order to buy on BitWrk, you need to deposit some amount of
- <a href="http://bitcoin.org">Bitcoin</a>.</p>
+<p class="lead">In order to buy on BitWrk, you need to deposit some amount of Bitcoin.</p>
 <p class="help-block">Deposits must be BTC 0.001 minimum. Smaller deposits will be ignored.</p>
-<form method="post" role="form" class="form-horizontal">
-<input type="hidden" name="action" value="requestdepositaddress">
+<form id="requestDepositAddressForm" action="/requestdepositaddress" method="post" role="form" class="form-horizontal">
 <div class="form-group">
 <label class="col-md-3 control-label">Deposit address:</label>
 <div class="col-md-9">
 <!-- JavaScript makes one visible, the other one invisible -->
 <div class="depositaddress-yes hidden"><p class="form-control-static"><a href="#" class="depositaddress text-info">_DEPOSIT_ADDRESS_</a></p></div>
-<div class="depositaddress-no"><p class="form-control-static text-warning">There is currently no deposit address associated with your account.</p></div>
+<div class="depositaddress-no hidden"><p class="form-control-static text-warning">There is currently no deposit address associated with your account.</p></div>
 </div>
 </div><!-- form-group -->
 <div class="form-group">
-<div class="col-md-offset-3 col-md-9"><button type="submit" class="btn btn-default">Request a new deposit address</button></div>
+<div class="col-md-offset-3 col-md-9">
+<div class="depositaddressrequest-yes hidden"><p class="form-control-static text-success">A new deposit address has been requested.</p></div>
+<div class="depositaddressrequest-no hidden"><button type="submit" class="btn btn-default">Request a new deposit address</button></div>
+</div>
 </div>
 </form>
 </div>

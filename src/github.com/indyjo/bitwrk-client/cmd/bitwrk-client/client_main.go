@@ -213,7 +213,8 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 		}
 	}
 	myAccountUrl := fmt.Sprintf("%saccount/%s", protocol.BitwrkUrl, BitcoinIdentity.GetAddress())
-	mux.Handle("/myaccount", NewHttpRelay("/myaccount", myAccountUrl, relay.client).WithFilterFunc(accountFilter))
+	myAccountRelay := NewHttpRelay("/myaccount", myAccountUrl, relay.client).WithFilterFunc(accountFilter)
+	mux.Handle("/myaccount", myAccountRelay)
 
 	resource := http.FileServer(http.Dir(path.Join(ResourceDir, "htroot")))
 	mux.Handle("/js/", resource)
@@ -244,6 +245,14 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux.HandleFunc("/revokemandate", func(w http.ResponseWriter, r *http.Request) {
 		if err := handleRevokeMandate(r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+	mux.HandleFunc("/requestdepositaddress", func(w http.ResponseWriter, r *http.Request) {
+		if err := handleRequestDepositAddress(r); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		} else {
+			// Account information is now stale
+			myAccountRelay.InvalidateCache()
 		}
 	})
 	mux.HandleFunc("/id", handleId)

@@ -91,6 +91,10 @@ func (r *HttpRelay) WithFilterFunc(f func(data []byte) ([]byte, error)) *HttpRel
 	return r.WithFilter(filterFunc(f))
 }
 
+func (r *HttpRelay) InvalidateCache() {
+	r.cached = nil
+}
+
 func (r *HttpRelay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	path := req.URL.Path
 	if !strings.HasPrefix(path, r.localPathPrefix) {

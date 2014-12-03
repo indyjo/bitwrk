@@ -1,3 +1,14 @@
+function showAlertBox(alertbox, alertcontent, alertclass, htmlcontent) {
+	alertcontent.html(htmlcontent);
+
+	alertbox.removeClass("alert-info");
+	alertbox.removeClass("alert-warning");
+	alertbox.removeClass("alert-danger");
+	alertbox.removeClass("alert-success");
+	alertbox.addClass(alertclass);
+	alertbox.fadeIn();
+}
+
 function newMessageUpdater(alertbox, content) {
 	var lastval = $.cookie("lastmotd");
 	var currentval = "";
@@ -15,22 +26,19 @@ function newMessageUpdater(alertbox, content) {
 				currentval = xhr.responseText;
 				if (currentval != lastval) {
 					var motd = JSON.parse(currentval)
-					content.html(motd.Text);
 
-					alertbox.removeClass("alert-info");
-					alertbox.removeClass("alert-warning");
-					alertbox.removeClass("alert-danger");
-					alertbox.removeClass("alert-success");
+					var alertclass;
 					if (motd.Error) {
-						alertbox.addClass("alert-danger");
+						alertclass = "alert-danger";
 					} else if (motd.Warning) {
-						alertbox.addClass("alert-warning");
+						alertclass = "alert-warning";
 					} else if (motd.Success) {
-						alertbox.addClass("alert-success");
+						alertclass = "alert-success";
 					} else {
-						alertbox.addClass("alert-info");
+						alertclass = "alert-info";
 					}
-					alertbox.fadeIn();
+
+					showAlertBox(alertbox, content, alertclass, motd.Text)
 				}
 			}
 		};
