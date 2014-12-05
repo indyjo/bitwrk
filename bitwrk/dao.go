@@ -19,12 +19,15 @@ package bitwrk
 import (
 	"errors"
 	"fmt"
+	"github.com/indyjo/bitwrk-common/money"
 )
 
 var ErrNoSuchObject = errors.New("No such object")
 var ErrKeyNotSet = errors.New("Key not set")
+var ErrNotTransactional = errors.New("Not a transactional DAO")
 
-// Interface to accounting
+// Abstracts the data store away. Many operations can be accomplished without
+// concrete knowledge about the underlying data store.
 type AccountingDao interface {
 	GetAccount(participant string) (ParticipantAccount, error)
 	SaveAccount(*ParticipantAccount) error
@@ -55,6 +58,8 @@ type CachedAccountingDao interface {
 type cachedAccountingDao struct {
 	// Underlying uncached DAO implementation.
 	delegate AccountingDao
+	// Whether the underlying DAO has transactional properties
+	transactional bool
 	// Cache all objects read _and_ written since the creation of the cached DAO.
 	accounts  map[string]ParticipantAccount
 	deposits  map[string]Deposit
@@ -65,9 +70,19 @@ type cachedAccountingDao struct {
 	savedMovements map[string]bool
 }
 
-func NewCachedAccountingDao(delegate AccountingDao) CachedAccountingDao {
+// Creates a new cached accounting DAO. This DAO provides the following benefits:
+// - Read-your-own-writes support for Google's datastore.
+// - Accounts get created on the fly in GetAccount
+// - Avoid unnecessary reads.
+// The transactional flag tells the cached dao whether it is save to perform
+// write-after-read operations. Passing true means that the Flush() method will
+// perform write-back of changed data. False means that Flush() will immediately
+// return ErrNotTransactional. All writes are purely ephemeral then and only affect
+// subsequent reads to this DAO instance.
+func NewCachedAccountingDao(delegate AccountingDao, transactional bool) CachedAccountingDao {
 	result := new(cachedAccountingDao)
 	result.delegate = delegate
+	result.transactional = transactional
 	result.accounts = make(map[string]ParticipantAccount)
 	result.deposits = make(map[string]Deposit)
 	result.movements = make(map[string]AccountMovement)
@@ -83,6 +98,17 @@ func (c *cachedAccountingDao) GetAccount(participant string) (account Participan
 	}
 
 	account, err = c.delegate.GetAccount(participant)
+	if err == ErrNoSuchObject {
+		// If no account exists under the specified name, create one
+		account = ParticipantAccount{
+			Participant: participant,
+			Available:   money.MustParse("BTC 0"),
+			Blocked:     money.MustParse("BTC 0"),
+		}
+		// Mark the account as changed so Flush() will save it
+		c.savedAccounts[participant] = true
+		err = nil
+	}
 	if err == nil {
 		c.accounts[participant] = account
 	}
@@ -147,6 +173,10 @@ func (c *cachedAccountingDao) SaveDeposit(uid string, deposit *Deposit) error {
 }
 
 func (c *cachedAccountingDao) Flush() error {
+	if !c.transactional {
+		return ErrNotTransactional
+	}
+
 	for k, _ := range c.savedAccounts {
 		account := c.accounts[k]
 		if err := c.delegate.SaveAccount(&account); err != nil {
