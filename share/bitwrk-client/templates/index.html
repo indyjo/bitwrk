@@ -20,6 +20,7 @@
 <script src="/js/jquery.form.js" ></script>
 <script src="/js/bootstrap.min.js" ></script>
 <script src="/js/js-iso8601.js" ></script>
+<script src="/js/qrcode.js" ></script>
 <script src="/js/accountinfo.js" ></script>
 <script src="/js/mandate-dialog.js" ></script>
 <script src="/js/iframe-dialog.js" ></script>
@@ -176,6 +177,12 @@ on BitWrk service <em class="btn btn-default btn-xs">{{.ServerURL}}</em>.</p>
 <!-- JavaScript makes one visible, the other one invisible -->
 <div class="depositaddress-yes hidden"><p class="form-control-static"><a href="#" class="depositaddress text-info">_DEPOSIT_ADDRESS_</a></p></div>
 <div class="depositaddress-no hidden"><p class="form-control-static text-warning">There is currently no deposit address associated with your account.</p></div>
+</div>
+</div><!-- form-group -->
+<div class="form-group depositaddress-yes hidden">
+<label class="col-md-3 control-label">QR-Code:</label>
+<div class="col-md-9">
+<div class="depositaddress-qr"></div>
 </div>
 </div><!-- form-group -->
 <div class="form-group">
