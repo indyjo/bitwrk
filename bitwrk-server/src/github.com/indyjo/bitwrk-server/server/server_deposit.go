@@ -136,12 +136,11 @@ func createDeposit(c appengine.Context, depositType, depositAccount, depositAmou
 	}
 
 	f := func(c appengine.Context) error {
-		dao := db.NewGaeAccountingDao(c)
+		dao := db.NewGaeAccountingDao(c, true)
 		if err := deposit.Place(depositUid, dao); err != nil {
 			return err
 		}
-		dao.Flush()
-		return nil
+		return dao.Flush()
 	}
 
 	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
@@ -174,7 +173,7 @@ func handleRenderDeposit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c := appengine.NewContext(r)
-	dao := db.NewGaeAccountingDao(c)
+	dao := db.NewGaeAccountingDao(c, false)
 
 	deposit, err := dao.GetDeposit(uid)
 	if err != nil {

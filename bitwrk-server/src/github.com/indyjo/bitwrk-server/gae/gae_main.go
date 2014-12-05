@@ -89,7 +89,7 @@ var ErrTransactionAlreadyRetired = fmt.Errorf("Transaction has already been reti
 func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 	var bidKey *datastore.Key
 	f := func(c appengine.Context) error {
-		dao := NewGaeAccountingDao(c)
+		dao := NewGaeAccountingDao(c, true)
 
 		if err := bid.CheckBalance(dao); err != nil {
 			return err
@@ -139,7 +139,7 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 func RetireBid(c appengine.Context, key *datastore.Key) error {
 	f := func(c appengine.Context) error {
 		now := time.Now()
-		dao := NewGaeAccountingDao(c)
+		dao := NewGaeAccountingDao(c, true)
 		var bid Bid
 		if err := datastore.Get(c, key, bidCodec{&bid}); err != nil {
 			return err
@@ -197,7 +197,7 @@ func RetireBid(c appengine.Context, key *datastore.Key) error {
 func RetireTransaction(c appengine.Context, key *datastore.Key) error {
 	f := func(c appengine.Context) error {
 		now := time.Now()
-		dao := NewGaeAccountingDao(c)
+		dao := NewGaeAccountingDao(c, true)
 		var tx Transaction
 		if err := datastore.Get(c, key, txCodec{&tx}); err != nil {
 			return err
@@ -232,7 +232,7 @@ func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, er
 
 	f := func(c appengine.Context) error {
 		txKey = nil
-		dao := NewGaeAccountingDao(c)
+		dao := NewGaeAccountingDao(c, true)
 
 		now := time.Now()
 		bid := new(Bid)

@@ -106,7 +106,7 @@ func handleAccount(w http.ResponseWriter, r *http.Request) {
 		}
 
 		c := appengine.NewContext(r)
-		dao := db.NewGaeAccountingDao(c)
+		dao := db.NewGaeAccountingDao(c, false)
 		var err error
 		account, err := dao.GetAccount(accountId)
 
@@ -190,7 +190,7 @@ func requestDepositAddress(c appengine.Context, r *http.Request, participant str
 	}
 
 	f := func(c appengine.Context) error {
-		dao := db.NewGaeAccountingDao(c)
+		dao := db.NewGaeAccountingDao(c, true)
 		if account, err := dao.GetAccount(participant); err != nil {
 			return err
 		} else if account.DepositAddressRequest != "" {
@@ -249,7 +249,7 @@ func storeDepositInfo(c appengine.Context, r *http.Request, participant string) 
 	}
 
 	f := func(c appengine.Context) error {
-		dao := db.NewGaeAccountingDao(c)
+		dao := db.NewGaeAccountingDao(c, true)
 		if account, err := dao.GetAccount(participant); err != nil {
 			return err
 		} else {

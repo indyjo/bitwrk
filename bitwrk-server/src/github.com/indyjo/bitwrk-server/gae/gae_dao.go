@@ -19,9 +19,8 @@ package gae
 import (
 	"appengine"
 	"appengine/datastore"
-	. "github.com/indyjo/bitwrk-common/bitwrk"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/money"
+	. "github.com/indyjo/bitwrk-common/bitwrk"
 )
 
 type gaeAccountingDao struct {
@@ -33,11 +32,7 @@ func (dao *gaeAccountingDao) GetAccount(participant string) (account Participant
 	key := AccountKey(dao.c, participant)
 	err = datastore.Get(dao.c, key, accountCodec{&account})
 	if err == datastore.ErrNoSuchEntity {
-		dao.c.Infof("Pulling account out of thin air: %v", participant)
-		account.Participant = participant
-		account.Available = money.MustParse("BTC 1")
-		account.Blocked = money.MustParse("BTC 0")
-		err = nil
+		err = ErrNoSuchObject
 	}
 
 	return
@@ -106,6 +101,6 @@ func (dao *gaeAccountingDao) SaveDeposit(uid string, deposit *Deposit) error {
 	return err
 }
 
-func NewGaeAccountingDao(c appengine.Context) CachedAccountingDao {
-	return NewCachedAccountingDao(&gaeAccountingDao{c: c})
+func NewGaeAccountingDao(c appengine.Context, transactional bool) CachedAccountingDao {
+	return NewCachedAccountingDao(&gaeAccountingDao{c: c}, transactional)
 }

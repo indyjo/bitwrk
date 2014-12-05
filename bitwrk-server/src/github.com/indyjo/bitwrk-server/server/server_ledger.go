@@ -70,7 +70,7 @@ func handleAccountMovement(w http.ResponseWriter, r *http.Request) {
 		}
 
 		c := appengine.NewContext(r)
-		dao := db.NewGaeAccountingDao(c)
+		dao := db.NewGaeAccountingDao(c, false)
 		var err error
 		movement, err := dao.GetMovement(movementKey)
 
