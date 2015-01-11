@@ -158,10 +158,12 @@ func (t *Trade) awaitTransaction(log bitwrk.Logger) error {
 	for count := 1; ; count++ {
 		if bid, etag, err := FetchBid(t.bidId, lastETag); err != nil {
 			return fmt.Errorf("Error in FetchBid awaiting transaction: %v", err)
-		} else if etag != lastETag {
+		} else {
+			if etag != lastETag || lastETag == "" {
+				log.Printf("Bid: %#v ETag: %v", t.bid, etag)
+			}
 			t.bid = bid
 			lastETag = etag
-			log.Printf("Bid: %#v", t.bid)
 		}
 
 		if t.bid.State == bitwrk.Matched {

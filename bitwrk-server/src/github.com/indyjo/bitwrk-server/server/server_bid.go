@@ -108,13 +108,14 @@ func handleRenderBid(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// ETag handling using status and content-type
-		etag := fmt.Sprintf("s%v-c%v", bid.State, contentType)
+		etag := fmt.Sprintf("\"s%v-c%v\"", bid.State, len(contentType))
 		if cachedEtag := r.Header.Get("If-None-Match"); cachedEtag == etag {
 			w.Header().Del("Content-Type")
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
 
+		w.Header().Set("X-ETag", etag)
 		w.Header().Set("ETag", etag)
 		w.Header().Set("Content-Type", contentType)
 		if contentType == "application/json" {
