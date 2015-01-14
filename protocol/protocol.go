@@ -134,6 +134,22 @@ func getJsonFromServer(relpath, etag string) (*http.Response, error) {
 	return defaultClient.Do(req)
 }
 
+func validETag(s string) (string, bool) {
+	return s, len(s) >= 2 && len(s) < 1024 && s[0] == '"' && s[len(s)-1] == '"' && s[len(s)-2] != '\\'
+}
+
+func getETag(response *http.Response) string {
+	if etag, ok := validETag(response.Header.Get("ETag")); ok {
+		return etag
+	} else if etag, ok := validETag(response.Header.Get("X-ETag")); ok {
+		// Fallback to X-ETag if that exists.
+		// See https://github.com/indyjo/bitwrk/issues/101
+		return etag
+	} else {
+		return ""
+	}
+}
+
 func FetchBid(bidId, etag string) (*bitwrk.Bid, string, error) {
 	var response *http.Response
 	if r, err := getJsonFromServer("bid/"+bidId, etag); err != nil {
@@ -149,7 +165,7 @@ func FetchBid(bidId, etag string) (*bitwrk.Bid, string, error) {
 		if err := decoder.Decode(&bid); err != nil {
 			return nil, "", err
 		}
-		return &bid, response.Header.Get("ETag"), nil
+		return &bid, getETag(response), nil
 	} else if response.StatusCode == http.StatusNotModified {
 		return nil, etag, nil
 	}
@@ -172,7 +188,7 @@ func FetchTx(txId, etag string) (*bitwrk.Transaction, string, error) {
 		if err := decoder.Decode(&tx); err != nil {
 			return nil, "", fmt.Errorf("Error decoding transaction JSON: %v", err)
 		}
-		return &tx, response.Header.Get("ETag"), nil
+		return &tx, getETag(response), nil
 	} else if response.StatusCode == http.StatusNotModified {
 		return nil, etag, nil
 	}
