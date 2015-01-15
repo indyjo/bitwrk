@@ -15,6 +15,7 @@ bursts of high need for computing power by continuously providing some computing
 virtually no cost.
 
 > Keep in touch with this project and be informed about news and updates:
+> **Web:** http://bitwrk.net/
 > **Facebook:** https://www.facebook.com/bitwrk
 > **Twitter:** https://twitter.com/BitWrk
 
@@ -24,6 +25,7 @@ experimental: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=ex
 
 What next?
 ----------
+- Visit BitWrk's website at http://bitwrk.net
 - For the impatient: Following the [Quick Start Instructions](QUICKSTART.md) gets you
   started in 5 minutes.
 - [About BitWrk](ABOUT.md) explains what BitWrk is and what it is meant to become.
@@ -34,7 +36,10 @@ What next?
 
 News
 ----
-- **2014-11-11:** Payment system integration is progressing. Required refactoring BitWrk into
+  - **2015-01-15:** News have moved to BitWrk's website: http://bitwrk.net
+  - **2014-12-30:** BitWrk was featured in a Lightning Talk by the lead developer on the
+  31st Chaos Communication Congress: https://www.youtube.com/watch?v=BHBe5g5KKiw
+  - **2014-11-11:** Payment system integration is progressing. Required refactoring BitWrk into
   separate projects:
   - **bitwrk** now contains code specific to client and server and may be refactored further at
   a later time.
@@ -74,4 +79,4 @@ or out of the BitWrk service. Thus, **no actual money can be made or lost.**
 Every new client account starts with **1 BTC virtual starting capital**.
 
 Have fun!
-2014-11-11, Jonas Eschenburg
+2015-ß1-15, Jonas Eschenburg
