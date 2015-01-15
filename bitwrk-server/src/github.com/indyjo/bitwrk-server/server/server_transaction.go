@@ -217,7 +217,7 @@ func handleTx(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ETag handling using transaction's revision number and content type
-	etag := fmt.Sprintf("r%v-c%v", tx.Revision, contentType)
+	etag := fmt.Sprintf("\"r%v-c%v\"", tx.Revision, len(contentType))
 	if cachedEtag := r.Header.Get("If-None-Match"); cachedEtag == etag {
 		w.Header().Del("Content-Type")
 		w.WriteHeader(http.StatusNotModified)

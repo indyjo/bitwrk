@@ -105,7 +105,7 @@ func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (ca
 		return nil, fmt.Errorf("Error establishing buyer: %v", err)
 	}
 
-	if err := a.waitForTransactionPhase(log.New("establishing"), bitwrk.PhaseTransmitting, bitwrk.PhaseBuyerEstablished); err != nil {
+	if err := a.waitForTransactionPhase(log.New("establishing"), bitwrk.PhaseTransmitting, bitwrk.PhaseEstablishing, bitwrk.PhaseSellerEstablished, bitwrk.PhaseBuyerEstablished); err != nil {
 		return nil, fmt.Errorf("Error awaiting TRANSMITTING phase: %v", err)
 	}
 

@@ -188,6 +188,7 @@ func (t *Trade) waitForTransactionPhase(log bitwrk.Logger, phase bitwrk.TxPhase,
 	t.waitWhile(func() bool {
 		currentPhase = t.tx.Phase
 		currentState = t.tx.State
+		log.Printf("Phase: %v - State: %v", currentPhase, currentState)
 		if currentState != bitwrk.StateActive {
 			return false
 		}
