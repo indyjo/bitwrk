@@ -228,6 +228,7 @@ func handleTx(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("ETag", etag)
+	w.Header().Set("X-ETag", etag)
 	if contentType == "application/json" {
 		err = renderTxJson(w, txId, tx)
 	} else {

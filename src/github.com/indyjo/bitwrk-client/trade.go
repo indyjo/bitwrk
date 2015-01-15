@@ -158,19 +158,16 @@ func (t *Trade) awaitTransaction(log bitwrk.Logger) error {
 	for count := 1; ; count++ {
 		if bid, etag, err := FetchBid(t.bidId, lastETag); err != nil {
 			return fmt.Errorf("Error in FetchBid awaiting transaction: %v", err)
-		} else {
-			if etag != lastETag || lastETag == "" {
-				log.Printf("Bid: %#v ETag: %v", t.bid, etag)
-			}
+		} else if bid != nil {
+			log.Printf("Bid: %#v ETag: %v lastETag: %v", *bid, etag, lastETag)
 			t.bid = bid
 			lastETag = etag
-		}
-
-		if t.bid.State == bitwrk.Matched {
-			t.txId = *t.bid.Transaction
-			break
-		} else if t.bid.State == bitwrk.Expired {
-			return ErrBidExpired
+			if t.bid.State == bitwrk.Matched {
+				t.txId = *t.bid.Transaction
+				break
+			} else if t.bid.State == bitwrk.Expired {
+				return ErrBidExpired
+			}
 		}
 
 		// Sleep for gradually longer durations
