@@ -428,10 +428,12 @@ def parse_args():
         MAX_COST=32*1024*1024*1024
     else:
         raise RuntimeError()
+
+    return args
         
 if __name__ == "__main__":
     try:
-        parse_args()
+        args = parse_args()
     except Exception as e:
         print(e)
         sys.exit(2)
