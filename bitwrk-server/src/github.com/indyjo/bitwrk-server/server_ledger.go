@@ -34,7 +34,17 @@ const movementViewHtml = `
 <body>
 <table>
 <tr><th>Time</th><td>{{.Timestamp}}</td></tr>
-<tr><th>Type</th><td>{{.Type}}</td></tr>
+<tr><th>Type</th><td>{{.Type}}
+{{if .BidKey}}
+&raquo; <a href="/bid/{{.BidKey}}">Bid</a>
+{{end}}
+{{if .TxKey}}
+&raquo; <a href="/tx/{{.TxKey}}">Tx</a>
+{{end}}
+{{if .DepositKey}}
+&raquo; <a href="/deposit/{{.DepositKey}}">Deposit</a>
+{{end}}
+</td></tr>
 <tr><th>Fee</th><td>{{.Fee}}</td></tr>
 <tr><th>World</th><td>{{.World}}</td></tr>
 <tr><th>Account</th><td><a href="/account/{{.AvailableAccount}}">{{.AvailableAccount}}</a></td></tr>

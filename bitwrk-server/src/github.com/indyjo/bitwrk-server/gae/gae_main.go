@@ -47,6 +47,10 @@ func DepositKey(c appengine.Context, uid string) *datastore.Key {
 	return datastore.NewKey(c, "Deposit", uid, 0, nil)
 }
 
+func DepositUid(key *datastore.Key) string {
+	return key.StringID()
+}
+
 // While in state "Placed", bid's have a corresponding entry in the
 // so-called "hot" zone, which allows for better transactional locality.
 //
@@ -103,7 +107,7 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 			bidKey = key
 		}
 
-		if err := bid.Book(dao); err != nil {
+		if err := bid.Book(dao, bidKey.Encode()); err != nil {
 			return err
 		}
 
@@ -169,7 +173,7 @@ func RetireBid(c appengine.Context, key *datastore.Key) error {
 			}
 		}
 
-		if err := bid.Retire(dao, now); err != nil {
+		if err := bid.Retire(dao, key.Encode(), now); err != nil {
 			return err
 		}
 
@@ -203,7 +207,7 @@ func RetireTransaction(c appengine.Context, key *datastore.Key) error {
 			return err
 		}
 
-		if err := tx.Retire(dao, now); err == ErrTooYoung {
+		if err := tx.Retire(dao, key.Encode(), now); err == ErrTooYoung {
 			return ErrTransactionTooYoung
 		} else if err == ErrAlreadyRetired {
 			return ErrTransactionAlreadyRetired
@@ -291,7 +295,7 @@ func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, er
 				buyerBid = otherBid
 			}
 
-			if err := tx.Book(dao, buyerBid); err != nil {
+			if err := tx.Book(dao, txKey.Encode(), buyerBid); err != nil {
 				return err
 			}
 		}

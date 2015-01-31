@@ -54,7 +54,7 @@ func (dao *gaeAccountingDao) GetMovement(key string) (movement AccountMovement, 
 	if err != nil {
 		return
 	}
-	err = datastore.Get(dao.c, k, movementCodec{&movement})
+	err = datastore.Get(dao.c, k, movementCodec{dao.c, &movement})
 	if err == datastore.ErrNoSuchEntity {
 		err = ErrNoSuchObject
 	}
@@ -67,7 +67,7 @@ func (dao *gaeAccountingDao) SaveMovement(movement *AccountMovement) (err error)
 	if err != nil {
 		return
 	}
-	_, err = datastore.Put(dao.c, key, movementCodec{movement})
+	_, err = datastore.Put(dao.c, key, movementCodec{dao.c, movement})
 	return
 }
 

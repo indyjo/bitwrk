@@ -17,6 +17,7 @@
 package gae
 
 import (
+	"appengine"
 	"appengine/datastore"
 	"fmt"
 	. "github.com/indyjo/bitwrk-common/bitwrk"
@@ -326,6 +327,7 @@ func (codec accountCodec) Save(c chan<- datastore.Property) error {
 }
 
 type movementCodec struct {
+	context  appengine.Context
 	movement *AccountMovement
 }
 
@@ -364,6 +366,17 @@ func (codec movementCodec) Load(c <-chan datastore.Property) error {
 			movement.Fee.Amount = p.Value.(int64)
 		case "World":
 			movement.World.Amount = p.Value.(int64)
+		case "BidKey":
+			s := p.Value.(*datastore.Key).Encode()
+			movement.BidKey = &s
+		case "TxKey":
+			s := p.Value.(*datastore.Key).Encode()
+			movement.TxKey = &s
+		case "DepositKey":
+			s := DepositUid(p.Value.(*datastore.Key))
+			movement.DepositKey = &s
+		case "WithdrawalKey":
+			panic("Loading withdrawal keys not implemented yet")
 		default:
 			return fmt.Errorf("Unknown property %s", p.Name)
 		}
@@ -400,6 +413,20 @@ func (codec movementCodec) Save(c chan<- datastore.Property) error {
 
 	c <- datastore.Property{Name: "Fee", Value: movement.Fee.Amount}
 	c <- datastore.Property{Name: "World", Value: movement.World.Amount}
+
+	if movement.BidKey != nil {
+		c <- datastore.Property{Name: "BidKey", Value: mustDecodeKey(movement.BidKey), NoIndex: true}
+	}
+	if movement.TxKey != nil {
+		c <- datastore.Property{Name: "TxKey", Value: mustDecodeKey(movement.TxKey), NoIndex: true}
+	}
+	if movement.DepositKey != nil {
+		c <- datastore.Property{Name: "DepositKey", Value: DepositKey(codec.context, *movement.DepositKey), NoIndex: true}
+	}
+	if movement.WithdrawalKey != nil {
+		panic("Storing withdrawal keys not yet implemented")
+	}
+
 	close(c)
 	return nil
 }
