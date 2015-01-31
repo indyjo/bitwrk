@@ -599,7 +599,7 @@ func NewTransaction(now time.Time, newKey, oldKey string, newBid, oldBid *Bid) *
 	return tx
 }
 
-func (tx *Transaction) Book(dao CachedAccountingDao, buyerBid *Bid) error {
+func (tx *Transaction) Book(dao CachedAccountingDao, txId string, buyerBid *Bid) error {
 	bidPrice := buyerBid.Price.Add(buyerBid.Fee)
 	txPrice := tx.Price.Add(tx.Fee)
 	delta := bidPrice.Sub(txPrice)
@@ -613,7 +613,8 @@ func (tx *Transaction) Book(dao CachedAccountingDao, buyerBid *Bid) error {
 	return PlaceAccountMovement(dao, tx.Matched, AccountMovementTransaction,
 		tx.Buyer, tx.Buyer,
 		delta, delta.Neg(),
-		zero, zero)
+		zero, zero,
+		nil, &txId, nil, nil)
 }
 
 var ErrTooYoung = fmt.Errorf("This transaction is too young to be retired")
@@ -622,7 +623,7 @@ var ErrAlreadyRetired = fmt.Errorf("Thid transaction has already been retired")
 // Retires the transaction and performs the necessary accounting steps.
 // Returns ErrTooYoung if the transaction is too young for retirement.
 // Returns ErrAlreadyRetired if the transaction has already been retired.
-func (tx *Transaction) Retire(dao AccountingDao, now time.Time) error {
+func (tx *Transaction) Retire(dao AccountingDao, txId string, now time.Time) error {
 	if tx.Price.Currency != tx.Fee.Currency {
 		panic("Inconsistent currencies")
 	}
@@ -640,12 +641,14 @@ func (tx *Transaction) Retire(dao AccountingDao, now time.Time) error {
 		err = PlaceAccountMovement(dao, now, AccountMovementTransactionFinish,
 			tx.Seller, tx.Buyer,
 			tx.Price, tx.Price.Add(tx.Fee).Neg(),
-			tx.Fee, zero)
+			tx.Fee, zero,
+			nil, &txId, nil, nil)
 	} else {
 		err = PlaceAccountMovement(dao, now, AccountMovementTransactionFinish,
 			tx.Buyer, tx.Buyer,
 			tx.Price.Add(tx.Fee), tx.Price.Add(tx.Fee).Neg(),
-			money.Money{Currency: tx.Price.Currency, Amount: 0}, zero)
+			money.Money{Currency: tx.Price.Currency, Amount: 0}, zero,
+			nil, &txId, nil, nil)
 	}
 	if err != nil {
 		return err

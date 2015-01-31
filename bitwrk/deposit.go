@@ -183,7 +183,8 @@ func (deposit *Deposit) Place(uid string, dao AccountingDao) (err error) {
 	err = PlaceAccountMovement(dao, deposit.Created, amType,
 		deposit.Account, deposit.Account,
 		deposit.Amount, zero,
-		zero, deposit.Amount.Neg())
+		zero, deposit.Amount.Neg(),
+		nil, nil, &uid, nil)
 	if err != nil {
 		return
 	}

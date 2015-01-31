@@ -207,7 +207,9 @@ type AccountMovement struct {
 	Fee   money.Money // Money immediately collectable by site owner
 	World money.Money // Money delta for the rest of the world
 
-	//BidKey, TransactionKey *string
+	// References to the entities that caused the movement
+	BidKey, TxKey             *string
+	DepositKey, WithdrawalKey *string
 }
 
 // Places a new account movement between the given accounts, in a
@@ -219,7 +221,8 @@ func PlaceAccountMovement(
 	mType AccountMovementType,
 	availableParticipant, blockedParticipant string,
 	availableDelta, blockedDelta,
-	fee money.Money, world money.Money,
+	fee, world money.Money,
+	bidKey, txKey, depositKey, withdrawalKey *string,
 ) error {
 	m := new(AccountMovement)
 	m.Timestamp = now
@@ -230,6 +233,10 @@ func PlaceAccountMovement(
 	m.BlockedAccount = blockedParticipant
 	m.Fee = fee
 	m.World = world
+	m.BidKey = bidKey
+	m.TxKey = txKey
+	m.DepositKey = depositKey
+	m.WithdrawalKey = withdrawalKey
 
 	if err := m.Validate(); err != nil {
 		return err
@@ -296,11 +303,11 @@ const (
 func (t AccountMovementType) String() string {
 	switch t {
 	case AccountMovementPayIn:
-		return "PAYIN"
+		return "DEPOSIT"
 	case AccountMovementPayOut:
-		return "PAYOUT"
+		return "WITHDRAWAL"
 	case AccountMovementPayOutReimburse:
-		return "PAYOUT_REIMBURSE"
+		return "WITHDRAWAL_REIMBURSE"
 	case AccountMovementBid:
 		return "BID"
 	case AccountMovementBidReimburse:

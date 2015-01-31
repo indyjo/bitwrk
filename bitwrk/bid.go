@@ -178,7 +178,7 @@ func (bid *Bid) CheckBalance(dao AccountingDao) error {
 	return nil
 }
 
-func (bid *Bid) Book(dao CachedAccountingDao) error {
+func (bid *Bid) Book(dao CachedAccountingDao, key string) error {
 	if bid.Type == Sell {
 		return nil
 	}
@@ -188,10 +188,12 @@ func (bid *Bid) Book(dao CachedAccountingDao) error {
 	return PlaceAccountMovement(dao, bid.Created, AccountMovementBid,
 		bid.Participant, bid.Participant,
 		priceIncludingFee.Neg(), priceIncludingFee,
-		zero, zero)
+		zero, zero,
+		&key, nil, nil, nil,
+		)
 }
 
-func (bid *Bid) Retire(dao AccountingDao, now time.Time) error {
+func (bid *Bid) Retire(dao AccountingDao, key string, now time.Time) error {
 	if bid.State != Placed && bid.State != InQueue {
 		// Only reimburse unmatched bids
 		return nil
@@ -207,7 +209,8 @@ func (bid *Bid) Retire(dao AccountingDao, now time.Time) error {
 	if err := PlaceAccountMovement(dao, now, AccountMovementBidReimburse,
 		bid.Participant, bid.Participant,
 		price, price.Neg(),
-		zero, zero); err != nil {
+		zero, zero,
+		&key, nil, nil, nil); err != nil {
 		return err
 	}
 
