@@ -78,4 +78,4 @@ As of version 0.4.1:
   exchange and to keep them busy.
 
 Have fun!
-2015-ß1-15, Jonas Eschenburg
+2015-01-15, Jonas Eschenburg
