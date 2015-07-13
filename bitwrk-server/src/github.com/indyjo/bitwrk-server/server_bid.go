@@ -206,7 +206,14 @@ func enqueueBid(c appengine.Context, w http.ResponseWriter, r *http.Request) (er
 		return fmt.Errorf("Error in db.EnqueueBid: %v", err)
 	}
 
+	// Send headers to client
 	redirectToBid(bidKey, w, r)
+	
+	// Trigger batch processing
+	if err := db.TriggerBatchProcessing(c, bid.Article); err != nil {
+		c.Errorf("Batch processing bids failed: %v", err)
+	}
+
 	return
 }
 

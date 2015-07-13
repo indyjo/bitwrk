@@ -23,6 +23,7 @@ import (
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"hash/crc32"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -54,6 +55,15 @@ func addTaskForArticle(c appengine.Context,
 		c.Errorf("[Queue %v] Error scheduling '%v' at %v: %v", queue, task.Name, task.ETA, err)
 	}
 	return
+}
+
+func addApplyChangesTask(c appengine.Context, article bitwrk.ArticleId, matched time.Time, matchedBids []string, placedBids []string) error {
+	matchedBidKeysString := strings.Join(matchedBids, " ")
+	placedBidKeysString := strings.Join(placedBids, " ")
+	c.Infof("Scheduling for PLACED: %v", placedBidKeysString)
+	c.Infof("Scheduling for MATCHED: %v", matchedBidKeysString)
+	return addTaskForArticle(c, article, "apply-changes", "", time.Time{}, time.Duration(0),
+		url.Values{"matched": {matchedBidKeysString}, "placed": {placedBidKeysString}, "timestamp": {matched.Format(time.RFC3339Nano)}})
 }
 
 func addRetireTransactionTask(c appengine.Context, txKey string, tx *bitwrk.Transaction) error {

@@ -24,3 +24,5 @@ queue:
 - name: worker-7
   rate: 25/s
   max_concurrent_requests: 1
+- name: hotbids
+  mode: pull

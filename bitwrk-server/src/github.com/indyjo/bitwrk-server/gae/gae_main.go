@@ -19,9 +19,11 @@ package gae
 import (
 	"appengine"
 	"appengine/datastore"
+	"appengine/memcache"
+	"appengine/taskqueue"
+	"encoding/json"
 	"fmt"
 	. "github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/money"
 	"time"
 )
 
@@ -38,40 +40,12 @@ func AccountKey(c appengine.Context, participant string) *datastore.Key {
 	return datastore.NewKey(c, "Account", participant, 0, nil)
 }
 
-func BidKey(c appengine.Context, bidId string) (key *datastore.Key, err error) {
-	key, err = datastore.DecodeKey(bidId)
-	return
-}
-
 func DepositKey(c appengine.Context, uid string) *datastore.Key {
 	return datastore.NewKey(c, "Deposit", uid, 0, nil)
 }
 
 func DepositUid(key *datastore.Key) string {
 	return key.StringID()
-}
-
-// While in state "Placed", bid's have a corresponding entry in the
-// so-called "hot" zone, which allows for better transactional locality.
-//
-// Each trade article has exactly one hot zone.
-//
-// Only those informations necessary for matching and expiration are
-// held in a HotBid. When matched or expired, the HotBid is deleted from
-// the hot zone.
-type hotBid struct {
-	BidKey  *datastore.Key
-	Type    BidType
-	Price   money.Money
-	Expires time.Time
-}
-
-func newHotBid(key *datastore.Key, bid *Bid) *hotBid {
-	return &hotBid{
-		BidKey:  key,
-		Type:    bid.Type,
-		Price:   bid.Price,
-		Expires: bid.Expires}
 }
 
 func GetBid(c appengine.Context, bidId string) (bid *Bid, err error) {
@@ -86,7 +60,7 @@ func GetBid(c appengine.Context, bidId string) (bid *Bid, err error) {
 
 var ErrLimitReached = fmt.Errorf("Limit of objects reached")
 var ErrElementsSkipped = fmt.Errorf("Some elements were skipped")
-var ErrTransactionTooYoung = fmt.Errorf("Transcation is too young to be retired")
+var ErrTransactionTooYoung = fmt.Errorf("Transaction is too young to be retired")
 var ErrTransactionAlreadyRetired = fmt.Errorf("Transaction has already been retired")
 
 // Transactional function to enqueue a bid, while keeping accounts in balance
@@ -111,11 +85,20 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 			return err
 		}
 
-		if err := addPlaceBidTask(c, bidKey.Encode(), bid); err != nil {
-			return err
-		}
 		if err := addRetireBidTask(c, bidKey.Encode(), bid); err != nil {
 			return err
+		}
+
+		// Encode the new bid as a hotBid and put it into a pull queue
+		hot := newHotBid(bidKey, bid)
+		if bytes, err := json.Marshal(*hot); err != nil {
+			return err
+		} else {
+			var task taskqueue.Task
+			task.Method = "PULL"
+			task.Payload = bytes
+			task.Tag = string(bid.Article)
+			taskqueue.Add(c, &task, "hotbids")
 		}
 
 		return dao.Flush()
@@ -125,18 +108,48 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 		return nil, err
 	}
 
-	// Attempt to match the new bid right away. If unsuccessful, that's no problem. A task has already
-	// been entered into the task queue that will repeat the operation.
-	time.Sleep(250 * time.Millisecond)
-	if txKey, err := TryMatchBid(c, bidKey); err != nil {
-		c.Warningf("Opportunistic matching failed: %v", err)
-	} else if txKey == nil {
-		c.Infof("Opportunistic matching yields no match")
-	} else {
-		c.Infof("Opportunistic matching yields txId %v", txKey.Encode())
-	}
-
 	return bidKey, nil
+}
+
+func TriggerBatchProcessing(c appengine.Context, article ArticleId) error {
+	// Instead of submitting a task to match incoming bids, resulting in one task per bid,
+	// we collect bids for up to two seconds and batch-process them afterwards.
+	semaphoreKey := "semaphore-" + string(article)
+	if semaphore, err := memcache.Increment(c, semaphoreKey, 2, 0); err != nil {
+		return err
+	} else if semaphore >= 4 {
+		c.Infof("Batch processing already triggered for article %v", article)
+		memcache.IncrementExisting(c, semaphoreKey, -2)
+		return nil
+	} else {
+		// Wait till it's our turn
+		for semaphore == 3 {
+			c.Infof("Waiting for batch semaphore release...")
+			time.Sleep(250 * time.Millisecond)
+			if s, err := memcache.IncrementExisting(c, semaphoreKey, 0); err != nil {
+				return err
+			} else {
+				semaphore = s
+			}
+		}
+		memcache.IncrementExisting(c, semaphoreKey, -1)
+		c.Infof("Starting batch processing...")
+		
+		// Second stage: process data and wait
+		time_before := time.Now()
+		deadline := time_before.Add(1 * time.Second)
+		matchingErr := MatchIncomingBids(c, article)
+		time_after := time.Now()
+		if time_after.Before(deadline) {
+			delay := deadline.Sub(time_after)
+			c.Infof("Batch processing took %v. Sleeping for %v", time_after.Sub(time_before), delay)
+			time.Sleep(delay)
+		} else {
+			c.Warningf("Batch processing took %v. Dealine exceeded!", time_after.Sub(time_before))
+		}
+		memcache.IncrementExisting(c, semaphoreKey, -1)
+		return matchingErr 
+	}
 }
 
 // This will reimburse the bid's price and fee to the buyer.
@@ -152,25 +165,6 @@ func RetireBid(c appengine.Context, key *datastore.Key) error {
 		if bid.State == Matched {
 			c.Infof("Not retiring matched bid %v", key)
 			return nil
-		}
-
-		// Delete any associated "hot" bids
-		if bid.State == Placed {
-			query := datastore.NewQuery("HotBid").KeysOnly()
-			query = query.Ancestor(ArticleKey(c, bid.Article))
-			query = query.Filter("BidKey=", key)
-			iter := query.Run(c)
-			for {
-				if hotKey, err := iter.Next(nil); err == datastore.Done {
-					break
-				} else if err != nil {
-					return err
-				} else {
-					if err := datastore.Delete(c, hotKey); err != nil {
-						return err
-					}
-				}
-			}
 		}
 
 		if err := bid.Retire(dao, key.Encode(), now); err != nil {
@@ -189,6 +183,37 @@ func RetireBid(c appengine.Context, key *datastore.Key) error {
 	}
 
 	return nil
+}
+
+// Marks a bid as placed. This is purely informational for the user.
+func PlaceBid(c appengine.Context, bidId string) error {
+	var key *datastore.Key
+	if k, err := datastore.DecodeKey(bidId); err != nil {
+		return err
+	} else {
+		key = k
+	}
+	
+	f := func(c appengine.Context) error {
+		var bid Bid
+		if err := datastore.Get(c, key, bidCodec{&bid}); err != nil {
+			return err
+		}
+
+		if bid.State != InQueue {
+			c.Infof("Not placing bid %v : State=%v", key, bid.State)
+			return nil
+		}
+		
+		bid.State = Placed
+
+		if _, err := datastore.Put(c, key, bidCodec{&bid}); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return datastore.RunInTransaction(c, f, nil)
 }
 
 // Transactions in phase FINISHED will cause the price to be credited on the seller's
@@ -223,125 +248,6 @@ func RetireTransaction(c appengine.Context, key *datastore.Key) error {
 	}
 
 	return datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true})
-}
-
-// Transactional function called by queue handler.
-// Queries for matching "hot" bids.
-// When a matching bid exists, creates the corresponding
-// transaction and marks both bids as MATCHED. Otherwise, the
-// bid is marked as PLACED, and a "hot waiting for other bids
-// to match it.
-func TryMatchBid(c appengine.Context, bidKey *datastore.Key) (*datastore.Key, error) {
-	var txKey *datastore.Key
-
-	f := func(c appengine.Context) error {
-		txKey = nil
-		dao := NewGaeAccountingDao(c, true)
-
-		now := time.Now()
-		bid := new(Bid)
-		if err := datastore.Get(c, bidKey, bidCodec{bid}); err != nil {
-			return err
-		}
-		if bid.State != InQueue {
-			// Nothing to do anymore! Can happen under some circumstances.
-			c.Infof("Bid %v already placed.", bidKey.Encode())
-			return nil
-		}
-		query := datastore.NewQuery("HotBid")
-		query = query.Ancestor(ArticleKey(c, bid.Article))
-		if bid.Type == Buy {
-			query = query.Filter("Type=", Sell).Filter("Price<=", bid.Price.Amount).Order("Price")
-		} else {
-			query = query.Filter("Type=", Buy).Filter("Price>=", bid.Price.Amount).Order("-Price")
-		}
-
-		if otherKey, otherBid, err := findValidBid(c, query.Run(c), now); err != nil {
-			// Error searching for matching partner
-			return err
-		} else if otherKey == nil {
-			// No other bid found. Mark bid as placed and put a hot bid into the datastore.
-			bid.State = Placed
-			hot := newHotBid(bidKey, bid)
-			if _, err := datastore.Put(c, datastore.NewIncompleteKey(c, "HotBid", ArticleKey(c, bid.Article)), hotBidCodec{hot}); err != nil {
-				return err
-			}
-		} else {
-			tx := NewTransaction(now, bidKey.Encode(), otherKey.Encode(), bid, otherBid)
-			if key, err := datastore.Put(c, datastore.NewIncompleteKey(c, "Tx", ArticleKey(c, bid.Article)), txCodec{tx}); err != nil {
-				// Error writing transaction
-				return err
-			} else {
-				txKey = key
-				txKeyEncoded := txKey.Encode()
-
-				otherBid.Transaction = &txKeyEncoded
-				if _, err := datastore.Put(c, otherKey, bidCodec{otherBid}); err != nil {
-					// Error writing other bid
-					return err
-				}
-
-				if err := addRetireTransactionTask(c, txKeyEncoded, tx); err != nil {
-					return err
-				}
-
-				bid.Transaction = &txKeyEncoded
-			}
-
-			var buyerBid *Bid
-			if bid.Type == Buy {
-				buyerBid = bid
-			} else {
-				buyerBid = otherBid
-			}
-
-			if err := tx.Book(dao, txKey.Encode(), buyerBid); err != nil {
-				return err
-			}
-		}
-
-		if _, err := datastore.Put(c, bidKey, bidCodec{bid}); err != nil {
-			// Writing back bid failed
-			return err
-		}
-
-		return dao.Flush()
-	}
-
-	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
-		// Transaction failed
-		return nil, err
-	}
-
-	return txKey, nil
-}
-
-// Finds the first matching hot bid in the list, and deletes it. Then, returns
-// the corresponding "real" bid.
-func findValidBid(c appengine.Context, iter *datastore.Iterator, now time.Time) (*datastore.Key, *Bid, error) {
-	for {
-		var hot hotBid
-		key, e := iter.Next(hotBidCodec{&hot})
-		if e == datastore.Done {
-			break
-		} else if e != nil {
-			// Error case
-			return nil, nil, e
-		}
-
-		if now.Before(hot.Expires) {
-			if err := datastore.Delete(c, key); err != nil {
-				return nil, nil, err
-			}
-
-			var bid Bid
-			if err := datastore.Get(c, hot.BidKey, bidCodec{&bid}); err != nil {
-				return nil, nil, err
-			}
-			return hot.BidKey, &bid, nil
-		}
-	}
-	return nil, nil, nil
 }
 
 func GetTransaction(c appengine.Context, key *datastore.Key) (*Transaction, error) {

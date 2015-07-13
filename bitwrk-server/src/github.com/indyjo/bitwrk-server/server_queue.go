@@ -21,6 +21,8 @@ import (
 	"appengine/datastore"
 	db "github.com/indyjo/bitwrk-server/gae"
 	"net/http"
+	"strings"
+	"time"
 )
 
 func mustDecodeKey(s string) *datastore.Key {
@@ -30,27 +32,6 @@ func mustDecodeKey(s string) *datastore.Key {
 		return key
 	}
 	return nil // never reached
-}
-
-func handlePlaceBid(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	c := appengine.NewContext(r)
-	bidKeyString := r.FormValue("bid")
-	bidKey := mustDecodeKey(bidKeyString)
-	c.Infof("Placing bid %v (%v)", bidKeyString, bidKey)
-	if txKey, err := db.TryMatchBid(c, bidKey); err != nil {
-		c.Errorf("Error placing bid: %v", err)
-		http.Error(w, "Error placing Bid", http.StatusInternalServerError)
-	} else {
-		c.Infof("Successfully placed!")
-		if txKey != nil {
-			c.Infof(" -> Transaction: %v", txKey.Encode())
-		}
-	}
 }
 
 func handleRetireTransaction(w http.ResponseWriter, r *http.Request) {
@@ -86,5 +67,46 @@ func handleRetireBid(w http.ResponseWriter, r *http.Request) {
 	if err := db.RetireBid(c, key); err != nil {
 		c.Warningf("Error retiring bid: %v", err)
 		http.Error(w, "Error retiring bid", http.StatusInternalServerError)
+	}
+}
+
+func handleApplyChanges(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	c := appengine.NewContext(r)
+	c.Infof("Placing bids: %v", r.FormValue("placed"))
+	placedKeys := strings.Split(r.FormValue("placed"), " ")
+	if len(placedKeys) == 1 && placedKeys[0] == "" {
+		placedKeys = []string{}
+	}
+	
+	for _, key := range placedKeys {
+		if err := db.PlaceBid(c, key); err != nil {
+			c.Errorf("Couldn't place bid %v: %v", key, err)
+		}
+	}
+	
+	c.Infof("Creating transactions for: %v", r.FormValue("matched"))
+	bidKeys := strings.Split(r.FormValue("matched"), " ")
+	if len(bidKeys) == 1 && bidKeys[0] == "" {
+		bidKeys = []string{}
+	}
+	var timestamp time.Time
+	if t, err := time.Parse(time.RFC3339Nano, r.FormValue("timestamp")); err != nil {
+		c.Errorf("Couldn't parse time '%v': %v", r.FormValue("timestamp"), err)
+		return
+	} else {
+		timestamp = t
+	}
+	
+	for len(bidKeys) != 0 {
+		newKey, oldKey := bidKeys[0], bidKeys[1]
+		bidKeys = bidKeys[2:]
+		if err := db.MatchBids(c, timestamp, newKey, oldKey); err != nil {
+			c.Errorf("Couldn't match bids %v and %v: %v", newKey, oldKey, err)
+		}
 	}
 }

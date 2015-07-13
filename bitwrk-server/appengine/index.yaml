@@ -13,6 +13,11 @@ indexes:
 - kind: HotBid
   ancestor: yes
   properties:
+  - name: Expires
+
+- kind: HotBid
+  ancestor: yes
+  properties:
   - name: Type
   - name: Price
 
