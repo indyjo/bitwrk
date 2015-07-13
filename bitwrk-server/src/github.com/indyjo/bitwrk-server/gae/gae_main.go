@@ -115,40 +115,28 @@ func TriggerBatchProcessing(c appengine.Context, article ArticleId) error {
 	// Instead of submitting a task to match incoming bids, resulting in one task per bid,
 	// we collect bids for up to two seconds and batch-process them afterwards.
 	semaphoreKey := "semaphore-" + string(article)
-	if semaphore, err := memcache.Increment(c, semaphoreKey, 2, 0); err != nil {
+	if semaphore, err := memcache.Increment(c, semaphoreKey, 1, 0); err != nil {
 		return err
-	} else if semaphore >= 4 {
+	} else if semaphore >= 2 {
 		c.Infof("Batch processing already triggered for article %v", article)
-		memcache.IncrementExisting(c, semaphoreKey, -2)
+		memcache.IncrementExisting(c, semaphoreKey, -1)
 		return nil
 	} else {
-		// Wait till it's our turn
-		for semaphore == 3 {
-			c.Infof("Waiting for batch semaphore release...")
-			time.Sleep(250 * time.Millisecond)
-			if s, err := memcache.IncrementExisting(c, semaphoreKey, 0); err != nil {
-				return err
-			} else {
-				semaphore = s
-			}
-		}
-		memcache.IncrementExisting(c, semaphoreKey, -1)
+		time.Sleep(1 * time.Second)
 		c.Infof("Starting batch processing...")
-		
-		// Second stage: process data and wait
+		memcache.IncrementExisting(c, semaphoreKey, -1)
 		time_before := time.Now()
-		deadline := time_before.Add(1 * time.Second)
 		matchingErr := MatchIncomingBids(c, article)
 		time_after := time.Now()
-		if time_after.Before(deadline) {
-			delay := deadline.Sub(time_after)
-			c.Infof("Batch processing took %v. Sleeping for %v", time_after.Sub(time_before), delay)
-			time.Sleep(delay)
+		duration := time_after.Sub(time_before)
+		if duration > 1000*time.Millisecond {
+			c.Errorf("Batch processing finished after %v. Limit exceeded!", duration)
+		} else if duration > 500*time.Millisecond {
+			c.Warningf("Batch processing finished after %v. Limit in danger.", duration)
 		} else {
-			c.Warningf("Batch processing took %v. Dealine exceeded!", time_after.Sub(time_before))
+			c.Infof("Batch processing finished after %v.", duration)
 		}
-		memcache.IncrementExisting(c, semaphoreKey, -1)
-		return matchingErr 
+		return matchingErr
 	}
 }
 
@@ -193,7 +181,7 @@ func PlaceBid(c appengine.Context, bidId string) error {
 	} else {
 		key = k
 	}
-	
+
 	f := func(c appengine.Context) error {
 		var bid Bid
 		if err := datastore.Get(c, key, bidCodec{&bid}); err != nil {
@@ -204,7 +192,7 @@ func PlaceBid(c appengine.Context, bidId string) error {
 			c.Infof("Not placing bid %v : State=%v", key, bid.State)
 			return nil
 		}
-		
+
 		bid.State = Placed
 
 		if _, err := datastore.Put(c, key, bidCodec{&bid}); err != nil {

@@ -151,7 +151,7 @@ func (codec hotBidCodec) Save(c chan<- datastore.Property) error {
 		c <- datastore.Property{Name: "Currency", Value: bid.Price.Currency.String()}
 	}
 	c <- datastore.Property{Name: "Price", Value: bid.Price.Amount}
-	c <- datastore.Property{Name: "Expires", Value: time.Time(bid.Expires), NoIndex: true}
+	c <- datastore.Property{Name: "Expires", Value: time.Time(bid.Expires)}
 	close(c)
 	return nil
 }
