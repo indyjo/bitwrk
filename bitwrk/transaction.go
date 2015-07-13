@@ -556,10 +556,22 @@ func handleTransmitFinished(tx *Transaction, arguments map[string]string) error 
 	return nil
 }
 
-func NewTransaction(now time.Time, newKey, oldKey string, newBid, oldBid *Bid) *Transaction {
+func NewTransaction(now time.Time, newKey, oldKey string, newBid, oldBid *Bid) (*Transaction, error) {
 	// sanity checks
-	if oldBid.Type == newBid.Type || oldBid.Price.Currency != newBid.Price.Currency {
-		panic("Non-matching bids")
+	if oldBid.Type == newBid.Type || oldBid.Price.Currency != newBid.Price.Currency || oldBid.Article != newBid.Article {
+		return nil, fmt.Errorf("Non-matching bids: \n\t%v\n\t%v", newBid, oldBid)
+	}
+	if oldBid.State != Placed {
+		return nil, fmt.Errorf("Older bid must be in state Matched, but is: %v", oldBid.State)
+	}
+	if newBid.State != InQueue {
+		return nil, fmt.Errorf("Newer bid must be in state InQueue, but is: %v", newBid.State)
+	}
+	if !oldBid.Expires.After(now) {
+		return nil, fmt.Errorf("Older bid expired %v", oldBid.Expires)
+	}
+	if !newBid.Expires.After(now) {
+		return nil, fmt.Errorf("Newer bid expired %v", newBid.Expires)
 	}
 
 	tx := &Transaction{
@@ -596,7 +608,7 @@ func NewTransaction(now time.Time, newKey, oldKey string, newBid, oldBid *Bid) *
 	oldBid.Matched = &now
 	oldBid.State = Matched
 
-	return tx
+	return tx, nil
 }
 
 func (tx *Transaction) Book(dao CachedAccountingDao, txId string, buyerBid *Bid) error {
