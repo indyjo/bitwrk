@@ -44,8 +44,6 @@ func (dao *gaeAccountingDao) SaveAccount(account *ParticipantAccount) (err error
 	}
 	key := AccountKey(dao.c, account.Participant)
 	_, err = datastore.Put(dao.c, key, accountCodec{account})
-	dao.c.Infof("Saved account %v. err=%v", key, err)
-	dao.c.Infof("-> account data: %#v", account)
 	return
 }
 

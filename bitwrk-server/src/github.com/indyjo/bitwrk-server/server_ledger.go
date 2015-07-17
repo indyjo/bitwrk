@@ -84,7 +84,10 @@ func handleAccountMovement(w http.ResponseWriter, r *http.Request) {
 		var err error
 		movement, err := dao.GetMovement(movementKey)
 
-		if err != nil {
+		if err == bitwrk.ErrNoSuchObject {
+			http.Error(w, "No such ledger entry", http.StatusNotFound)
+			return
+		} else if err != nil {
 			http.Error(w, "Error retrieving ledger entry", http.StatusInternalServerError)
 			c.Errorf("Error getting account movement %v: %v", movementKey, err)
 			return
