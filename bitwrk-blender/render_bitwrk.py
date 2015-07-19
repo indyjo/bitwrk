@@ -392,7 +392,7 @@ class Tile:
         """ 
         # draw rect in preview color
         tile = engine.begin_result(self.minx, self.miny, self.resx, self.resy)
-        tile.layers[0].rect = [self.color] * (self.resx*self.resy)
+        tile.layers[0].passes[0].rect = [self.color] * (self.resx*self.resy)
         engine.end_result(tile)
         
         self.result = engine.begin_result(self.minx, self.miny, self.resx, self.resy)
@@ -422,7 +422,7 @@ class Tile:
             engine.report({'ERROR'}, "Exception in dispatch: {}".format(traceback.format_exc()))
             self.conn.close()
             self.conn = None
-            self.result.layers[0].rect = [[1,0,0,1]] * (self.resx*self.resy)
+            self.result.layers[0].passes[0].rect = [[1,0,0,1]] * (self.resx*self.resy)
             engine.end_result(self.result)
             self.result = None
             return False
@@ -463,7 +463,7 @@ class Tile:
         except:
             print("Exception in collect:", sys.exc_info())
             engine.report({'WARNING'}, "Exception in collect: {}".format(traceback.format_exc()))
-            self.result.layers[0].rect = [[1,0,0,1]] * (self.resx*self.resy)
+            self.result.layers[0].passes[0].rect = [[1,0,0,1]] * (self.resx*self.resy)
             engine.end_result(self.result)
             self.result = None
         finally:
