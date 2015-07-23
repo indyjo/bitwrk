@@ -39,7 +39,7 @@ indexes:
   - name: Received
 
 - kind: Tx
-  ancestor: yes
   properties:
-  - name: State
-  - name: Timeout
+  - name: Article
+  - name: Matched
+

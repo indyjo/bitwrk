@@ -95,21 +95,21 @@ func (codec bidCodec) Load(c <-chan datastore.Property) error {
 
 func (codec bidCodec) Save(c chan<- datastore.Property) error {
 	bid := codec.bid
-	c <- datastore.Property{Name: "Type", Value: int64(bid.Type)}
-	c <- datastore.Property{Name: "State", Value: int64(bid.State)}
-	c <- datastore.Property{Name: "Article", Value: string(bid.Article)}
+	c <- datastore.Property{Name: "Type", Value: int64(bid.Type), NoIndex: true}
+	c <- datastore.Property{Name: "State", Value: int64(bid.State), NoIndex: true}
+	c <- datastore.Property{Name: "Article", Value: string(bid.Article), NoIndex: true}
 	if bid.Price.Currency != money.BTC {
-		c <- datastore.Property{Name: "Currency", Value: bid.Price.Currency.String()}
+		c <- datastore.Property{Name: "Currency", Value: bid.Price.Currency.String(), NoIndex: true}
 	}
-	c <- datastore.Property{Name: "Price", Value: bid.Price.Amount}
-	c <- datastore.Property{Name: "Fee", Value: bid.Fee.Amount}
-	c <- datastore.Property{Name: "Participant", Value: string(bid.Participant)}
+	c <- datastore.Property{Name: "Price", Value: bid.Price.Amount, NoIndex: true}
+	c <- datastore.Property{Name: "Fee", Value: bid.Fee.Amount, NoIndex: true}
+	c <- datastore.Property{Name: "Participant", Value: string(bid.Participant), NoIndex: true}
 	c <- datastore.Property{Name: "Document", Value: string(bid.Document), NoIndex: true}
 	c <- datastore.Property{Name: "Signature", Value: string(bid.Signature), NoIndex: true}
 	c <- datastore.Property{Name: "Created", Value: time.Time(bid.Created)}
-	c <- datastore.Property{Name: "Expires", Value: time.Time(bid.Expires)}
+	c <- datastore.Property{Name: "Expires", Value: time.Time(bid.Expires), NoIndex: true}
 	if bid.Matched != nil {
-		c <- datastore.Property{Name: "Matched", Value: *bid.Matched}
+		c <- datastore.Property{Name: "Matched", Value: *bid.Matched, NoIndex: true}
 	}
 	c <- datastore.Property{Name: "Transaction", Value: mustDecodeKey(bid.Transaction), NoIndex: true}
 	close(c)
@@ -145,7 +145,7 @@ func (codec hotBidCodec) Load(c <-chan datastore.Property) error {
 
 func (codec hotBidCodec) Save(c chan<- datastore.Property) error {
 	bid := codec.bid
-	c <- datastore.Property{Name: "BidKey", Value: bid.BidKey}
+	c <- datastore.Property{Name: "BidKey", Value: bid.BidKey, NoIndex: true}
 	c <- datastore.Property{Name: "Type", Value: int64(bid.Type)}
 	if bid.Price.Currency != money.BTC {
 		c <- datastore.Property{Name: "Currency", Value: bid.Price.Currency.String()}
@@ -230,23 +230,26 @@ func (codec txCodec) Load(c <-chan datastore.Property) error {
 	return nil
 }
 
+// Save a Transaction object. For the sake of cost reduction, the only indexed properties are:
+// - Article
+// - Matched 
 func (codec txCodec) Save(c chan<- datastore.Property) error {
 	tx := codec.tx
-	c <- datastore.Property{Name: "Revision", Value: int64(tx.Revision)}
+	c <- datastore.Property{Name: "Revision", Value: int64(tx.Revision), NoIndex: true}
 	c <- datastore.Property{Name: "BuyerBid", Value: mustDecodeKey(&tx.BuyerBid), NoIndex: true}
 	c <- datastore.Property{Name: "SellerBid", Value: mustDecodeKey(&tx.SellerBid), NoIndex: true}
-	c <- datastore.Property{Name: "Buyer", Value: string(tx.Buyer)}
-	c <- datastore.Property{Name: "Seller", Value: string(tx.Seller)}
+	c <- datastore.Property{Name: "Buyer", Value: string(tx.Buyer), NoIndex: true}
+	c <- datastore.Property{Name: "Seller", Value: string(tx.Seller), NoIndex: true}
 	c <- datastore.Property{Name: "Article", Value: string(tx.Article)}
 	if tx.Price.Currency != money.BTC {
-		c <- datastore.Property{Name: "Currency", Value: tx.Price.Currency.String()}
+		c <- datastore.Property{Name: "Currency", Value: tx.Price.Currency.String(), NoIndex: true}
 	}
-	c <- datastore.Property{Name: "Price", Value: tx.Price.Amount}
-	c <- datastore.Property{Name: "Fee", Value: tx.Fee.Amount}
+	c <- datastore.Property{Name: "Price", Value: tx.Price.Amount, NoIndex: true}
+	c <- datastore.Property{Name: "Fee", Value: tx.Fee.Amount, NoIndex: true}
 	c <- datastore.Property{Name: "Matched", Value: time.Time(tx.Matched)}
-	c <- datastore.Property{Name: "State", Value: int64(tx.State)}
-	c <- datastore.Property{Name: "Phase", Value: int64(tx.Phase)}
-	c <- datastore.Property{Name: "Timeout", Value: time.Time(tx.Timeout)}
+	c <- datastore.Property{Name: "State", Value: int64(tx.State), NoIndex: true}
+	c <- datastore.Property{Name: "Phase", Value: int64(tx.Phase), NoIndex: true}
+	c <- datastore.Property{Name: "Timeout", Value: time.Time(tx.Timeout), NoIndex: true}
 	if tx.WorkerURL != nil {
 		c <- datastore.Property{Name: "WorkerURL", Value: *tx.WorkerURL, NoIndex: true}
 	}
@@ -308,15 +311,15 @@ func (codec accountCodec) Save(c chan<- datastore.Property) error {
 	account := codec.account
 	c <- datastore.Property{Name: "Participant", Value: string(account.Participant)}
 	if account.LastMovementKey != nil {
-		c <- datastore.Property{Name: "LastMovementKey", Value: mustDecodeKey(account.LastMovementKey)}
+		c <- datastore.Property{Name: "LastMovementKey", Value: mustDecodeKey(account.LastMovementKey), NoIndex: true}
 	}
 	if account.Available.Currency != money.BTC {
 		c <- datastore.Property{Name: "Currency", Value: account.Available.Currency.String()}
 	}
-	c <- datastore.Property{Name: "Available", Value: account.Available.Amount}
-	c <- datastore.Property{Name: "Blocked", Value: account.Blocked.Amount}
+	c <- datastore.Property{Name: "Available", Value: account.Available.Amount, NoIndex: true}
+	c <- datastore.Property{Name: "Blocked", Value: account.Blocked.Amount, NoIndex: true}
 	if account.DepositInfo != "" {
-		c <- datastore.Property{Name: "DepositInfo", Value: account.DepositInfo, NoIndex: true}
+		c <- datastore.Property{Name: "DepositInfo", Value: account.DepositInfo}
 		c <- datastore.Property{Name: "LastDepositInfo", Value: account.LastDepositInfo}
 	}
 	if account.DepositAddressRequest != "" {
@@ -393,26 +396,26 @@ func (codec movementCodec) Load(c <-chan datastore.Property) error {
 func (codec movementCodec) Save(c chan<- datastore.Property) error {
 	movement := codec.movement
 	c <- datastore.Property{Name: "Timestamp", Value: movement.Timestamp}
-	c <- datastore.Property{Name: "Type", Value: int64(movement.Type)}
+	c <- datastore.Property{Name: "Type", Value: int64(movement.Type), NoIndex: true}
 	if movement.AvailableDelta.Currency != money.BTC {
-		c <- datastore.Property{Name: "Currency", Value: movement.AvailableDelta.Currency.String()}
+		c <- datastore.Property{Name: "Currency", Value: movement.AvailableDelta.Currency.String(), NoIndex: true}
 	}
-	c <- datastore.Property{Name: "AvailableDelta", Value: movement.AvailableDelta.Amount}
-	c <- datastore.Property{Name: "AvailableAccount", Value: string(movement.AvailableAccount)}
+	c <- datastore.Property{Name: "AvailableDelta", Value: movement.AvailableDelta.Amount, NoIndex: true}
+	c <- datastore.Property{Name: "AvailableAccount", Value: string(movement.AvailableAccount), NoIndex: true}
 	if movement.AvailablePredecessorKey != nil {
 		c <- datastore.Property{Name: "AvailablePredecessorKey", Value: mustDecodeKey(movement.AvailablePredecessorKey)}
 	}
-	c <- datastore.Property{Name: "BlockedDelta", Value: movement.BlockedDelta.Amount}
+	c <- datastore.Property{Name: "BlockedDelta", Value: movement.BlockedDelta.Amount, NoIndex: true}
 
 	if movement.BlockedAccount != movement.AvailableAccount {
-		c <- datastore.Property{Name: "BlockedAccount", Value: string(movement.BlockedAccount)}
+		c <- datastore.Property{Name: "BlockedAccount", Value: string(movement.BlockedAccount), NoIndex: true}
 		if movement.BlockedPredecessorKey != nil {
-			c <- datastore.Property{Name: "BlockedPredecessorKey", Value: mustDecodeKey(movement.BlockedPredecessorKey)}
+			c <- datastore.Property{Name: "BlockedPredecessorKey", Value: mustDecodeKey(movement.BlockedPredecessorKey), NoIndex: true}
 		}
 	}
 
-	c <- datastore.Property{Name: "Fee", Value: movement.Fee.Amount}
-	c <- datastore.Property{Name: "World", Value: movement.World.Amount}
+	c <- datastore.Property{Name: "Fee", Value: movement.Fee.Amount, NoIndex: true}
+	c <- datastore.Property{Name: "World", Value: movement.World.Amount, NoIndex: true}
 
 	if movement.BidKey != nil {
 		c <- datastore.Property{Name: "BidKey", Value: mustDecodeKey(movement.BidKey), NoIndex: true}
