@@ -92,8 +92,8 @@ func Test_String(t *testing.T) {
 	}
 
 	for _, c := range []testcase{
-		{"satoshi-1", "satoshi -1"},
-		{"satoshi 1", "satoshi 1"},
+		{"satoshi-1", "uBTC -0.01"},
+		{"satoshi 1", "uBTC 0.01"},
 		{"BTC 123456789", "BTC 123456789"},
 		{"BTC 123456789.0", "BTC 123456789"},
 		{"BTC 123456789.00", "BTC 123456789"},
@@ -111,8 +111,8 @@ func Test_String(t *testing.T) {
 		{"BTC 0.00012345", "uBTC 123.45"},
 		{"BTC 0.00001234", "uBTC 12.34"},
 		{"BTC 0.00000123", "uBTC 1.23"},
-		{"BTC 0.00000012", "satoshi 12"},
-		{"BTC 0.00000001", "satoshi 1"},
+		{"BTC 0.00000012", "uBTC 0.12"},
+		{"BTC 0.00000001", "uBTC 0.01"},
 		{"BTC 0.00000000", "BTC 0"},
 		{"mBTC 0", "BTC 0"},
 		{"uBTC 0", "BTC 0"},
@@ -137,8 +137,8 @@ func Test_String(t *testing.T) {
 func Test_JSON(t *testing.T) {
 	var m Money
 	for _, bs := range [][]byte{
-		[]byte(`"satoshi -1"`),
-		[]byte(`"satoshi 1"`),
+		[]byte(`"uBTC -0.01"`),
+		[]byte(`"uBTC 0.01"`),
 		[]byte(`"BTC 123.456"`),
 		[]byte(`"mBTC 123.456"`),
 		[]byte(`"uBTC 123.45"`),

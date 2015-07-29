@@ -77,13 +77,35 @@ type Unit struct {
 	currency Currency
 	// The sub-unit's value in multiples of the base unit
 	factor int64
+	// Whether this unit will be auto-selected for formatting
+	selectable bool
+}
+
+func (u Unit) String() string {
+	return u.symbol
+}
+
+func ParseUnit(symbol string) (Unit, error) {
+	if u, ok := unitsBySymbol[symbol]; ok {
+		return u, nil
+	} else {
+		return Unit{}, errors.New("No such unit: " + symbol)
+	}
+}
+
+func MustParseUnit(symbol string) Unit {
+	if u, err := ParseUnit(symbol); err != nil {
+		panic(err)
+	} else {
+		return u
+	}
 }
 
 var units = [...]Unit{
-	Unit{"BTC", BTC, 100000000},
-	Unit{"mBTC", BTC, 100000},
-	Unit{"uBTC", BTC, 100},
-	Unit{"satoshi", BTC, 1}}
+	Unit{"BTC", BTC, 100000000, true},
+	Unit{"mBTC", BTC, 100000, true},
+	Unit{"uBTC", BTC, 100, true},
+	Unit{"satoshi", BTC, 1, false}}
 
 var unitsBySymbol = make(map[string]Unit)
 var unitsByCurrency = make(map[Currency][]Unit)
@@ -145,36 +167,68 @@ func MustParse(s string) Money {
 	return m
 }
 
+// Formats a valid string representation of the amount, including symbol
 func (m Money) String() string {
-	if m.Amount == 0 {
+	return m.Format(m.SelectUnit(), true)
+}
+
+// Selects a unit in a suitable scale for formatting
+func (m Money) SelectUnit() Unit {
+	units, ok := unitsByCurrency[m.Currency]
+	if !ok {
+		panic(fmt.Sprintf("No unit found for currency: %v", m.Currency))
+	}
+
+	v := m.Amount
+	if v < 0 {
+		v = -v
+	} else if v == 0 {
 		unit := m.Currency.DefaultUnit()
 		if unit == nil {
 			panic(fmt.Sprintf("No default unit found for currency: %v", m.Currency))
 		}
-		return unit.symbol + " 0"
+		return *unit
 	}
 
-	// Find the first unit so that the amount can be displayed without leading zero
+	// Find the largest selectable unit that will produce an amount
+	// without leading zero. If not possible, fall back to the smallest
+	// selectable unit.
+	var result Unit
+	found := false
+	for _, unit := range units {
+		if unit.selectable {
+			result = unit
+			found = true
+		}
+		if unit.factor <= v && found {
+			break
+		}
+	}
+
+	if !found {
+		panic("No selectable unit found")
+	}
+
+	return result
+}
+
+// Formats in a specific unit scale
+func (m Money) Format(unit Unit, includeSymbol bool) string {
+	if m.Currency != unit.currency {
+		panic(fmt.Sprintf("Currencies don't match: [%v] [%v -> %v]", m.Currency, unit.symbol, unit.currency))
+	}
+
 	v := m.Amount
 	sign := ""
 	if v < 0 {
 		v = -v
 		sign = "-"
 	}
-
-	units, ok := unitsByCurrency[m.Currency]
-	if !ok {
-		panic(fmt.Sprintf("No unit found for currency: %v", m.Currency))
-	}
-	for _, unit := range units {
-		if unit.factor > v {
-			continue
-		}
-
+	if includeSymbol {
 		return unit.symbol + " " + sign + formatAmount(v, unit.factor)
+	} else {
+		return sign + formatAmount(v, unit.factor)
 	}
-
-	panic("Shouldn't reach this")
 }
 
 // Formats a positive value
