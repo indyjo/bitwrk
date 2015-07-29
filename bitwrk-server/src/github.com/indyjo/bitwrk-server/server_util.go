@@ -17,8 +17,10 @@
 package server
 
 import (
+	"appengine"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitcoin"
+	"regexp"
 )
 
 // Check whether a bitcoin address is from the 'right' network,
@@ -34,5 +36,22 @@ func checkBitcoinAddress(address string) error {
 			" This server accepts %v.", networkId, address, CfgBitcoinNetworkId)
 	}
 
+	return nil
+}
+
+var blenderRegexp = regexp.MustCompile(`^(net\.bitwrk/blender/0/2\.(69|7[0-9])/(512M|2G|8G|32G))$`)
+
+func checkArticle(_ appengine.Context, article string) error {
+	switch article {
+	case "fnord", "snafu", "foobar",
+		"net.bitwrk/gorays/0":
+		// TODO: add real article management
+	default:
+		if blenderRegexp.MatchString(article) {
+		} else {
+			return fmt.Errorf("Article not traded here: %#v", article)
+		}
+	}
+	
 	return nil
 }

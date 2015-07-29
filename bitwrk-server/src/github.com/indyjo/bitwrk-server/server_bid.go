@@ -27,7 +27,6 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 )
 
@@ -157,8 +156,6 @@ func handleCreateBid(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var blenderRegexp = regexp.MustCompile(`^(net\.bitwrk/blender/0/2\.(69|7[0-9])/(512M|2G|8G|32G))$`)
-
 func enqueueBid(c appengine.Context, w http.ResponseWriter, r *http.Request) (err error) {
 	bidType := r.FormValue("type")
 	bidArticle := r.FormValue("article")
@@ -173,17 +170,11 @@ func enqueueBid(c appengine.Context, w http.ResponseWriter, r *http.Request) (er
 		return fmt.Errorf("Error in checkNonce: %v", err)
 	}
 
-	switch bidArticle {
-	case "fnord", "snafu", "foobar",
-		"net.bitwrk/gorays/0":
-		// TODO: add real article management
-	default:
-		if blenderRegexp.MatchString(bidArticle) {
-		} else {
-			return fmt.Errorf("Article not traded here: %#v", bidArticle)
-		}
+	err = checkArticle(c, bidArticle)
+	if err != nil {
+		return
 	}
-
+	
 	err = checkBitcoinAddress(bidAddress)
 	if err != nil {
 		return

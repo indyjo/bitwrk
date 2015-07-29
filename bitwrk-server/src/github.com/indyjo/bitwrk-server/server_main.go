@@ -17,10 +17,15 @@
 package server
 
 import (
+	"appengine"
+	"appengine/user"
+	"fmt"
 	"net/http"
 )
 
 func init() {
+	http.HandleFunc("/login", handleLogin)
+	http.HandleFunc("/logout", handleLogout)
 	http.HandleFunc("/bid", handleCreateBid)
 	http.HandleFunc("/bid/", handleRenderBid)
 	http.HandleFunc("/nonce", handleGetNonce)
@@ -32,9 +37,50 @@ func init() {
 	http.HandleFunc("/deposit", handleCreateDeposit)
 	http.HandleFunc("/deposit/", handleRenderDeposit)
 	http.HandleFunc("/query/accounts", handleQueryAccounts)
+	http.HandleFunc("/query/prices", handleQueryPrices)
+	http.HandleFunc("/query/trades", handleQueryTrades)
 	http.HandleFunc("/_ah/queue/apply-changes", handleApplyChanges)
 	http.HandleFunc("/_ah/queue/retire-tx", handleRetireTransaction)
 	http.HandleFunc("/_ah/queue/retire-bid", handleRetireBid)
+}
+
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	c := appengine.NewContext(r)
+	if u := user.Current(c); u == nil {
+		url, err := user.LoginURL(c, r.URL.String())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Location", url)
+		w.WriteHeader(http.StatusFound)
+	} else {
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprintf(w, "User: %v\n", u)
+	}
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	c := appengine.NewContext(r)
+	if u := user.Current(c); u != nil {
+		url, err := user.LogoutURL(c, r.URL.String())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Location", url)
+		w.WriteHeader(http.StatusFound)
+	}
 }
 
 func handleMyIp(w http.ResponseWriter, r *http.Request) {
