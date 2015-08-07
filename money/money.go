@@ -120,7 +120,7 @@ var pattern = regexp.MustCompile(`^([A-Za-z]+) ?(-)?([0-9]+)(?:\.([0-9]+))?$`)
 func (m *Money) Parse(s string) error {
 	matches := pattern.FindStringSubmatch(s)
 	if matches == nil {
-		return errors.New("Input doesn't match pattern for monetary amounts")
+		return errors.New("Input doesn't match pattern for monetary amounts: " + s)
 	}
 	symbol := matches[1]
 	unit, ok := unitsBySymbol[symbol]
