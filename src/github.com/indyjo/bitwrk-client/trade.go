@@ -53,6 +53,9 @@ type Trade struct {
 	buyerSecret *bitwrk.Thash
 	workFile    cafs.File
 
+	bytesToTransfer  uint64
+	bytesTransferred uint64
+
 	encResultFile    cafs.File
 	encResultKey     *bitwrk.Tkey
 	encResultHashSig string
@@ -348,17 +351,21 @@ func (t *Trade) GetState() *ActivityState {
 	info := ""
 	if t.lastError != nil {
 		info = t.lastError.Error()
-	} else if t.tx != nil {
-		info = t.tx.Phase.String()
-	} else if t.bid != nil {
-		info = t.bid.State.String()
 	}
+
+	phase := ""
+	if t.tx != nil {
+		phase = t.tx.Phase.String()
+	} else if t.bid != nil {
+		phase = t.bid.State.String()
+	}
+
 	price := t.price
 	if t.tx != nil {
 		price = t.tx.Price
 	}
 
-	return &ActivityState{
+	result := &ActivityState{
 		Type:     t.bidType.String(),
 		Article:  t.article,
 		Alive:    t.alive,
@@ -368,7 +375,17 @@ func (t *Trade) GetState() *ActivityState {
 		BidId:    t.bidId,
 		TxId:     t.txId,
 		Info:     info,
+		Phase:    phase,
+
+		BytesToTransfer:  t.bytesToTransfer,
+		BytesTransferred: t.bytesTransferred,
 	}
+
+	if t.workFile != nil {
+		result.BytesTotal = uint64(t.workFile.Size())
+	}
+
+	return result
 }
 
 func (t *Trade) Permit(identity *bitcoin.KeyPair, price money.Money) bool {

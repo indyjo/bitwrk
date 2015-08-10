@@ -345,13 +345,19 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 	defer pipeIn.Close()
 	mwriter := multipart.NewWriter(pipeOut)
 
+	// Communicate status back
+	progressCallback := func(bytesToTransfer, bytesTransferred uint64) {
+		a.bytesToTransfer = bytesToTransfer
+		a.bytesTransferred = bytesTransferred
+	}
+
 	// Write work chunks into pipe for HTTP request
 	go func() {
 		defer pipeOut.Close()
 		if part, err := mwriter.CreateFormFile("chunkdata", "chunkdata.bin"); err != nil {
 			pipeOut.CloseWithError(err)
 			return
-		} else if err := cafs.WriteRequestedChunks(a.workFile, wishList, part); err != nil {
+		} else if err := cafs.WriteRequestedChunks(a.workFile, wishList, part, progressCallback); err != nil {
 			pipeOut.CloseWithError(err)
 			return
 		}

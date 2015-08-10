@@ -63,6 +63,12 @@ type ActivityState struct {
 	Amount      money.Money
 	BidId, TxId string
 	Info        string
+	Phase       string // The phase the activity's active object is in
+
+	// Information about a transmission in progress
+	BytesTotal       uint64
+	BytesToTransfer  uint64
+	BytesTransferred uint64
 }
 
 type ActivityManager struct {

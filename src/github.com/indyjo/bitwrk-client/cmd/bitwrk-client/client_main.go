@@ -258,6 +258,7 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux.HandleFunc("/id", handleId)
 	mux.HandleFunc("/version", handleVersion)
 	mux.HandleFunc("/cafsdebug", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
 		client.GetActivityManager().GetStorage().DumpStatistics(cafs.NewWriterPrinter(w))
 	})
 	mux.HandleFunc("/stackdump", func(w http.ResponseWriter, r *http.Request) {
