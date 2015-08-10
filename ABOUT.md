@@ -1,19 +1,14 @@
 About BitWrk
 ============
 
-> *"I want BitWrk to become a true community project, a technology that is in the hands of many.
+> "I want BitWrk to become a true community project, a technology that is in the hands of many.
 > By sharing revenue with authors, I want to create a whole new business model for Open Source
-> developers. 
+> developers.
 > 
 > Please support the project by trying out the software and testing it for bugs!
 > Also, there is a Facebook page to like, a Twitter account to follow and a GitHub project to star.
 >
-> If you prefer to support BitWrk financially, consider sending some (milli-)Bitcoins to* **tip4commit**.
-> *They will be distributed to everybody who contributes code to BitWrk.
-> Alternatively, you could donate directly to 1BiTWrKBPKT2yKdfEw77EAsCHgpjkqgPkv and help finance
-> some servers providing Blender rendering.
->
-> Last but not least, BitWrk is in need of developers."*
+> Last but not least, BitWrk is in need of developers."
 >
 >   -- Jonas Eschenburg, founder of BitWrk
 
