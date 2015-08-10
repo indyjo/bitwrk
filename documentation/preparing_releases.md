@@ -30,28 +30,38 @@ Git operations
     git tag -a vx.y.z
 - Push tag:
     git push origin vx.y.z
-    
+
+Creating a source tarball
+-------------------------
+Use "git-archive-all" to prepare the tarballs, because github's tarballs don't include
+the submodules (cafs, bitwrk-common)
+
+    # git-archive-all can be cloned from github like this:
+    # git clone https://github.com/Kentzo/git-archive-all.git
+    git-archive-all --prefix bitwrk-x.y.z/ ../bitwrk-x.y.z.tar.gz
+    # repeat for .zip
+
+Now upload both .tar.gz and .zip to github, associate with release.
+
 Compiling for Mac OS X
 ----------------------
 - Login as root, create directory under /tmp
 - Unpack and compile:
-    wget --content-disposition https://github.com/indyjo/bitwrk/archive/v0.4.0.tar.gz
-    tar xzf bitwrk-0.4.0.tar.gz
-    cd bitwrk-0.4.0/
+    wget https://github.com/indyjo/bitwrk/releases/download/v0.5.0/bitwrk-0.5.0.tar.gz
+    tar xzf bitwrk-0.5.0.tar.gz
+    cd bitwrk-0.5.0/
     export GOPATH=$(pwd)
-    cd src/cmd/bitwrk-client/
-    go install
+    go install ./src/github.com/indyjo/bitwrk-client/cmd/bitwrk-client/...
 - Prepare binary tgz
     cd ../../../../
-    mv bitwrk-0.4.0 bitwrk-0.4.0-src
-    mkdir bitwrk-0.4.0
-    cp -a bitwrk-0.4.0-src/share bitwrk-0.4.0-src/bin bitwrk-0.4.0/
-    tar czvf bitwrk-0.4.0-osx.x64.tgz bitwrk-0.4.0
+    mv bitwrk-0.5.0 bitwrk-0.5.0-src
+    mkdir bitwrk-0.5.0
+    cp -a bitwrk-0.5.0-src/share bitwrk-0.5.0-src/bin bitwrk-0.5.0/
+    tar czvf bitwrk-0.5.0-osx.x64.tgz bitwrk-0.5.0
 - Prepare bitwrk-blender zip
-    mkdir bitwrk-blender-0.4.0
-    cp bitwrk-0.4.0-src/bitwrk-blender/* bitwrk-blender-0.4.0/
-    zip -r bitwrk-blender-0.4.0.zip bitwrk-blender-0.4.0/
-    
+    mkdir bitwrk-blender-0.5.0
+    cp bitwrk-0.5.0-src/bitwrk-blender/* bitwrk-blender-0.5.0/
+    zip -r bitwrk-blender-0.5.0.zip bitwrk-blender-0.5.0/
 
 Compiling for Windows
 ---------------------
