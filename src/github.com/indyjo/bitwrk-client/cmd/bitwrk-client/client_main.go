@@ -40,6 +40,7 @@ import (
 var ExternalAddress string
 var ExternalPort int
 var InternalPort int
+var InternalIface string
 var BitcoinIdentity *bitcoin.KeyPair
 var ResourceDir string
 var BitwrkUrl string
@@ -53,6 +54,7 @@ func main() {
 	flags.IntVar(&ExternalPort, "extport", -1,
 		"Port that can be reached from the Internet (-1 disables incoming connections)")
 	flags.IntVar(&InternalPort, "intport", 8081, "Maintenance port for admin interface")
+	flags.StringVar(&InternalIface, "intiface", "127.0.0.1", "Network interface for admin interface")
 	flags.StringVar(&ResourceDir, "resourcedir",
 		"auto",
 		"Directory where the bitwrk client loads resources from")
@@ -175,7 +177,7 @@ func startReceiveManager() (receiveManager *client.ReceiveManager) {
 func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux := http.NewServeMux()
 	s := &http.Server{
-		Addr:    fmt.Sprintf("localhost:%v", InternalPort),
+		Addr:    fmt.Sprintf("%v:%v", InternalIface, InternalPort),
 		Handler: mux,
 		// No timeouts!
 	}

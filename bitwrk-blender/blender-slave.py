@@ -412,6 +412,10 @@ def parse_args():
     parser.add_argument('--bitwrk-port', metavar='PORT', help="BitWrk client port", type=int, default=8081)
     parser.add_argument('--max-cost', metavar='CLASS', help="Maximum cost of one task (in mega- and giga-rays)",
         choices=["512M", "2G", "8G", "32G"], default="512M")
+    parser.add_argument('--listen-port', metavar='PORT',
+        help="TCP port on which to listen for jobs (0=any)", type=int, default=0)
+    parser.add_argument('--listen-iface', metavar='IP',
+        help="Network interface on which to listen for jobs", default="127.0.0.1")
     args = parser.parse_args()
     
     BLENDER_BIN=args.blender
@@ -430,10 +434,12 @@ def parse_args():
         MAX_COST=32*1024*1024*1024
     else:
         raise RuntimeError()
+
+    return args
         
 if __name__ == "__main__":
     try:
-        parse_args()
+        args = parse_args()
     except Exception as e:
         print(e)
         sys.exit(2)
@@ -442,7 +448,7 @@ if __name__ == "__main__":
     print(" > Maximum number of rays is", MAX_COST)
     print(" > Article ID is", ARTICLE_ID)
     
-    httpd = http.server.HTTPServer(('127.0.0.1', 0), BlenderHandler)
+    httpd = http.server.HTTPServer((args.listen_iface, args.listen_port), BlenderHandler)
     
     if not register_with_bitwrk_client(httpd.server_address):
         sys.exit(3)
