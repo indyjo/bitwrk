@@ -62,13 +62,14 @@ func NewWorkReceiver(log bitwrk.Logger,
 		info:         info,
 		encResultKey: key,
 	}
-	result.endpoint.SetHandler(func(w http.ResponseWriter, r *http.Request) {
+	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 		if err := result.handleRequest(w, r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			log.Printf("Error in request: %v", err)
 			result.Dispose()
 		}
-	})
+	}
+	result.endpoint.SetHandler(withCompression(handlerFunc))
 	return result
 }
 
@@ -124,7 +125,7 @@ type todoList struct {
 func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "OPTIONS" {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"Adler32Chunking": true}`))
+		w.Write([]byte(`{"Adler32Chunking": true, "GZIPCompression": true}`))
 		return nil
 	}
 	if r.Method != "POST" {

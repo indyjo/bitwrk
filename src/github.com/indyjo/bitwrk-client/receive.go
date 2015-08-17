@@ -17,8 +17,10 @@
 package client
 
 import (
+	"compress/gzip"
 	"crypto/rand"
 	"encoding/hex"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -106,6 +108,54 @@ func (e *Endpoint) SetHandler(handle func(http.ResponseWriter, *http.Request)) {
 	e.m.mutex.Lock()
 	defer e.m.mutex.Unlock()
 	e.handle = handle
+}
+
+type gzipBody struct {
+	compressed, uncompressed io.ReadCloser
+}
+
+func newGZIPBody(compressed io.ReadCloser) (*gzipBody, error) {
+	if gz, err := gzip.NewReader(compressed); err != nil {
+		return nil, err
+	} else {
+		return &gzipBody{compressed, gz}, nil
+	}
+}
+
+func (gz *gzipBody) Read(data []byte) (int, error) {
+	return gz.uncompressed.Read(data)
+}
+
+func (gz *gzipBody) Close() error {
+	if err := gz.uncompressed.Close(); err != nil {
+		gz.compressed.Close()
+		return err
+	} else if err := gz.compressed.Close(); err != nil {
+		return err
+	} else {
+		return nil
+	}
+}
+
+// Given a handler, returns a handler with transparent support for receiving gzip-compressed POST data
+func withCompression(handle func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.Header.Get("Content-Encoding") == "gzip" {
+			log.Printf("Handling GZIP-compressed POST.\n")
+			if gz, err := newGZIPBody(r.Body); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			} else {
+				// copy request data, substitute body
+				r2 := *r
+				r2.Body = gz
+				// Call original handler
+				handle(w, &r2)
+			}
+		} else {
+			handle(w, r)
+		}
+	}
 }
 
 func (e *Endpoint) URL() string {

@@ -17,6 +17,7 @@
 package client
 
 import (
+	"compress/gzip"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -152,30 +153,35 @@ func (a *BuyActivity) finishBuy(log bitwrk.Logger) error {
 	return nil
 }
 
-func (a *BuyActivity) testSellerForChunkedCapability(log bitwrk.Logger, client *http.Client) (bool, error) {
+// Performs an OPTIONS request to the seller's WorkerURL and finds out the sellers' capabilities.
+func (a *BuyActivity) testSellerForCapabilities(log bitwrk.Logger, client *http.Client) (supportsChunked, supportsCompressed bool, err error) {
 	req, err := NewRequest("OPTIONS", *a.tx.WorkerURL, nil)
 	if err != nil {
-		return false, err
+		return
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return false, err
+		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return false, nil
+		return
 	}
 
 	decoder := json.NewDecoder(resp.Body)
 	var caps struct {
 		Adler32Chunking bool
+		GZIPCompression bool
 	}
 	err = decoder.Decode(&caps)
 	if err != nil {
-		return false, err
+		return
 	}
 
-	return caps.Adler32Chunking, nil
+	supportsChunked = caps.Adler32Chunking
+	supportsCompressed = caps.GZIPCompression
+
+	return
 }
 
 // Performs all buyer to seller conact.
@@ -208,19 +214,21 @@ func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
 	scopedClient := NewClient(&st.Transport)
 
 	chunked := false
+	compressed := false
 	if a.workFile.IsChunked() {
-		if supported, err := a.testSellerForChunkedCapability(log, scopedClient); err != nil {
+		if chunkedSupported, compressedSupported, err := a.testSellerForCapabilities(log, scopedClient); err != nil {
 			log.Printf("Failed to probe seller for capabilities: %v", err)
 		} else {
-			chunked = supported
-			log.Printf("Chunked work transmission supported by seller: %v", chunked)
+			chunked = chunkedSupported
+			compressed = compressedSupported
+			log.Printf("Chunked/compressed work transmission supported by seller: %v/%v", chunked, compressed)
 		}
 	}
 
 	var response io.ReadCloser
 	var transmissionError error
 	if chunked {
-		response, transmissionError = a.transmitWorkChunked(log, scopedClient)
+		response, transmissionError = a.transmitWorkChunked(log, scopedClient, compressed)
 	} else {
 		response, transmissionError = a.transmitWorkLinear(log, scopedClient)
 	}
@@ -292,10 +300,10 @@ func (a *BuyActivity) transmitWorkLinear(log bitwrk.Logger, client *http.Client)
 		log.Printf("Work transmitted successfully.")
 	}()
 
-	return a.postToSeller(pipeIn, mwriter.FormDataContentType(), client)
+	return a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client)
 }
 
-func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client) (io.ReadCloser, error) {
+func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client, compressed bool) (io.ReadCloser, error) {
 	if r, err := a.requestMissingChunks(log.New("request missing chunks"), client); err != nil {
 		return nil, err
 	} else {
@@ -308,7 +316,7 @@ func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client
 		if _, err := io.ReadFull(r, wishList); err != nil {
 			return nil, fmt.Errorf("Error decoding list of missing chunks: %v", err)
 		}
-		return a.sendMissingChunksAndReturnResult(log.New("send work chunk data"), client, wishList)
+		return a.sendMissingChunksAndReturnResult(log.New("send work chunk data"), client, wishList, compressed)
 	}
 }
 
@@ -332,18 +340,31 @@ func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Clien
 		log.Printf("Work chunk hashes transmitted successfully.")
 	}()
 
-	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), client); err != nil {
+	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client); err != nil {
 		return nil, fmt.Errorf("Error sending work chunk hashes to seller: %v", err)
 	} else {
 		return r, nil
 	}
 }
 
-func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client *http.Client, wishList []byte) (io.ReadCloser, error) {
+func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client *http.Client, wishList []byte, compressed bool) (io.ReadCloser, error) {
 	// Send data of missing chunks to seller
 	pipeIn, pipeOut := io.Pipe()
 	defer pipeIn.Close()
-	mwriter := multipart.NewWriter(pipeOut)
+
+	// Setup compression layer with dummy impl in case of uncompressed transmisison
+	var compressor io.Writer
+	var closeCompressor func() error
+	if compressed {
+		c := gzip.NewWriter(pipeOut)
+		compressor = c
+		closeCompressor = c.Close
+	} else {
+		compressor = pipeOut
+		closeCompressor = func() error { return nil }
+	}
+
+	mwriter := multipart.NewWriter(compressor)
 
 	// Communicate status back
 	progressCallback := func(bytesToTransfer, bytesTransferred uint64) {
@@ -365,10 +386,14 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 			pipeOut.CloseWithError(err)
 			return
 		}
+		if err := closeCompressor(); err != nil {
+			pipeOut.CloseWithError(err)
+			return
+		}
 		log.Printf("Missing chunk data transmitted successfully.")
 	}()
 
-	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), client); err != nil {
+	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), compressed, client); err != nil {
 		return nil, fmt.Errorf("Error sending work chunk data to seller: %v", err)
 	} else {
 		return r, nil
@@ -393,11 +418,18 @@ func (a *BuyActivity) encodeChunkedFirstTransmission(log bitwrk.Logger, mwriter 
 	return mwriter.Close()
 }
 
-func (a *BuyActivity) postToSeller(postData io.Reader, contentType string, client *http.Client) (io.ReadCloser, error) {
+// Post data to the seller's WorkerURL.
+//   postData    is the data to send in the request stream
+//   contentType is the type of content in the request stream
+//   compressed  signals whether the request stream has been gzip-compressed
+func (a *BuyActivity) postToSeller(postData io.Reader, contentType string, compressed bool, client *http.Client) (io.ReadCloser, error) {
 	if req, err := NewRequest("POST", *a.tx.WorkerURL, postData); err != nil {
 		return nil, fmt.Errorf("Error creating transmit request: %v", err)
 	} else {
 		req.Header.Set("Content-Type", contentType)
+		if compressed {
+			req.Header.Set("Content-Encoding", "gzip")
+		}
 
 		if resp, err := client.Do(req); err != nil {
 			return nil, err
