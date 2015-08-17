@@ -689,7 +689,7 @@ def save_copy(filepath):
     save_as_mainfile(copy=True) messes up filepaths, so we need to restore them afterwards."""
     if BUG_SAVE_AS_COPY:
         saved = save_filepaths()
-    bpy.ops.wm.save_as_mainfile(filepath=filepath, check_existing=False, copy=True, relative_remap=True)
+    bpy.ops.wm.save_as_mainfile(filepath=filepath, check_existing=False, copy=True, relative_remap=True, compress=False)
     if BUG_SAVE_AS_COPY:
         restore_filepaths(saved)
 
@@ -793,7 +793,7 @@ if __name__ == "__main__":
             if len(args) > 0 and args[0] == 'process':
                 repath()
                 remove_scripted_drivers()
-                bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath, check_existing=False)
+                bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath, check_existing=False, compress=False)
         except:
             traceback.print_exc()
             sys.exit(-1)
