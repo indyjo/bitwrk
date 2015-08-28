@@ -418,15 +418,15 @@ func (t *Trade) GetTrade() *Trade {
 
 func (t *Trade) Dispose() {
 	t.manager.unregister(t.GetKey())
-	for _, fp := range []*cafs.File{
-		&t.workFile,
-		&t.resultFile,
-		&t.encResultFile,
-	} {
-		f := *fp
+	files := []cafs.File{
+		t.workFile,
+		t.resultFile,
+		t.encResultFile,
+	}
+	for _, f := range files {
 		if f != nil {
 			f.Dispose()
-			*fp = nil
+			f = nil
 		}
 	}
 }

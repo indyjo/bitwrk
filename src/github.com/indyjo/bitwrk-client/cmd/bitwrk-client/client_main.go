@@ -317,6 +317,7 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 		return
 	} else {
 		reader = f.Open()
+		f.Dispose()
 	}
 	defer func() {
 		if err := reader.Close(); err != nil {
