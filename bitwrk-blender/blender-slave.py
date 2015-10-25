@@ -115,12 +115,12 @@ render.image_settings.exr_codec='PIZ'
 render.image_settings.use_preview=False
 render.use_compositing=False
 render.use_sequencer=False
-render.use_progressive_refine=False
 render.use_save_buffers=False
 render.use_persistent_data=False
 
 scene.cycles.use_cache=False
 scene.cycles.debug_use_spatial_splits=False
+scene.cycles.use_progressive_refine=False
 
 percentage = max(1, min(10000, render.resolution_percentage))
 resx = int(render.resolution_x * percentage / 100)
