@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -115,6 +115,12 @@ render.image_settings.exr_codec='PIZ'
 render.image_settings.use_preview=False
 render.use_compositing=False
 render.use_sequencer=False
+render.use_progressive_refine=False
+render.use_save_buffers=False
+render.use_persistent_data=False
+
+scene.cycles.use_cache=False
+scene.cycles.debug_use_spatial_splits=False
 
 percentage = max(1, min(10000, render.resolution_percentage))
 resx = int(render.resolution_x * percentage / 100)
