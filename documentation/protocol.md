@@ -66,5 +66,6 @@ Bid / Transaction Timing
 - New Transaction: 1 min (transaction.go, NewTransaction())
 - Transmitting: +2 min (transaction.go, phaseArrivalFuncs)
 - Working: +5 min
-- Unverified: +5 min
-- Work/Result disputed: +60 min
+- Unverified: +15 min
+- Finished: instant retirement
+- Work/Result instant retirement

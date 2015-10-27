@@ -110,3 +110,72 @@ Bitcoin address.
 **It is very important to have the private key file backed up in some safe place.**
 **It is also very important that neither the private key file, nor the backup be visible
 to others.**
+
+How Bidding Works
+-----------------
+
+In order to take part in a BitWrk transaction, participants may bid to either work
+for money (sell), or pay for work (buy).
+
+A buy bid might look like this:
+> I will pay *up to* 200uBTC to anyone who does 1 unit of _X_ work for me.
+where _X_ would be something like "Blender 2.75 rendering up to 512 million rays".
+(In case you're wondering, these units of work are standardized).
+
+In contrast, a sell bid might look like this:
+> I will perform 1 unit of _X_ work for anyone who pays *at least* 100uBTC.
+
+Any bid stays valid for a duration of 2 minutes. A _matching_ bid may
+ - exist at the time the bid is entered,
+ - be created within the 2 minutes of the first bids validity
+ - not be created at all.
+
+If a matching bid is found, both bids are simultaneously marked as _matched_
+(which removes them from the pool of valid bids)
+and a _transaction_ is created as proof of the contract between buyer and seller.
+
+The transaction also defines the actual price the buyer pays and the seller receives
+upon completion of the job. It is always the price defined by the earlier of the two bids.
+
+| Earlier bid           | Later bid             | Resulting price |
+| --------------------: | --------------------: | --------------: |
+| BUY for up to 200     | SELL for at least 100 |             200 |
+| SELL for at least 100 | BUY for up to 200     |             100 |
+| BUY for up to 100     | SELL for at least 200 | No match!       |
+| SELL for at least 200 | BUY for up to 100     | No match!       |
+
+Transaction Fees
+----------------
+
+BitWrk imposes a fee on transactions. The fee is currently fixed at 3% of the transaction
+price. It is paid by the buyer in addition to the transaction price.
+
+If a buyer's bid can be matched instantly, the transaction price is defined by the minimum
+price set by the seller. Therefore, the fee also depends on the seller's price. An amount
+equal to the sum of both is blocked on the buyer's account for the duration of the
+transaction.
+
+If a buyer's bid can _not_ be matched right away, an amount equal to the bid's price plus
+the corresponding fee is blocked on the buyer's account. In case a transaction
+arises from the bid at a later time, its price and fee will equal those of the bid.
+Otherwise, if the bid expires before a transaction is created, the blocked amount will be
+reimbursed, including the fee.
+
+
+Transaction Outcomes
+--------------------
+
+BitWrk ensures that, at the time a transaction results from two matching bids, an
+amount equal to the transaction price plus the corresponding fee is blocked on the
+buyer's account. There is no way for the buyer to spend the money and be unable to pay.
+
+Transactions have just two states, _active_ and _retired_, but while they're _active_,
+they go through different phases. Each phase transition affects the _active_ life of
+the transaction. Some phases increase the time left by a fixed number of minutes,
+others cause instant retirement. For details see the [documentation of BitWrk's protocol](documentation/protocol.md).
+
+If the time has come to retire a transaction, there are two possibilities. Either the
+transaction has ended in a success phase (_unverified_ and _finished_). In that case, 
+the transaction price is transferred to the seller and the fee is finally deducted.
+Or the transaction ends in one of the other phases and the buyer's blocked amount is
+reimbursed.
