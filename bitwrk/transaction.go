@@ -305,6 +305,8 @@ type phaseTransitionRule struct {
 	phaseTransitions []phaseTransition
 }
 
+// This table encodes the BitWrk transaction interaction protocol by defining
+// which messages cause which possible phase transitions.
 var phaseTransitionRules = []phaseTransitionRule{
 	{makeMessageType(FromBuyer, "workhash", "worksecrethash").with(handleWorkHashes),
 		[]phaseTransition{
@@ -359,10 +361,10 @@ func retireNow(tx *Transaction, now time.Time) {
 var phaseArrivalFuncs = map[TxPhase]phaseArrivalFunc{
 	PhaseTransmitting:   grantTime(2 * time.Minute),
 	PhaseWorking:        grantTime(5 * time.Minute),
-	PhaseUnverified:     grantTime(5 * time.Minute),
+	PhaseUnverified:     grantTime(15 * time.Minute),
 	PhaseFinished:       retireNow,
-	PhaseWorkDisputed:   grantTime(1 * time.Hour),
-	PhaseResultDisputed: grantTime(1 * time.Hour),
+	PhaseWorkDisputed:   retireNow,
+	PhaseResultDisputed: retireNow,
 }
 
 func (tx *Transaction) findMatchingRule(address string, arguments map[string]string) *phaseTransitionRule {
@@ -556,6 +558,10 @@ func handleTransmitFinished(tx *Transaction, arguments map[string]string) error 
 	return nil
 }
 
+// Given two matching bids, an older one and a newer one, returns a new Transaction object.
+// Also checks that none of the bids has expired and that they're in the correct state (placed, in_queue).
+// The resulting transaction's price is defined by the elder bid, as is the fee.
+// In case of success, both bids are modified in order to reflect their new matched state.
 func NewTransaction(now time.Time, newKey, oldKey string, newBid, oldBid *Bid) (*Transaction, error) {
 	// sanity checks
 	if oldBid.Type == newBid.Type || oldBid.Price.Currency != newBid.Price.Currency || oldBid.Article != newBid.Article {
@@ -597,7 +603,7 @@ func NewTransaction(now time.Time, newKey, oldKey string, newBid, oldBid *Bid) (
 	}
 
 	tx.Price = oldBid.Price
-	tx.Fee = money.Min(newBid.Fee, oldBid.Fee)
+	tx.Fee = oldBid.Fee
 	tx.BuyerBid = buyKey
 	tx.SellerBid = sellKey
 	tx.Buyer = buyBid.Participant
@@ -611,6 +617,9 @@ func NewTransaction(now time.Time, newKey, oldKey string, newBid, oldBid *Bid) (
 	return tx, nil
 }
 
+// Applies a newly-created transaction to the accounting system.
+// This will reimburse the (positive) delta between bid and transaction price to
+// the buyer, an amount that was blocked when the bid was created.
 func (tx *Transaction) Book(dao CachedAccountingDao, txId string, buyerBid *Bid) error {
 	bidPrice := buyerBid.Price.Add(buyerBid.Fee)
 	txPrice := tx.Price.Add(tx.Fee)
@@ -632,9 +641,14 @@ func (tx *Transaction) Book(dao CachedAccountingDao, txId string, buyerBid *Bid)
 var ErrTooYoung = fmt.Errorf("This transaction is too young to be retired")
 var ErrAlreadyRetired = fmt.Errorf("Thid transaction has already been retired")
 
-// Retires the transaction and performs the necessary accounting steps.
+// Retires the transaction and performs the necessary accounting steps:
+// - If the transaction retires in UNVERIFIED or FINISHED state, the buyer's blocked
+//   money is transferred to the seller
+// - Otherwise, the blocked money is reimbursed
 // Returns ErrTooYoung if the transaction is too young for retirement.
 // Returns ErrAlreadyRetired if the transaction has already been retired.
+// In case of success (regardless of transaction phase), the transaction is marked
+// as retired and the revision count is increased.
 func (tx *Transaction) Retire(dao AccountingDao, txId string, now time.Time) error {
 	if tx.Price.Currency != tx.Fee.Currency {
 		panic("Inconsistent currencies")
@@ -649,17 +663,19 @@ func (tx *Transaction) Retire(dao AccountingDao, txId string, now time.Time) err
 
 	var err error
 	zero := money.Money{Currency: tx.Price.Currency, Amount: 0}
-	if tx.Phase == PhaseFinished {
+	if tx.Phase == PhaseFinished || tx.Phase == PhaseUnverified {
+		// Transfer buyer's money (sans fee) to seller, sack fee
 		err = PlaceAccountMovement(dao, now, AccountMovementTransactionFinish,
 			tx.Seller, tx.Buyer,
 			tx.Price, tx.Price.Add(tx.Fee).Neg(),
 			tx.Fee, zero,
 			nil, &txId, nil, nil)
 	} else {
+		// Reimburse buyer's money
 		err = PlaceAccountMovement(dao, now, AccountMovementTransactionFinish,
 			tx.Buyer, tx.Buyer,
 			tx.Price.Add(tx.Fee), tx.Price.Add(tx.Fee).Neg(),
-			money.Money{Currency: tx.Price.Currency, Amount: 0}, zero,
+			zero, zero,
 			nil, &txId, nil, nil)
 	}
 	if err != nil {
