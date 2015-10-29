@@ -128,8 +128,10 @@ resy = int(render.resolution_y * percentage / 100)
 
 render.use_border = True
 render.use_crop_to_border = True
-render.tile_x = 32
-render.tile_y = 32
+render.tile_x = max(4, min(64, (xmax - xmin + 1) // 8))
+render.tile_y = max(4, min(64, (ymax - ymin + 1) // 8))
+print("Using tiles of size", render.tile_x, render.tile_y)
+render.threads_mode='AUTO'
 
 # Add 0.5 to integer coords to avoid errors caused by rounding towards zero
 render.border_min_x = (xmin+0.5) / resx
