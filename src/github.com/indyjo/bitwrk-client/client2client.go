@@ -45,6 +45,7 @@ type WorkHandler interface {
 
 type WorkReceiver interface {
 	Dispose()
+	IsDisposed() (bool, error) // Returns whether the work receiver was disposed, and if so, if there was an error
 	URL() string
 }
 
@@ -66,16 +67,26 @@ func NewWorkReceiver(log bitwrk.Logger,
 		if err := result.handleRequest(w, r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			log.Printf("Error in request: %v", err)
-			result.Dispose()
+			result.doDispose(fmt.Errorf("Error handling request from %v: %v", r.RemoteAddr, err))
 		}
 	}
 	result.endpoint.SetHandler(withCompression(handlerFunc))
 	return result
 }
 
+// An object of this type is created for each sell and registered as an HTTP handler on a
+// randomly-generated path. See receive.go for how that works.
+// Function handleRequest(...) is called multiple times as client-client communication
+// is performed in several requests.
+// The endpointReceiver keeps the necessary state to correctly handle each step.
 type endpointReceiver struct {
-	mutex            sync.Mutex
+	// Must be acquired for every read or write within endpointReceiver.
+	// Exception: reading from disposed* fields.
+	mutex sync.Mutex
+	// Must be acquired for reading and writing the disposed* fields
+	disposedMutex    sync.Mutex
 	disposed         bool
+	disposedError    error
 	endpoint         *Endpoint
 	storage          cafs.FileStorage
 	log              bitwrk.Logger
@@ -93,9 +104,13 @@ func (r *endpointReceiver) URL() string {
 	return r.endpoint.URL()
 }
 
-func (receiver *endpointReceiver) doDispose() {
+func (receiver *endpointReceiver) doDispose(err error) {
+	receiver.disposedMutex.Lock()
+	defer receiver.disposedMutex.Unlock()
+
 	if !receiver.disposed {
 		receiver.disposed = true
+		receiver.disposedError = err
 		receiver.endpoint.Dispose()
 		if receiver.builder != nil {
 			receiver.builder.Dispose()
@@ -111,7 +126,13 @@ func (receiver *endpointReceiver) doDispose() {
 func (receiver *endpointReceiver) Dispose() {
 	receiver.mutex.Lock()
 	defer receiver.mutex.Unlock()
-	receiver.doDispose()
+	receiver.doDispose(nil)
+}
+
+func (receiver *endpointReceiver) IsDisposed() (bool, error) {
+	receiver.disposedMutex.Lock()
+	defer receiver.disposedMutex.Unlock()
+	return receiver.disposed, receiver.disposedError
 }
 
 var ZEROHASH bitwrk.Thash
@@ -122,6 +143,15 @@ type todoList struct {
 	mustHandleReceipt     bool
 }
 
+// This function handles all (http) requests from buyer to seller.
+// - an OPTIONS request for querying protocol options
+// - A POST where the buyer sends a list of block hashes and the seller returns which are missing
+// - A POST where the buyer sends work data and a "buyer secret" and the seller publishes it, does the work and
+//   returns the finished result, encrypted with one-time key.
+//   This comes in two variants: A simple one that contains complete work data and one that contains the chunks
+//   requested using the previous request.
+// - A POST where the buyer acknowledges the reception of the encrypted result using a signature and the seller
+//   publishes this information and returns the decryption key
 func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "OPTIONS" {
 		w.Header().Set("Content-Type", "application/json")
@@ -135,11 +165,6 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 
 	receiver.mutex.Lock()
 	defer receiver.mutex.Unlock()
-
-	// Verify we haven't been disposed yet
-	if receiver.disposed {
-		return ErrAlreadyDisposed
-	}
 
 	receiver.log.Printf("Handling request from %v on %v", r.RemoteAddr, r.URL)
 	defer receiver.log.Printf("Done handling request from %v on %v", r.RemoteAddr, r.URL)
@@ -187,9 +212,9 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 		reader := receiver.encResultFile.Open()
 		defer reader.Close()
 		if _, err := io.Copy(w, reader); err != nil {
-			fmt.Printf("Error sending work result back to buyer: %v", err)
+			return fmt.Errorf("Error sending work result back to buyer: %v", err)
 		}
-		return nil // No use in returning an error, http connection is probably closed anyway
+		return nil
 	} else {
 		panic("Shouldn't get here")
 	}
@@ -383,7 +408,7 @@ func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(log bitwrk.Logger, wor
 		return err
 	}
 
-	a.encResultFile = temp.File()
+	a.execSync(func() { a.encResultFile = temp.File() })
 
 	return nil
 }

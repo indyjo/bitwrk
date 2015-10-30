@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -64,9 +64,8 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workF
 
 	file, err := a.doPerformBuy(log, interrupt)
 	if err != nil {
-		a.lastError = err
+		a.execSync(func() { a.lastError = err })
 	}
-	a.alive = false
 	return file, err
 }
 
@@ -80,7 +79,7 @@ func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (ca
 	if _, err := rand.Reader.Read(secret[:]); err != nil {
 		return nil, err
 	}
-	a.buyerSecret = &secret
+	a.execSync(func() { a.buyerSecret = &secret })
 	log.Printf("Computed buyer's secret.")
 
 	// Get work hash
@@ -110,15 +109,27 @@ func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (ca
 		return nil, fmt.Errorf("Error awaiting TRANSMITTING phase: %v", err)
 	}
 
+	var sellerErr error
 	if err := a.interactWithSeller(log.New("transmitting")); err != nil {
-		return nil, fmt.Errorf("Error transmitting work and receiving encrypted result: %v", err)
+		sellerErr = fmt.Errorf("Error transmitting work and receiving encrypted result: %v", err)
 	}
 
+	var phaseErr error
 	if err := a.waitForTransactionPhase(log, bitwrk.PhaseUnverified, bitwrk.PhaseTransmitting, bitwrk.PhaseWorking); err != nil {
-		return nil, fmt.Errorf("Error awaiting UNVERIFIED phase: %v", err)
+		phaseErr = fmt.Errorf("Error awaiting UNVERIFIED phase: %v", err)
 	}
 
-	a.encResultKey = a.tx.ResultDecryptionKey
+	if sellerErr == nil && phaseErr == nil {
+		// Everythong went fine, continue
+	} else if sellerErr == nil {
+		return nil, phaseErr
+	} else if phaseErr == nil {
+		return nil, sellerErr
+	} else {
+		return nil, fmt.Errorf("%v. Additionally: %v", phaseErr, sellerErr)
+	}
+
+	a.execSync(func() { a.encResultKey = a.tx.ResultDecryptionKey })
 
 	if err := a.decryptResult(); err != nil {
 		return nil, fmt.Errorf("Error decrypting result: %v", err)
@@ -150,6 +161,7 @@ func (a *BuyActivity) finishBuy(log bitwrk.Logger) error {
 	}
 
 	a.waitWhile(func() bool { return a.tx.State == bitwrk.StateActive })
+	a.execSync(func() { a.alive = false })
 	return nil
 }
 
@@ -252,7 +264,7 @@ func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
 		return err
 	}
 
-	a.encResultFile = temp.File()
+	a.execSync(func() { a.encResultFile = temp.File() })
 
 	if err := a.signReceipt(scopedClient); err != nil {
 		return fmt.Errorf("Error signing receipt for encrypted result: %v", err)
@@ -368,8 +380,10 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 
 	// Communicate status back
 	progressCallback := func(bytesToTransfer, bytesTransferred uint64) {
-		a.bytesToTransfer = bytesToTransfer
-		a.bytesTransferred = bytesTransferred
+		a.execSync(func() {
+			a.bytesToTransfer = bytesToTransfer
+			a.bytesTransferred = bytesTransferred
+		})
 	}
 
 	// Write work chunks into pipe for HTTP request
@@ -453,7 +467,9 @@ func (a *BuyActivity) signReceipt(client *http.Client) error {
 	if sig, err := a.identity.SignMessage(encresulthash, rand.Reader); err != nil {
 		return err
 	} else {
-		a.encResultHashSig = sig
+		a.execSync(func() {
+			a.encResultHashSig = sig
+		})
 	}
 
 	formValues := url.Values{}
@@ -495,7 +511,9 @@ func (a *BuyActivity) decryptResult() error {
 		return err
 	}
 
-	a.resultFile = temp.File()
+	a.execSync(func() {
+		a.resultFile = temp.File()
+	})
 
 	return nil
 }

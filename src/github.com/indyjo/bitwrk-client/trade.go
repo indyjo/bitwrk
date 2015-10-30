@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -101,6 +101,15 @@ func (a *Trade) beginTrade(log bitwrk.Logger, interrupt <-chan bool) error {
 	}
 
 	return nil
+}
+
+// Executes a short function that modifies the trade's internal state.
+// Then broadcasts a signal to condition listeners.
+func (t *Trade) execSync(f func()) {
+	t.condition.L.Lock()
+	defer t.condition.L.Unlock()
+	f()
+	t.condition.Broadcast()
 }
 
 func (t *Trade) awaitPermission(interrupt <-chan bool) error {

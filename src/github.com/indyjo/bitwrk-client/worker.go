@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -164,10 +164,10 @@ func (s *WorkerState) executeSell(log bitwrk.Logger, sell *SellActivity, interru
 }
 
 func (s *WorkerState) blockFor(d time.Duration) {
-	s.Blockers++ // Unlocked after 20s
+	s.Blockers++ // Unlocked after N seconds
 	s.cond.Broadcast()
 	go func() {
-		time.Sleep(20 * time.Second)
+		time.Sleep(d)
 		s.cond.L.Lock()
 		defer s.cond.L.Unlock()
 		s.Blockers--

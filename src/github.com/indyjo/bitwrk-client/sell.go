@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -66,9 +66,9 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 	defer log.Println("Sell finished")
 	err := a.doPerformSell(log, receiveManager, interrupt)
 	if err != nil {
-		a.lastError = err
+		a.execSync(func() { a.lastError = err })
 	}
-	a.alive = false
+	a.execSync(func() { a.alive = false })
 	return err
 }
 
@@ -96,15 +96,38 @@ func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *ReceiveM
 		return err
 	}
 
-	// Wait through the whole transaction lifecycle
-	a.waitForTransactionPhase(log, bitwrk.PhaseFinished,
-		bitwrk.PhaseEstablishing,
-		bitwrk.PhaseBuyerEstablished,
-		bitwrk.PhaseSellerEstablished,
-		bitwrk.PhaseTransmitting,
-		bitwrk.PhaseWorking,
-		bitwrk.PhaseUnverified)
-	return nil
+	// Wait while transaction is active and work is not finished
+	var txState bitwrk.TxState
+	var txPhase bitwrk.TxPhase
+	a.waitWhile(func() bool {
+		txPhase = a.tx.Phase
+		txState = a.tx.State
+		return txState == bitwrk.StateActive &&
+			txPhase != bitwrk.PhaseUnverified
+	})
+
+	// Return an error if receiver had one
+	var receiverErr error
+	if disposed, err := receiver.IsDisposed(); disposed && err != nil {
+		receiverErr = err
+	}
+
+	// Return an error if transaction ended unexpectedly
+	var stateErr error
+	if txState != bitwrk.StateActive && txPhase != bitwrk.PhaseUnverified && txPhase != bitwrk.PhaseFinished {
+		stateErr = fmt.Errorf("Sell ended unexpectedly in phase %v", txPhase)
+	}
+
+	// Depending on failure mode, report the corresponding error
+	if stateErr == nil && receiverErr == nil {
+		return nil
+	} else if receiverErr == nil {
+		return stateErr
+	} else if stateErr == nil {
+		return receiverErr
+	} else {
+		return fmt.Errorf("%v. Additionally: %v", stateErr, receiverErr)
+	}
 }
 
 func (a *SellActivity) HandleWork(log bitwrk.Logger, workFile cafs.File, buyerSecret bitwrk.Thash) (io.ReadCloser, error) {
