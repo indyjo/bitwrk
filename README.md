@@ -43,6 +43,8 @@ What next?
 
 News
 ----
+  - **2015-11-01:** Release of BitWrk 0.5.1 "Moon": Support for Blender 2.76,
+  compressed data transmission, revised transaction logic and lots of bugs fixed
   - **2015-08-10:** Release of BitWrk 0.5.0: Bitcoin integration is finally here, allowing
   users to pay in Bitcoin
   - **2015-01-15:** News have moved to BitWrk's website: http://bitwrk.net
@@ -62,7 +64,7 @@ News
 Status
 ------
 
-As of version 0.5.0:
+As of version 0.5.1:
 - BitWrk is now integrated with a Bitcoin payment processing system, allowing users to pay for
   compute power, in Bitcoin. For this, the user has to request a deposit address, which will
   be provided after a couple of seconds by the payment processor. Bitcoin transactions need at
@@ -93,4 +95,4 @@ As of version 0.5.0:
   exchange and to keep them busy.
 
 Have fun!
-2015-08-10, Jonas Eschenburg
+2015-11-01, Jonas Eschenburg
