@@ -133,7 +133,7 @@ class BitWrkSettings(bpy.types.PropertyGroup):
                 ('32G', "32 Giga-rays", "", 2)],
             default='512M',
             set=set_complexity,
-            get=lambda value: value['complexity'])
+            get=lambda value: value['complexity'] if 'complexity' in value else 3)
         settings.concurrency = IntProperty(
             name="Concurrent tiles",
             description="Maximum number of BitWrk trades active in parallel",
@@ -696,7 +696,7 @@ def save_copy(filepath):
 def process_file(filepath):
     """Opens the given blend file in a separate Blender process and substitutes
     file paths to those which will exist on the worker side."""
-    ret = subprocess.call([sys.argv[0], "-b", "--enable-autoexec", "-noaudio", filepath, "-P", __file__, "--", "process"])
+    ret = subprocess.call([sys.argv[0], "-b", "--enable-autoexec", "-noaudio", filepath, "-P", __file__, "--", "process", filepath])
     if ret != 0:
         raise RuntimeError("Error processing file '{}': Calling blender returned code {}".format(filepath, ret))
 
@@ -790,10 +790,10 @@ if __name__ == "__main__":
     else:
         try:
             args = sys.argv[idx+1:]
-            if len(args) > 0 and args[0] == 'process':
+            if len(args) > 1 and args[0] == 'process':
                 repath()
                 remove_scripted_drivers()
-                bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath, check_existing=False, compress=False)
+                bpy.ops.wm.save_as_mainfile(filepath=args[1], check_existing=False, compress=False)
         except:
             traceback.print_exc()
             sys.exit(-1)
