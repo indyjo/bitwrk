@@ -32,11 +32,34 @@ Running the BitWrk client
 
 ### Done!
 Now you should see the BitWrk client's admin user interface on http://localhost:8081/,
-showing your account number (which has been randomly chosen) and your current (virtual)
-balance of **BTC 1** in the status bar at the top of the page.
-  
+showing your account number (which has been randomly chosen) and your current
+balance of **BTC 0** in the status bar at the top of the page.
+
 Your next step is to try buying and selling on the BitWrk network using Blender,
 BitWrk's first supported application.
+
+For selling, you may skip a couple of paragraphs.
+For buying, i.e. rendering, you need to first deposit some money on your account.
+
+Depositing money on your account
+--------------------------------
+Before you can start buying on BitWrk, you need to deposit a small amount of Bitcoin on your
+account, which will be used to pay for the computing power you use. Deposits can be as small
+as 1 mBTC (BTC 0.001), i.e. you *don't* need to put large amounts of money on BitWrk, and
+there is *no* subscription involved.
+
+To deposit money on your account:
+- Make sure you have a Bitcoin client installed (either on you PC, or on your cell phone, tablet
+  etc.) that has some money on it. Please refer to http://bitcoin.org for more information on that
+  topic.
+- In the BitWrk client's user interface, go to the "Accounts" tab (http://localhost:8081/ui/account)
+- New accounts don't have a deposit address assigned to them. Click on "Generate a new deposit address"
+  and wait for a couple of seconds. A QR code should appear which can be scanned with your cell phone.
+  If you have a Bitcoin client installed on your computer, you may directly click the address link.
+- Using your Bitcoin client, deposit a *small* amount of money to the generated address.
+- Because of the way Bitcoin works, your account will be credited with the transferred amount after
+  about one hour, which equates to 6 Bitcoin confirmations.
+
 
 Blender Integration
 -------------------
@@ -48,7 +71,8 @@ software, Blender (http://blender.org/), as a proof-of-concept project.
 In order to use BitWrk to accelerate Blender's "Cycles" rendering engine, perform
 the following steps: 
 - Setup the BitWrk client as described in the previous section.
-- Start Blender (at least version 2.69). Select a scene you like. Verify that it looks
+- Start Blender (if in doubt, use the version supported by the latest BitWrk release).
+- Select a scene you like. Verify that it looks
   good when rendered with the "Cycles" rendering engine.
 - Go to **User Preferences -> Addons -> Install From File**
 - Select **render_bitwrk.py**. You find it in BitWrk's **bitwrk-blender** folder.
@@ -64,8 +88,7 @@ the following steps:
   small tiles.
 - You now need to browse to the BitWrk client's user interface (on http://localhost:8081/)
   permit the buys you just made. You can choose a price you are willing to pay for each
-  tile (this is just proof-of-concept for now, there is no money involved with BitWrk at
-  this stage). Best to leave it at the default.
+  tile. The minimum price allowed by BitWrk is 10 uBTC (BTC 0.00001).
 
 
 ### Selling rendering power on BitWrk
