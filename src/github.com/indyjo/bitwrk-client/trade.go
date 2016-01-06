@@ -96,8 +96,10 @@ func (a *Trade) beginTrade(log bitwrk.Logger, interrupt <-chan bool) error {
 	if tx, etag, err := FetchTx(a.txId, ""); err != nil {
 		return err
 	} else {
-		a.tx = tx
-		a.txETag = etag
+		a.execSync(func() {
+			a.tx = tx
+			a.txETag = etag
+		})
 	}
 
 	return nil

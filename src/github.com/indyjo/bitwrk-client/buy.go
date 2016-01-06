@@ -60,12 +60,17 @@ func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error)
 // Manages the complete lifecycle of a buy.
 // When a bool can be read from interrupt, the buy is aborted.
 func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workFile cafs.File) (cafs.File, error) {
-	a.workFile = workFile.Duplicate()
+	a.execSync(func() { a.workFile = workFile.Duplicate() })
+	defer a.execSync(func() {
+		a.alive = false
+		log.Printf("Buy finished")
+	})
 
 	file, err := a.doPerformBuy(log, interrupt)
 	if err != nil {
 		a.execSync(func() { a.lastError = err })
 	}
+
 	return file, err
 }
 
