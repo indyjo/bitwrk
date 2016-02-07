@@ -77,9 +77,9 @@ security leak by which an attacker could steal the data stored on the server
 would *not* allow them to perform any monetary transactions in the name of users.
  
 As a user of BitWrk, you shouldn't need to worry about the server. You need
-to trust it, though, especially if you decide to send money to it (which as
-of now is not possible, but will be). As a trust-building measure, the
-server's source code is open-sourced, too.
+to trust it, though, especially if you decide to send money to it.
+
+As a trust-building measure, the server's source code is open-sourced, too.
 
 Identity Management
 -------------------
@@ -94,7 +94,7 @@ This ID serves two distinct purposes:
 When communicating with the BitWrk service, such as when placing a bid, the client must
 authenticate, i.e. prove that it really *is* the the owner address it *claims* to have.
 
-Then, after some time of selling work on BitWrk, the Money earned will be transferred
+Then, after some time of selling work on BitWrk, the money earned will be transferred
 (via Bitcoin) back to this address.
 
 In order to be able to prove the ownership of its account ID, the BitWrk client must
