@@ -37,7 +37,7 @@ What next?
   started in 5 minutes.
 - [About BitWrk](ABOUT.md) explains what BitWrk is and what it is meant to become.
 - [Compiling BitWrk Yourself](COMPILING.md) caters to developers and Linux users.
-- Read more about the [Concepts Behind BitWrk](documentation/CONCEPTS.md).
+- Read more about the [Concepts Behind BitWrk](CONCEPTS.md).
 - Consult [this file](COPYING) about the license under which BitWrk is distributed (GPLV3).
 
 
