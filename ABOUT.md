@@ -48,4 +48,4 @@ If, on the other hand, Bitcoin turns out _not_ to be a good choice, that's
 not going to be a problem. BitWrk itself does not _depend_ on it. Other
 currencies and payment methods can be integrated later on.
 
-Read more about the [concepts behind BitWrk](documentation/CONCEPTS.md).
+Read more about the [concepts behind BitWrk](CONCEPTS.md).
