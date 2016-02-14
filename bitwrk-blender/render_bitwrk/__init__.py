@@ -28,8 +28,15 @@ bl_info = {
 }
 
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory)
-import bpy
+
 from render_bitwrk import render, settings, settings_panel
+
+if "bpy" in locals():
+    import imp
+    imp.reload(render)
+    imp.reload(settings)
+    imp.reload(settings_panel)
+import bpy
 
 def register():
     bpy.utils.register_class(render.BitWrkRenderEngine)
