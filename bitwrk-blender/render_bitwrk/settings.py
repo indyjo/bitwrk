@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2016  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 # ##### END GPL LICENSE BLOCK #####
 
 import bpy
-from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty, FloatProperty
+from bpy.props import BoolProperty, StringProperty, IntProperty, PointerProperty, EnumProperty, FloatProperty
 
 # used by BitWrkSettings PropertyGroup
 def set_complexity(self, value):
@@ -65,6 +65,14 @@ class BitWrkSettings(bpy.types.PropertyGroup):
             max=64.0,
             precision=2,
             subtype='FACTOR')
+        settings.expert_mode = BoolProperty(
+            name="Show advanced options",
+            description="Enables display of expert settings",
+            default=False)
+        settings.bitwrk_client_executable_path = StringProperty(
+            name="BitWrk client executable",
+            description="Path to the BitWrk client's executable file",
+            subtype='FILE_PATH')
         
         bpy.types.Scene.bitwrk_settings = PointerProperty(type=BitWrkSettings, name="BitWrk Settings", description="Settings for using the BitWrk service")
 

@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2016  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -29,13 +29,14 @@ bl_info = {
 
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory)
 
-from render_bitwrk import render, settings, settings_panel
+from render_bitwrk import render, settings, settings_panel, bitwrkclient
 
 if "bpy" in locals():
     import imp
     imp.reload(render)
     imp.reload(settings)
     imp.reload(settings_panel)
+    imp.reload(bitwrkclient)
 import bpy
 
 def register():
@@ -43,6 +44,8 @@ def register():
     bpy.utils.register_class(settings_panel.RENDER_PT_bitwrk_settings)
     bpy.utils.register_class(settings.BitWrkSettings)
     bpy.utils.register_class(settings_panel.StartBrowserOperator)
+    bpy.utils.register_class(settings_panel.StartBitwrkClientOperator)
+    bpy.utils.register_class(settings_panel.StopBitwrkClientOperator)
     for name in dir(bpy.types):
         klass = getattr(bpy.types, name)
         if 'COMPAT_ENGINES' not in dir(klass):
@@ -54,6 +57,12 @@ def register():
         
     
 def unregister():
+    try:
+        bitwrkclient.stop_bitwrk_client()
+    except:
+        pass
+    bpy.utils.unregister_class(settings_panel.StopBitwrkClientOperator)
+    bpy.utils.unregister_class(settings_panel.StartBitwrkClientOperator)
     bpy.utils.unregister_class(settings_panel.StartBrowserOperator)
     bpy.utils.unregister_class(settings.BitWrkSettings)
     bpy.utils.unregister_class(settings_panel.RENDER_PT_bitwrk_settings)
