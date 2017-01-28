@@ -21,7 +21,7 @@ import (
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
-	. "github.com/indyjo/bitwrk-common/protocol"
+	"github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/cafs"
 	"io"
 	"sync"
@@ -93,7 +93,7 @@ func (a *Trade) beginTrade(log bitwrk.Logger, interrupt <-chan bool) error {
 	}
 	log.Printf("Got transaction id: %v", a.txId)
 
-	if tx, etag, err := FetchTx(a.txId, ""); err != nil {
+	if tx, etag, err := protocol.FetchTx(a.txId, ""); err != nil {
 		return err
 	} else {
 		a.execSync(func() {
@@ -114,36 +114,24 @@ func (t *Trade) execSync(f func()) {
 	t.condition.Broadcast()
 }
 
+// Waits until user has granted permission for this trade.
+// Returns nil on success and
+// ErrNoPermission if permission was rejected.
+// Returns ErrInterrupted if a boolean can be read from 'interrupt' while waiting.
 func (t *Trade) awaitPermission(interrupt <-chan bool) error {
-	exit := make(chan bool)
-	defer func() {
-		exit <- true
-	}()
-	interrupted := false
-	go func() {
-		for {
-			select {
-			case <-interrupt:
-				interrupted = true
-				t.condition.Broadcast()
-			case <-exit:
-				return
-			}
-		}
-	}()
-	// wait for permission or rejection
-	t.condition.L.Lock()
-	defer t.condition.L.Unlock()
-	for !t.accepted && !t.rejected && !interrupted {
-		t.condition.Wait()
-	}
-	if interrupted {
-		return ErrInterrupted
-	}
-	if t.accepted {
+	rejected := false
+	err := t.interruptibleWaitWhile(interrupt, func() bool {
+		rejected = t.rejected
+		return !t.accepted && !t.rejected
+	})
+
+	if err != nil {
+		return err
+	} else if rejected {
+		return ErrNoPermission
+	} else {
 		return nil
 	}
-	return ErrNoPermission
 }
 
 var bidMutex sync.Mutex
@@ -159,7 +147,7 @@ func (t *Trade) awaitBid() error {
 		t.article,
 		t.price,
 	}
-	if bidId, err := PlaceBid(&rawBid, t.identity); err != nil {
+	if bidId, err := protocol.PlaceBid(&rawBid, t.identity); err != nil {
 		return err
 	} else {
 		t.bidId = bidId
@@ -170,7 +158,7 @@ func (t *Trade) awaitBid() error {
 func (t *Trade) awaitTransaction(log bitwrk.Logger) error {
 	lastETag := ""
 	for count := 1; ; count++ {
-		if bid, etag, err := FetchBid(t.bidId, lastETag); err != nil {
+		if bid, etag, err := protocol.FetchBid(t.bidId, lastETag); err != nil {
 			return fmt.Errorf("Error in FetchBid awaiting transaction: %v", err)
 		} else if bid != nil {
 			log.Printf("Bid: %#v ETag: %v lastETag: %v", *bid, etag, lastETag)
@@ -230,6 +218,7 @@ func (t *Trade) waitForTransactionPhase(log bitwrk.Logger, phase bitwrk.TxPhase,
 	return ErrTxUnexpectedState
 }
 
+// Waits on state changes and repeatedly evaluates f() until it returns false once. Then returns.
 func (t *Trade) waitWhile(f func() bool) {
 	t.condition.L.Lock()
 	defer t.condition.L.Unlock()
@@ -240,6 +229,36 @@ func (t *Trade) waitWhile(f func() bool) {
 		}
 		t.condition.Wait()
 	}
+}
+
+// Waits on state changes until either f() returns false or a boolean was read from interrupt,
+// in which case ErrInterrupted is returned. Otherwise, returns nil.
+func (t *Trade) interruptibleWaitWhile(interrupt <-chan bool, f func() bool) error {
+	// On end of function, send a boolean through 'exit' to stop
+	exit := make(chan bool)
+	defer func() {
+		exit <- true
+	}()
+
+	// Listen for interrupt and exit signal in parallel goroutine
+	interrupted := false
+	go func() {
+		for {
+			select {
+			case <-interrupt:
+				interrupted = true
+				t.condition.Broadcast()
+			case <-exit:
+				return
+			}
+		}
+	}()
+
+	t.waitWhile(func() bool { return !interrupted && f() })
+	if interrupted {
+		return ErrInterrupted
+	}
+	return nil
 }
 
 // Closes resources upon exit of a function or when some condition no longer holds
@@ -283,7 +302,7 @@ func (t *Trade) updateTransaction(log bitwrk.Logger) error {
 	attemptsLeft := 3
 	for attemptsLeft > 0 {
 		attemptsLeft--
-		if tx, etag, err := FetchTx(t.txId, ""); err != nil {
+		if tx, etag, err := protocol.FetchTx(t.txId, ""); err != nil {
 			log.Printf("Error updating transaction: %v (attempts left: %d)", err, attemptsLeft)
 			if attemptsLeft > 0 {
 				time.Sleep(5 * time.Second)
@@ -326,7 +345,7 @@ func (t *Trade) pollTransaction(log bitwrk.Logger, abort <-chan bool) {
 		default:
 		}
 
-		if tx, etag, err := FetchTx(t.txId, ""); err != nil {
+		if tx, etag, err := protocol.FetchTx(t.txId, ""); err != nil {
 			log.Printf("Error polling transaction: %v", err)
 		} else if etag != t.txETag {
 			t.condition.L.Lock()
