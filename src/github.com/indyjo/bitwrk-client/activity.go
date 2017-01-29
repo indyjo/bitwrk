@@ -17,6 +17,7 @@
 package client
 
 import (
+	"crypto/rand"
 	"errors"
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
@@ -72,6 +73,7 @@ type ActivityState struct {
 }
 
 type ActivityManager struct {
+	logger     bitwrk.Logger
 	mutex      *sync.Mutex
 	activities map[ActivityKey]Activity
 	mandates   map[ActivityKey]*Mandate
@@ -82,6 +84,7 @@ type ActivityManager struct {
 }
 
 var activityManager = ActivityManager{
+	bitwrk.Root().New("ActivityManager"),
 	new(sync.Mutex),
 	make(map[ActivityKey]Activity),
 	make(map[ActivityKey]*Mandate),
@@ -93,6 +96,51 @@ var activityManager = ActivityManager{
 
 func GetActivityManager() *ActivityManager {
 	return &activityManager
+}
+
+func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error) {
+	now := time.Now()
+	result := &BuyActivity{
+		Trade: Trade{
+			condition:  sync.NewCond(new(sync.Mutex)),
+			manager:    m,
+			key:        m.NewKey(),
+			started:    now,
+			lastUpdate: now,
+			bidType:    bitwrk.Buy,
+			article:    article,
+			alive:      true,
+		},
+	}
+	m.register(result.key, result)
+	return result, nil
+}
+
+func (m *ActivityManager) NewSell(worker Worker) (*SellActivity, error) {
+	now := time.Now()
+
+	result := &SellActivity{
+		Trade: Trade{
+			condition:    sync.NewCond(new(sync.Mutex)),
+			manager:      m,
+			key:          m.NewKey(),
+			started:      now,
+			lastUpdate:   now,
+			bidType:      bitwrk.Sell,
+			article:      worker.GetWorkerState().Info.Article,
+			encResultKey: new(bitwrk.Tkey),
+			alive:        true,
+		},
+		worker: worker,
+	}
+
+	// Get a random key for encrypting the result
+	if _, err := rand.Reader.Read(result.encResultKey[:]); err != nil {
+		return nil, err
+	}
+
+	m.register(result.key, result)
+	return result, nil
 }
 
 func (m *ActivityManager) GetStorage() cafs.FileStorage {
@@ -175,6 +223,38 @@ func (m *ActivityManager) register(key ActivityKey, activity Activity) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.activities[key] = activity
+
+	trade := activity.GetTrade()
+	if trade == nil {
+		return // Only trades are activities we care about at the moment
+	}
+
+	// First try to find a local match
+	for key2, activity2 := range m.activities {
+		if key2 == key {
+			continue // can't match activity with itself
+		}
+		// can only match with activities of same article and opposite type (buy/sell)
+		trade2 := activity2.GetTrade()
+		if trade2 == nil || trade2.article != trade.article || trade2.bidType == trade.bidType {
+			continue
+		}
+		// other activity could be a valid local match
+		matched := false
+		trade2.execSync(func() {
+			if trade2.alive && !trade2.accepted && !trade2.rejected {
+				trade.localMatch = trade2
+				trade2.localMatch = trade
+				matched = true
+				m.logger.Printf("Local match: #%v (new) - #%v (old)", key, key2)
+			}
+		})
+
+		if matched {
+			return // Early exit when a match was found
+		}
+	}
+
 	// Try to apply all known mandates to the new activity, until a matching mandate
 	// was applied successfully.
 	for mandateKey, mandate := range m.mandates {

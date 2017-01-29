@@ -31,35 +31,17 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"sync"
-	"time"
 )
 
 type BuyActivity struct {
 	Trade
 }
 
-func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error) {
-	now := time.Now()
-	result := &BuyActivity{
-		Trade: Trade{
-			condition:  sync.NewCond(new(sync.Mutex)),
-			manager:    m,
-			key:        m.NewKey(),
-			started:    now,
-			lastUpdate: now,
-			bidType:    bitwrk.Buy,
-			article:    article,
-			alive:      true,
-		},
-	}
-	m.register(result.key, result)
-	return result, nil
-}
-
-// Manages the complete lifecycle of a buy.
+// Manages the complete lifecycle of a buy, which can either be local or remote.
 // When a bool can be read from interrupt, the buy is aborted.
+// On success, returns a cafs.File to the result data.
 func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workFile cafs.File) (cafs.File, error) {
+	log.Printf("Buy started")
 	a.execSync(func() { a.workFile = workFile.Duplicate() })
 	defer a.execSync(func() {
 		a.alive = false
@@ -74,8 +56,50 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workF
 	return file, err
 }
 
+// Waits for clearance and then performs either a local or a remote buy, depending on the decision taken.
 func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
-	if err := a.beginTrade(log, interrupt); err != nil {
+	if err := a.awaitClearance(log, interrupt); err != nil {
+		return nil, err
+	}
+
+	if a.localMatch != nil {
+		return a.doLocalBuy(log, interrupt)
+	} else {
+		return a.doRemoteBuy(log, interrupt)
+	}
+}
+
+// Performs a local buy.
+func (a *BuyActivity) doLocalBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
+	sell := a.localMatch
+	var resultFile cafs.File
+
+	// Wait for sell to either die or produce a result
+	if err := sell.interruptibleWaitWhile(interrupt, func() bool {
+		if sell.alive && sell.resultFile == nil {
+			return true
+		} else {
+			if sell.resultFile != nil {
+				resultFile = sell.resultFile.Duplicate()
+			}
+			return false
+		}
+	}); err != nil {
+		return nil, fmt.Errorf("Error waiting for local sell to complete: %v", err)
+	}
+
+	if resultFile == nil {
+		return nil, fmt.Errorf("Sell didn't produce a result: #%v", sell.GetKey())
+	} else {
+		// Save result file
+		a.execSync(func() { a.resultFile = resultFile })
+		return resultFile, nil
+	}
+}
+
+// Performs a remote buy once it has been cleared.
+func (a *BuyActivity) doRemoteBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
+	if err := a.beginRemoteTrade(log, interrupt); err != nil {
 		return nil, err
 	}
 

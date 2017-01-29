@@ -38,15 +38,20 @@ type Trade struct {
 	bidType bitwrk.BidType
 	article bitwrk.ArticleId
 
-	alive    bool
-	rejected bool
-	accepted bool
+	alive      bool   // Set to false on end of life
+	rejected   bool   // Set to true on Forbid
+	accepted   bool   // Set to true on Permit
+	localMatch *Trade // Set to a matching trade on local match
+
+	// Information stored on Permit(...)
 	identity *bitcoin.KeyPair
 	price    money.Money
 
+	// Remote bid information
 	bidId string
 	bid   *bitwrk.Bid
 
+	// Remote transaction information
 	txId, txETag string
 	tx           *bitwrk.Transaction
 
@@ -66,16 +71,7 @@ type Trade struct {
 // Configuration value for the maximum number of unmatched bids to allow at a time
 var NumUnmatchedBids = 1
 
-func (a *Trade) beginTrade(log bitwrk.Logger, interrupt <-chan bool) error {
-	// wait for grant or reject
-	log.Println("Waiting for permission")
-
-	// Get a permission for the sell
-	if err := a.awaitPermission(interrupt); err != nil {
-		return fmt.Errorf("Error awaiting permission: %v", err)
-	}
-	log.Printf("Got permission. Price: %v", a.price)
-
+func (a *Trade) beginRemoteTrade(log bitwrk.Logger, interrupt <-chan bool) error {
 	// Prevent too many unmatched bids on server
 	key := fmt.Sprintf("%v-%v", a.bidType, a.article)
 	if err := a.manager.checkoutToken(key, NumUnmatchedBids, interrupt); err != nil {
@@ -114,22 +110,33 @@ func (t *Trade) execSync(f func()) {
 	t.condition.Broadcast()
 }
 
-// Waits until user has granted permission for this trade.
-// Returns nil on success and
+// Waits until either user has granted permission for this trade or the trade has been matched locally.
+// On success, the caller may query the appropriate state fields to find out which action to take.
+// Returns nil on clearance (either local or trade) and
 // ErrNoPermission if permission was rejected.
 // Returns ErrInterrupted if a boolean can be read from 'interrupt' while waiting.
-func (t *Trade) awaitPermission(interrupt <-chan bool) error {
-	rejected := false
+func (t *Trade) awaitClearance(log bitwrk.Logger, interrupt <-chan bool) error {
+	// wait for grant or reject
+	log.Println("Awaiting clearance")
+
 	err := t.interruptibleWaitWhile(interrupt, func() bool {
-		rejected = t.rejected
-		return !t.accepted && !t.rejected
+		return !t.accepted && !t.rejected && t.localMatch == nil
 	})
 
 	if err != nil {
+		fmt.Errorf("Error awaiting clearance: %v", err)
 		return err
-	} else if rejected {
+	} else if t.rejected {
+		fmt.Errorf("Clearance denied")
 		return ErrNoPermission
 	} else {
+		if t.accepted {
+			log.Printf("Got trade clearance. Price: %v", t.price)
+		} else if t.localMatch != nil {
+			log.Printf("Got local clearance. Matched with #%v.", t.localMatch.key)
+		} else {
+			panic("unexpected state")
+		}
 		return nil
 	}
 }
@@ -388,6 +395,8 @@ func (t *Trade) GetState() *ActivityState {
 		phase = t.tx.Phase.String()
 	} else if t.bid != nil {
 		phase = t.bid.State.String()
+	} else if t.localMatch != nil {
+		phase = fmt.Sprintf("LOCAL (#%v)", t.localMatch.GetKey())
 	}
 
 	price := t.price
