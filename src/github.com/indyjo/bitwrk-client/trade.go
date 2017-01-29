@@ -38,10 +38,11 @@ type Trade struct {
 	bidType bitwrk.BidType
 	article bitwrk.ArticleId
 
-	alive      bool   // Set to false on end of life
-	rejected   bool   // Set to true on Forbid
-	accepted   bool   // Set to true on Permit
-	localMatch *Trade // Set to a matching trade on local match
+	alive             bool   // Set to false on end of life
+	clearanceDenied   bool   // Set to true on Forbid
+	clearedForTrade   bool   // Set to true on Permit
+	localMatch        *Trade // Set to a matching trade on local match
+	awaitingClearance bool   // Set to false on local match, Forbid and Permit
 
 	// Information stored on Permit(...)
 	identity *bitcoin.KeyPair
@@ -119,18 +120,16 @@ func (t *Trade) awaitClearance(log bitwrk.Logger, interrupt <-chan bool) error {
 	// wait for grant or reject
 	log.Println("Awaiting clearance")
 
-	err := t.interruptibleWaitWhile(interrupt, func() bool {
-		return !t.accepted && !t.rejected && t.localMatch == nil
-	})
+	err := t.interruptibleWaitWhile(interrupt, func() bool { return t.awaitingClearance })
 
 	if err != nil {
 		fmt.Errorf("Error awaiting clearance: %v", err)
 		return err
-	} else if t.rejected {
+	} else if t.clearanceDenied {
 		fmt.Errorf("Clearance denied")
 		return ErrNoPermission
 	} else {
-		if t.accepted {
+		if t.clearedForTrade {
 			log.Printf("Got trade clearance. Price: %v", t.price)
 		} else if t.localMatch != nil {
 			log.Printf("Got local clearance. Matched with #%v.", t.localMatch.key)
@@ -408,8 +407,8 @@ func (t *Trade) GetState() *ActivityState {
 		Type:     t.bidType.String(),
 		Article:  t.article,
 		Alive:    t.alive,
-		Accepted: t.accepted,
-		Rejected: t.rejected,
+		Accepted: !t.awaitingClearance && !t.clearanceDenied,
+		Rejected: t.clearanceDenied,
 		Amount:   price,
 		BidId:    t.bidId,
 		TxId:     t.txId,
@@ -430,12 +429,13 @@ func (t *Trade) GetState() *ActivityState {
 func (t *Trade) Permit(identity *bitcoin.KeyPair, price money.Money) bool {
 	t.condition.L.Lock()
 	defer t.condition.L.Unlock()
-	if t.accepted || t.rejected {
+	if !t.awaitingClearance {
 		return false
 	}
 	t.identity = identity
 	t.price = price
-	t.accepted = true
+	t.clearedForTrade = true
+	t.awaitingClearance = false
 	t.condition.Broadcast()
 	return true
 }
@@ -443,10 +443,11 @@ func (t *Trade) Permit(identity *bitcoin.KeyPair, price money.Money) bool {
 func (t *Trade) Forbid() bool {
 	t.condition.L.Lock()
 	defer t.condition.L.Unlock()
-	if t.accepted || t.rejected {
+	if !t.awaitingClearance {
 		return false
 	}
-	t.rejected = true
+	t.clearanceDenied = true
+	t.awaitingClearance = false
 	t.condition.Broadcast()
 	return true
 }

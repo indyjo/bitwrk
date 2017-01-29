@@ -102,14 +102,15 @@ func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error)
 	now := time.Now()
 	result := &BuyActivity{
 		Trade: Trade{
-			condition:  sync.NewCond(new(sync.Mutex)),
-			manager:    m,
-			key:        m.NewKey(),
-			started:    now,
-			lastUpdate: now,
-			bidType:    bitwrk.Buy,
-			article:    article,
-			alive:      true,
+			condition:         sync.NewCond(new(sync.Mutex)),
+			manager:           m,
+			key:               m.NewKey(),
+			started:           now,
+			lastUpdate:        now,
+			bidType:           bitwrk.Buy,
+			article:           article,
+			alive:             true,
+			awaitingClearance: true,
 		},
 	}
 	m.register(result.key, result)
@@ -121,15 +122,16 @@ func (m *ActivityManager) NewSell(worker Worker) (*SellActivity, error) {
 
 	result := &SellActivity{
 		Trade: Trade{
-			condition:    sync.NewCond(new(sync.Mutex)),
-			manager:      m,
-			key:          m.NewKey(),
-			started:      now,
-			lastUpdate:   now,
-			bidType:      bitwrk.Sell,
-			article:      worker.GetWorkerState().Info.Article,
-			encResultKey: new(bitwrk.Tkey),
-			alive:        true,
+			condition:         sync.NewCond(new(sync.Mutex)),
+			manager:           m,
+			key:               m.NewKey(),
+			started:           now,
+			lastUpdate:        now,
+			bidType:           bitwrk.Sell,
+			article:           worker.GetWorkerState().Info.Article,
+			encResultKey:      new(bitwrk.Tkey),
+			alive:             true,
+			awaitingClearance: true,
 		},
 		worker: worker,
 	}
@@ -242,9 +244,11 @@ func (m *ActivityManager) register(key ActivityKey, activity Activity) {
 		// other activity could be a valid local match
 		matched := false
 		trade2.execSync(func() {
-			if trade2.alive && !trade2.accepted && !trade2.rejected {
+			if trade2.alive && trade2.awaitingClearance {
 				trade.localMatch = trade2
 				trade2.localMatch = trade
+				trade.awaitingClearance = false
+				trade2.awaitingClearance = false
 				matched = true
 				m.logger.Printf("Local match: #%v (new) - #%v (old)", key, key2)
 			}
