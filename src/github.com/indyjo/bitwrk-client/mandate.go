@@ -24,17 +24,18 @@ import (
 	"time"
 )
 
+// Automates granting permission to (or publishing of, as it is now called) a trade.
 type Mandate struct {
-	mutex         sync.Mutex
-	expired       bool
-	Identity      *bitcoin.KeyPair
-	BidType       bitwrk.BidType // Buy or Sell
-	Article       bitwrk.ArticleId
-	Price         money.Money
-	UseTradesLeft bool
-	TradesLeft    int
-	UseUntil      bool
-	Until         time.Time
+	mutex         sync.Mutex       // Protects every access to the mandate's state
+	expired       bool             // Initially false
+	Identity      *bitcoin.KeyPair // Which identity to pass to the publish operation
+	BidType       bitwrk.BidType   // Buy or Sell
+	Article       bitwrk.ArticleId // Which article to buy or sell
+	Price         money.Money      // Which price to bid/ask for
+	UseTradesLeft bool             // Whether TradesLeft should be regarded
+	TradesLeft    int              // Remaining number of trades until expiration
+	UseUntil      bool             // Whether Until should be regarded
+	Until         time.Time        // Time at which mandate should expire
 }
 
 // Shown to user
@@ -48,6 +49,7 @@ type MandateInfo struct {
 	Until         time.Time
 }
 
+// Returns true if the mandate has expired
 func (m *Mandate) Expired() bool {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -109,7 +111,7 @@ func (m *Mandate) Apply(activity Activity, now time.Time) bool {
 		return false
 	}
 
-	result := t.Permit(m.Identity, m.Price)
+	result := t.Publish(m.Identity, m.Price)
 	if result {
 		m.TradesLeft--
 	}

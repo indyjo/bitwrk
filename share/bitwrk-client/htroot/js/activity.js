@@ -73,7 +73,7 @@ function setActivities(node, activitiesjson, serverUrl) {
 						+ '_phase_dummy_' + '<div class="info"></div>';
 			} else {
 				item.innerHTML = '<div class="type"></div>'
-						+ '<button class="closebtn btn btn-primary btn-xs">Permit</button>'
+						+ '<button class="closebtn btn btn-primary btn-xs">Publish</button>'
 						+ '<div class="article"></div>' + '_phase_dummy_'
 						+ '<div class="info"></div>';
 			}

@@ -194,7 +194,6 @@ func handleRevokeMandate(r *http.Request) error {
 	return nil
 }
 
-
 // Simply forward the request to the BitWrk service
 func handleRequestDepositAddress(r *http.Request) error {
 	if nonce, err := protocol.GetNonce(); err != nil {

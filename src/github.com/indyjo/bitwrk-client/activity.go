@@ -43,9 +43,9 @@ type Activity interface {
 	GetKey() ActivityKey
 	GetState() *ActivityState
 
-	// Permit the activity.
-	// Returns true if the call caused the activity to be accepted.
-	Permit(identity *bitcoin.KeyPair, price money.Money) bool
+	// Publish the activity.
+	// Returns true if the call caused the activity to be published.
+	Publish(identity *bitcoin.KeyPair, price money.Money) bool
 
 	// Forbid the activity.
 	// Returns true if the call caused the activity to be rejected.
@@ -59,7 +59,7 @@ type ActivityState struct {
 	Type        string
 	Article     bitwrk.ArticleId
 	Alive       bool // Whether the activity is still alive
-	Accepted    bool // Whether the activity was permitted
+	Accepted    bool // true iff the activity can no longer be published
 	Rejected    bool
 	Amount      money.Money
 	BidId, TxId string

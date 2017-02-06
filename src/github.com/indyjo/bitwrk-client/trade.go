@@ -40,11 +40,11 @@ type Trade struct {
 
 	alive             bool   // Set to false on end of life
 	clearanceDenied   bool   // Set to true on Forbid
-	clearedForTrade   bool   // Set to true on Permit
+	published         bool   // Set to true on Publish
 	localMatch        *Trade // Set to a matching trade on local match
-	awaitingClearance bool   // Set to false on local match, Forbid and Permit
+	awaitingClearance bool   // Set to false on local match, Forbid and Publish
 
-	// Information stored on Permit(...)
+	// Information stored on Publish(...)
 	identity *bitcoin.KeyPair
 	price    money.Money
 
@@ -129,7 +129,7 @@ func (t *Trade) awaitClearance(log bitwrk.Logger, interrupt <-chan bool) error {
 		fmt.Errorf("Clearance denied")
 		return ErrNoPermission
 	} else {
-		if t.clearedForTrade {
+		if t.published {
 			log.Printf("Got trade clearance. Price: %v", t.price)
 		} else if t.localMatch != nil {
 			log.Printf("Got local clearance. Matched with #%v.", t.localMatch.key)
@@ -426,7 +426,7 @@ func (t *Trade) GetState() *ActivityState {
 	return result
 }
 
-func (t *Trade) Permit(identity *bitcoin.KeyPair, price money.Money) bool {
+func (t *Trade) Publish(identity *bitcoin.KeyPair, price money.Money) bool {
 	t.condition.L.Lock()
 	defer t.condition.L.Unlock()
 	if !t.awaitingClearance {
@@ -434,7 +434,7 @@ func (t *Trade) Permit(identity *bitcoin.KeyPair, price money.Money) bool {
 	}
 	t.identity = identity
 	t.price = price
-	t.clearedForTrade = true
+	t.published = true
 	t.awaitingClearance = false
 	t.condition.Broadcast()
 	return true
