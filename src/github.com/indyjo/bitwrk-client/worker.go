@@ -30,6 +30,7 @@ type WorkerManager struct {
 	workers         map[string]*WorkerState
 	activityManager *ActivityManager
 	receiveManager  *ReceiveManager
+	localOnly       bool // Whether workers are restricted to local jobs
 }
 
 type WorkerState struct {
@@ -59,11 +60,12 @@ type Worker interface {
 	DoWork(workReader io.Reader, client *http.Client) (io.ReadCloser, error)
 }
 
-func NewWorkerManager(a *ActivityManager, r *ReceiveManager) *WorkerManager {
+func NewWorkerManager(a *ActivityManager, r *ReceiveManager, localOnly bool) *WorkerManager {
 	m := new(WorkerManager)
 	m.workers = make(map[string]*WorkerState)
 	m.activityManager = a
 	m.receiveManager = r
+	m.localOnly = localOnly
 	return m
 }
 
@@ -100,7 +102,7 @@ func (m *WorkerManager) RegisterWorker(info WorkerInfo) {
 			Idle: true,
 		}
 		m.workers[info.Id] = s
-		go s.offer(log)
+		go s.offer(log, m.localOnly)
 	}
 }
 
@@ -117,7 +119,7 @@ func (m *WorkerManager) UnregisterWorker(id string) {
 	}
 }
 
-func (s *WorkerState) offer(log bitwrk.Logger) {
+func (s *WorkerState) offer(log bitwrk.Logger, localOnly bool) {
 	defer log.Printf("Stopped offering")
 	s.cond.L.Lock()
 	defer s.cond.L.Unlock()
@@ -131,7 +133,7 @@ func (s *WorkerState) offer(log bitwrk.Logger) {
 		}
 		if s.Blockers == 0 {
 			s.LastError = ""
-			if sell, err := s.m.activityManager.NewSell(s); err != nil {
+			if sell, err := s.m.activityManager.NewSell(s, localOnly); err != nil {
 				s.LastError = fmt.Sprintf("Error creating sell: %v", err)
 				log.Println(s.LastError)
 				s.blockFor(20 * time.Second)

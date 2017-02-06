@@ -117,7 +117,7 @@ func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error)
 	return result, nil
 }
 
-func (m *ActivityManager) NewSell(worker Worker) (*SellActivity, error) {
+func (m *ActivityManager) NewSell(worker Worker, localOnly bool) (*SellActivity, error) {
 	now := time.Now()
 
 	result := &SellActivity{
@@ -132,6 +132,7 @@ func (m *ActivityManager) NewSell(worker Worker) (*SellActivity, error) {
 			encResultKey:      new(bitwrk.Tkey),
 			alive:             true,
 			awaitingClearance: true,
+			localOnly:         localOnly,
 		},
 		worker: worker,
 	}

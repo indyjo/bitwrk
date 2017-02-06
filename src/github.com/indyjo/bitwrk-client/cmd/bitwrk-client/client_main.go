@@ -104,7 +104,8 @@ func main() {
 	log.Printf("Own BitWrk account: %v\n", BitcoinIdentity.GetAddress())
 	log.Printf("Trusted account: %v", TrustedAccount)
 
-	workerManager := client.NewWorkerManager(client.GetActivityManager(), receiveManager)
+	// Create local-only worker manager if no external port has been specified
+	workerManager := client.NewWorkerManager(client.GetActivityManager(), receiveManager, ExternalPort <= 0)
 
 	exit := make(chan error)
 	if InternalPort > 0 {
@@ -130,11 +131,14 @@ func getReceiveManagerPrefix(addr string) (prefix string) {
 	return
 }
 
+// Depending on whether an external port has been configured, starts listening for
+// incoming connections on it.
 func startReceiveManager() (receiveManager *client.ReceiveManager) {
 	receiveManager = client.NewReceiveManager("")
 	if ExternalPort <= 0 {
-		log.Printf("External port is %v. No connections will be accepted from other hosts.", ExternalPort)
-		log.Printf("Only buys can be performed.")
+		log.Printf("External port is %v.", ExternalPort)
+		log.Println("  -> No connections will be accepted from other hosts.")
+		log.Println("  -> Workers can only accept local jobs.")
 		return
 	}
 
@@ -228,13 +232,9 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux.HandleFunc("/", handleHome)
 	mux.HandleFunc("/ui/", handleHome)
 	mux.HandleFunc("/activities", handleActivities)
-	if ExternalPort > 0 {
-		mux.HandleFunc("/registerworker", func(w http.ResponseWriter, r *http.Request) {
-			handleRegisterWorker(workerManager, w, r)
-		})
-	} else {
-		mux.HandleFunc("/registerworker", http.NotFound)
-	}
+	mux.HandleFunc("/registerworker", func(w http.ResponseWriter, r *http.Request) {
+		handleRegisterWorker(workerManager, w, r)
+	})
 	mux.HandleFunc("/unregisterworker", func(w http.ResponseWriter, r *http.Request) {
 		handleUnregisterWorker(workerManager, w, r)
 	})

@@ -38,6 +38,7 @@ type Trade struct {
 	bidType bitwrk.BidType
 	article bitwrk.ArticleId
 
+	localOnly         bool   // Set to true if publishing not possible (only used for sells)
 	alive             bool   // Set to false on end of life
 	clearanceDenied   bool   // Set to true on Forbid
 	published         bool   // Set to true on Publish
@@ -407,7 +408,7 @@ func (t *Trade) GetState() *ActivityState {
 		Type:     t.bidType.String(),
 		Article:  t.article,
 		Alive:    t.alive,
-		Accepted: !t.awaitingClearance && !t.clearanceDenied,
+		Accepted: t.localOnly || (!t.awaitingClearance && !t.clearanceDenied),
 		Rejected: t.clearanceDenied,
 		Amount:   price,
 		BidId:    t.bidId,
@@ -429,6 +430,9 @@ func (t *Trade) GetState() *ActivityState {
 func (t *Trade) Publish(identity *bitcoin.KeyPair, price money.Money) bool {
 	t.condition.L.Lock()
 	defer t.condition.L.Unlock()
+	if t.localOnly {
+		return false
+	}
 	if !t.awaitingClearance {
 		return false
 	}
