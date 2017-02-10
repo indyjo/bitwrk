@@ -23,6 +23,8 @@ from bpy.props import StringProperty, IntProperty, PointerProperty, EnumProperty
 from render_bitwrk.common import get_article_id, max_tilesize, render_resolution
 from render_bitwrk.tiling import optimal_tiling
 import render_bitwrk.bitwrkclient as bitwrkclient
+import render_bitwrk.worker as worker
+from render_bitwrk.render import is_render_active
 
 class StartBrowserOperator(bpy.types.Operator):
     """Open BitWrk admin console in web browser"""
@@ -69,6 +71,33 @@ class StopBitwrkClientOperator(bpy.types.Operator):
         bitwrkclient.stop_bitwrk_client() 
         return {'FINISHED'}
 
+class StartWorkerOperator(bpy.types.Operator):
+    """Join the rendering swarm with this computer"""
+    bl_idname = "bitwrk.startworker"
+    bl_label = "Start worker"
+
+    @classmethod
+    def poll(cls, context):
+        return worker.can_start_worker(context.scene.bitwrk_settings)
+
+    def execute(self, context):
+        settings=context.scene.bitwrk_settings
+        worker.start_worker(settings) 
+        return {'FINISHED'}
+
+class StopWorkerOperator(bpy.types.Operator):
+    """Stop rendering on this computer"""
+    bl_idname = "bitwrk.stopworker"
+    bl_label = "Stop worker"
+
+    @classmethod
+    def poll(cls, context):
+        return worker.can_stop_worker()
+
+    def execute(self, context):
+        worker.stop_worker() 
+        return {'FINISHED'}
+
 class RENDER_PT_bitwrk_settings(bpy.types.Panel):
     bl_label = "BitWrk distributed rendering"
     bl_space_type = "PROPERTIES"
@@ -90,27 +119,32 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
                 "No BitWrk client at {}:{}".format(settings.bitwrk_client_host, settings.bitwrk_client_port),
                 icon='ERROR')
         
-        row = self.layout.split(0.5)
+        row = self.layout.row(align=True)
         row.operator("bitwrk.startclient", icon='PLAY')
         row.operator("bitwrk.stopclient", icon='X')
         
         if settings.expert_mode and not bitwrkclient.can_stop_bitwrk_client():
-            row = self.layout.split(0.5)
+            layout = self.layout.column()
+            layout.enabled = not is_render_active() and not worker.worker_alive()
+            row = layout.split(0.5)
             row.label("BitWrk client host:")
             row.prop(settings, "bitwrk_client_host", text="")
-            row = self.layout.split(0.5)
+            row = layout.split(0.5)
             row.label("BitWrk client port:")
             row.prop(settings, "bitwrk_client_port", text="")
         
-        if not bitwrkclient.probe_bitwrk_client(settings):
+        if bitwrkclient.can_start_bitwrk_client(settings):
             row = self.layout.split(0.5)
             row.label("BitWrk client executable file:")
             row.prop(settings, "bitwrk_client_executable_path", text="")
             
         if bitwrkclient.probe_bitwrk_client(settings):
             self.layout.separator()
-                
-            self.layout.prop(settings, "complexity")
+            
+            row = self.layout.row()
+            row.enabled = not worker.worker_alive()
+            row.prop(settings, "complexity")
+            
             row = self.layout.split(0.333)
             row.label("Article id: ", icon="RNDCURVE")
             row.label(get_article_id(settings.complexity))
@@ -127,10 +161,24 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
             row.prop(settings, "concurrency")
             if settings.expert_mode:
                 row = self.layout.split(0.333)
+                row.enabled = not is_render_active()
                 row.label("Boost factor", icon='NEXT_KEYFRAME')
                 row.prop(settings, "boost_factor")
             if settings.boost_factor > 1:
                 self.layout.label("A boost factor greater than 1.0 makes rendering more expensive!", icon='ERROR')
         
+            self.layout.separator()
+                
+            self.layout.label("Also render on this computer:")
+            row = self.layout.row(align=True)
+            row.operator("bitwrk.startworker", icon='PLAY')
+            row.operator("bitwrk.stopworker", icon='X')
+            if settings.expert_mode:
+                layout = self.layout.row()
+                layout.enabled=not worker.worker_alive()
+                layout.prop(settings, "use_custom_python_executable")
+                if settings.use_custom_python_executable:
+                    layout.prop(settings, "custom_python_executable", text="")
+
         self.layout.separator()
         self.layout.prop(settings, "expert_mode")

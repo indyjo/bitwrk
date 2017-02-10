@@ -73,6 +73,15 @@ class BitWrkSettings(bpy.types.PropertyGroup):
             name="BitWrk client executable",
             description="Path to the BitWrk client's executable file",
             subtype='FILE_PATH')
+        settings.use_custom_python_executable = BoolProperty(
+            name="Use custom Python interpreter",
+            description="Use specified Python interpreter instead of the one provided by Blender",
+            default=False)
+        settings.custom_python_executable = StringProperty(
+            name="Custom Python interpreter",
+            description="The custom Python interpreter executable to use for Blender worker",
+            subtype='FILE_PATH',
+            default=bpy.app.binary_path_python)
         
         bpy.types.Scene.bitwrk_settings = PointerProperty(type=BitWrkSettings, name="BitWrk Settings", description="Settings for using the BitWrk service")
 

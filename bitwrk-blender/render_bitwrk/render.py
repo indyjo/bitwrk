@@ -136,6 +136,11 @@ class Tile:
         finally:
             self.conn = None
 
+_render_count = 0
+def is_render_active():
+    global _render_count
+    return _render_count > 0
+
 class BitWrkRenderEngine(bpy.types.RenderEngine):
     """BitWrk Rendering Engine"""
     bl_idname = "BITWRK_RENDER"
@@ -143,11 +148,15 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
     bl_description = "Performs distributed rendering using the BitWrk marketplace for compute power"
     
     def render(self, scene):
+        global _render_count
+        _render_count += 1
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 self._doRender(scene, tmpdir)
         except:
             self.report({'ERROR'}, "Exception while rendering: {}".format(traceback.format_exc()))
+        finally:
+            _render_count -= 1
         
     def _doRender(self, scene, tmpdir):
         # Export the file to a temporary directory and call this script

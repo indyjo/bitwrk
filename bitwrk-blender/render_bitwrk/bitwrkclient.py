@@ -88,6 +88,8 @@ def bitwrk_client_alive():
 def can_start_bitwrk_client(settings):
     if bitwrk_client_alive():
         return False
+    if probe_bitwrk_client(settings):
+        return False
     clientpath = client_executable_path(settings)
     return os.path.isfile(clientpath)
 
