@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2016  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ from render_bitwrk.tagged import Tagged
 from render_bitwrk.common import get_article_id, max_tilesize, render_resolution
 from render_bitwrk.tiling import optimal_tiling
 from render_bitwrk.blendfile import save_copy, process_file
+from render_bitwrk.bitwrkclient import probe_bitwrk_client
 
 # Features enabled beginning with certain Blender versions
 FEATURE_BUNDLE_RESOURCES = bpy.app.version >= (2, 71, 0)
@@ -144,13 +145,19 @@ def is_render_active():
 class BitWrkRenderEngine(bpy.types.RenderEngine):
     """BitWrk Rendering Engine"""
     bl_idname = "BITWRK_RENDER"
-    bl_label = "BitWrk distributed rendering"
+    bl_label = "BitWrk Render"
     bl_description = "Performs distributed rendering using the BitWrk marketplace for compute power"
     
     def render(self, scene):
         global _render_count
         _render_count += 1
         try:
+            if not hasattr(scene, 'bitwrk_settings'):
+                self.report({'ERROR'}, "Must first setup BitWrk")
+                return
+            if not probe_bitwrk_client(scene.bitwrk_settings):
+                self.report({'ERROR'}, "Must first connect to BitWrk client")
+                return
             with tempfile.TemporaryDirectory() as tmpdir:
                 self._doRender(scene, tmpdir)
         except:

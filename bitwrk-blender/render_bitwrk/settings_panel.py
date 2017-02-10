@@ -133,7 +133,7 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
             row.label("BitWrk client port:")
             row.prop(settings, "bitwrk_client_port", text="")
         
-        if bitwrkclient.can_start_bitwrk_client(settings):
+        if not bitwrkclient.probe_bitwrk_client(settings):
             row = self.layout.split(0.5)
             row.label("BitWrk client executable file:")
             row.prop(settings, "bitwrk_client_executable_path", text="")
