@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -19,14 +19,15 @@
 # Blender-slave.py - Offers Blender rendering to the BitWrk service
 
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory, http.server)
-import sys
+import sys, signal
 if sys.version_info[:2] < (3,2):
     raise RuntimeError("Python >= 3.2 required. Detected: %s" % sys.version_info)
 
 import urllib.request, urllib.parse, urllib.error
 import http.server, struct, os, tempfile, subprocess
 from select import select
-
+from threading import Thread
+        
 # decode http chunked encoding
 class Unchunked:
     def __init__(self, stream):
@@ -376,17 +377,6 @@ def register_with_bitwrk_client(addr):
         return False
     return True
 
-def serve(httpd):
-    addr = httpd.server_address
-    try:
-        httpd.serve_forever()
-    finally:
-        # Unregister on exit
-        query = urllib.parse.urlencode({
-            'id' : 'blender-%d' % addr[1]
-        })
-        urllib.request.urlopen("http://%s:%d/unregisterworker" % (BITWRK_HOST, BITWRK_PORT), query.encode('ascii'), 10)
-    
 def get_blender_version():
     proc = subprocess.Popen([BLENDER_BIN, '-v'], stdout=subprocess.PIPE)
     output, _ = proc.communicate()
@@ -472,6 +462,20 @@ if __name__ == "__main__":
     def reregister_with_bitwrk_client():
         return register_with_bitwrk_client(httpd.server_address)
     
+    def handler(sig, stack):
+        t = Thread(target=httpd.shutdown)
+        t.start()
+    signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
+    
     print(" > Listening on", httpd.server_address)
-    print("------------------------------------------------")
-    serve(httpd)
+    httpd.serve_forever()
+
+    # Unregister on exit
+    print(" > Shutdown. Unregistering from BitWrk client.")
+    addr = httpd.server_address
+    query = urllib.parse.urlencode({
+        'id' : 'blender-%d' % addr[1]
+    })
+    urllib.request.urlopen("http://%s:%d/unregisterworker" % (BITWRK_HOST, BITWRK_PORT), query.encode('ascii'), 10)
+    print(" > Worker stopped")
