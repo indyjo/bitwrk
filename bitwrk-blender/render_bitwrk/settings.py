@@ -82,6 +82,10 @@ class BitWrkSettings(bpy.types.PropertyGroup):
             description="The custom Python interpreter executable to use for Blender worker",
             subtype='FILE_PATH',
             default=bpy.app.binary_path_python)
+        settings.bitwrk_client_allow_nonlocal_workers = BoolProperty(
+            name="Allow other computers as workers",
+            description="Allow other computers on the network to register as workers",
+            default=False)
         
         bpy.types.Scene.bitwrk_settings = PointerProperty(type=BitWrkSettings, name="BitWrk Settings", description="Settings for using the BitWrk service")
 

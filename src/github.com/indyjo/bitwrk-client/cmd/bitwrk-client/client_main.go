@@ -53,8 +53,8 @@ func main() {
 		"IP address or name this host can be reached under from the internet")
 	flags.IntVar(&ExternalPort, "extport", -1,
 		"Port that can be reached from the Internet (-1 disables incoming connections)")
-	flags.IntVar(&InternalPort, "intport", 8081, "Maintenance port for admin interface")
-	flags.StringVar(&InternalIface, "intiface", "127.0.0.1", "Network interface for admin interface")
+	flags.IntVar(&InternalPort, "intport", 8081, "Network port on which to listen for internal connections (UI and workers)")
+	flags.StringVar(&InternalIface, "intiface", "127.0.0.1", "Network interface on which to listen for internal connections (UI and workers)")
 	flags.StringVar(&ResourceDir, "resourcedir",
 		"auto",
 		"Directory where the bitwrk client loads resources from")
@@ -100,7 +100,8 @@ func main() {
 
 	receiveManager := startReceiveManager()
 
-	log.Printf("Internal port: %v\n", InternalPort)
+	log.Printf("Internal network interface for UI and workers: %v\n", InternalIface)
+	log.Printf("Internal network port for UI and workers: %v\n", InternalPort)
 	log.Printf("Own BitWrk account: %v\n", BitcoinIdentity.GetAddress())
 	log.Printf("Trusted account: %v", TrustedAccount)
 

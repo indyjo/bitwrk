@@ -98,7 +98,10 @@ def start_bitwrk_client(settings):
     if bitwrk_client_alive():
         return
     clientpath = client_executable_path(settings)
-    CLIENT_PROC = subprocess.Popen([clientpath, "-intport", str(settings.bitwrk_client_port)])
+    args = [clientpath, "-intport", str(settings.bitwrk_client_port)]
+    if settings.bitwrk_client_allow_nonlocal_workers:
+        args.extend(["-intiface", ""])
+    CLIENT_PROC = subprocess.Popen(args)
     atexit.register(_exithandler)
     
 def can_stop_bitwrk_client():
