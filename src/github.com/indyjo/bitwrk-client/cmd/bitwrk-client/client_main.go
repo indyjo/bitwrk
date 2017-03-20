@@ -28,6 +28,7 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -179,6 +180,32 @@ func startReceiveManager() (receiveManager *client.ReceiveManager) {
 	return
 }
 
+// A wrapper around http.Handler that denies access from non-loopback sources
+type protector struct{ h http.Handler }
+
+// Denies requests from prohibited addresses
+func (p protector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if allowed(r.RemoteAddr) {
+		p.h.ServeHTTP(w, r)
+	} else {
+		http.Error(w, "Access only allowed from loopback interface, not from "+r.RemoteAddr, http.StatusForbidden)
+	}
+}
+
+// Deny access to everybody except localhost
+func allowed(hostport string) bool {
+	host, _, err := net.SplitHostPort(hostport)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
+}
+
+// Sets up handlers for requests on BitWrk's internal port
 func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	mux := http.NewServeMux()
 	s := &http.Server{
@@ -187,11 +214,26 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 		// No timeouts!
 	}
 	relay := NewHttpRelay("/", protocol.BitwrkUrl, protocol.NewClient(&http.Transport{}))
-	mux.Handle("/account/", relay)
-	mux.Handle("/bid/", relay)
-	mux.Handle("/deposit/", relay)
-	mux.Handle("/tx/", relay)
-	mux.Handle("/motd", relay)
+
+	// Some shortcuts for API declaration
+	public := func(pattern string, handler http.Handler) {
+		mux.Handle(pattern, handler)
+	}
+	protected := func(pattern string, handler http.Handler) {
+		mux.Handle(pattern, protector{handler})
+	}
+	publicFunc := func(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+		public(pattern, http.HandlerFunc(handler))
+	}
+	protectedFunc := func(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+		protected(pattern, protector{http.HandlerFunc(handler)})
+	}
+
+	public("/account/", relay)
+	public("/bid/", relay)
+	public("/deposit/", relay)
+	public("/tx/", relay)
+	public("/motd", relay)
 
 	accountFilter := func(data []byte) ([]byte, error) {
 		var account bitwrk.ParticipantAccount
@@ -221,36 +263,36 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	}
 	myAccountUrl := fmt.Sprintf("%saccount/%s", protocol.BitwrkUrl, BitcoinIdentity.GetAddress())
 	myAccountRelay := NewHttpRelay("/myaccount", myAccountUrl, relay.client).WithFilterFunc(accountFilter)
-	mux.Handle("/myaccount", myAccountRelay)
+	public("/myaccount", myAccountRelay)
 
 	resource := http.FileServer(http.Dir(path.Join(ResourceDir, "htroot")))
-	mux.Handle("/js/", resource)
-	mux.Handle("/css/", resource)
-	mux.Handle("/img/", resource)
+	public("/js/", resource)
+	public("/css/", resource)
+	public("/img/", resource)
 
-	mux.HandleFunc("/buy/", handleBuy)
-	mux.HandleFunc("/file/", handleFile)
-	mux.HandleFunc("/", handleHome)
-	mux.HandleFunc("/ui/", handleHome)
-	mux.HandleFunc("/activities", handleActivities)
-	mux.HandleFunc("/registerworker", func(w http.ResponseWriter, r *http.Request) {
+	protectedFunc("/buy/", handleBuy)
+	publicFunc("/file/", handleFile)
+	protectedFunc("/", handleHome)
+	protectedFunc("/ui/", handleHome)
+	protectedFunc("/activities", handleActivities)
+	publicFunc("/registerworker", func(w http.ResponseWriter, r *http.Request) {
 		handleRegisterWorker(workerManager, w, r)
 	})
-	mux.HandleFunc("/unregisterworker", func(w http.ResponseWriter, r *http.Request) {
+	publicFunc("/unregisterworker", func(w http.ResponseWriter, r *http.Request) {
 		handleUnregisterWorker(workerManager, w, r)
 	})
-	mux.HandleFunc("/workers", func(w http.ResponseWriter, r *http.Request) {
+	protectedFunc("/workers", func(w http.ResponseWriter, r *http.Request) {
 		handleWorkers(workerManager, w, r)
 	})
-	mux.HandleFunc("/mandates", func(w http.ResponseWriter, r *http.Request) {
+	protectedFunc("/mandates", func(w http.ResponseWriter, r *http.Request) {
 		handleMandates(client.GetActivityManager(), w, r)
 	})
-	mux.HandleFunc("/revokemandate", func(w http.ResponseWriter, r *http.Request) {
+	protectedFunc("/revokemandate", func(w http.ResponseWriter, r *http.Request) {
 		if err := handleRevokeMandate(r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
-	mux.HandleFunc("/requestdepositaddress", func(w http.ResponseWriter, r *http.Request) {
+	protectedFunc("/requestdepositaddress", func(w http.ResponseWriter, r *http.Request) {
 		if err := handleRequestDepositAddress(r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		} else {
@@ -258,13 +300,13 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 			myAccountRelay.InvalidateCache()
 		}
 	})
-	mux.HandleFunc("/id", handleId)
-	mux.HandleFunc("/version", handleVersion)
-	mux.HandleFunc("/cafsdebug", func(w http.ResponseWriter, r *http.Request) {
+	publicFunc("/id", handleId)
+	publicFunc("/version", handleVersion)
+	protectedFunc("/cafsdebug", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		client.GetActivityManager().GetStorage().DumpStatistics(cafs.NewWriterPrinter(w))
 	})
-	mux.HandleFunc("/stackdump", func(w http.ResponseWriter, r *http.Request) {
+	protectedFunc("/stackdump", func(w http.ResponseWriter, r *http.Request) {
 		name := r.FormValue("name")
 		if len(name) == 0 {
 			name = "goroutine"
