@@ -376,19 +376,23 @@ func SendDeposit(deposit *bitwrk.Deposit) error {
 }
 
 func GetParticipantsWithDepositAddressRequest(limit int) ([]string, error) {
-	if resp, err := getFromServer(fmt.Sprintf("query/accounts?requestdepositaddress=yes&limit=%v", limit)); resp != nil {
+	if resp, err := getFromServer(fmt.Sprintf("query/accounts?requestdepositaddress=yes&limit=%v", limit)); err != nil {
+		return nil, fmt.Errorf("Error GETting from server: %v", err)
+	} else if resp == nil {
+		return nil, fmt.Errorf("No response from server")
+	} else {
 		defer resp.Body.Close()
 		result := make([]string, 0, limit)
 		reader := bufio.NewReaderSize(resp.Body, 256)
 		for {
-			if line, _, err := reader.ReadLine(); err != nil {
+			if line, _, err := reader.ReadLine(); err == io.EOF {
 				break
+			} err != nil {
+				return nil, fmt.Errorf("Error reading from server: %v", err)
 			} else {
 				result = append(result, string(line))
 			}
 		}
 		return result, nil
-	} else {
-		return nil, fmt.Errorf("Error GETting from server: %v", err)
 	}
 }
