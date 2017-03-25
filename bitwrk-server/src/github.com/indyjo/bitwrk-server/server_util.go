@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"regexp"
+	"strings"
 )
 
 // Check whether a bitcoin address is from the 'right' network,
@@ -52,6 +53,18 @@ func checkArticle(_ appengine.Context, article string) error {
 			return fmt.Errorf("Article not traded here: %#v", article)
 		}
 	}
-	
+
 	return nil
+}
+
+// Given a string in format host, host:port or [host]:port, returns the host part.
+func stripPort(hostport string) string {
+	colon := strings.IndexByte(hostport, ':')
+	if colon == -1 {
+		return hostport
+	}
+	if i := strings.IndexByte(hostport, ']'); i != -1 {
+		return strings.TrimPrefix(hostport[:i], "[")
+	}
+	return hostport[:colon]
 }

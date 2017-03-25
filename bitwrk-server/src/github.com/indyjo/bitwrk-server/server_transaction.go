@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -279,20 +279,6 @@ func makeDocument(m map[string]string) string {
 	return strings.Join(arguments, "&")
 }
 
-func hostsMatch(a, b string) bool {
-	idxA := strings.LastIndex(a, ":")
-	idxB := strings.LastIndex(b, ":")
-	if idxA == -1 && idxB == -1 {
-		return a == b
-	} else if idxA != -1 && idxB != -1 {
-		return a[:idxA] == b[:idxB]
-	} else if idxA != -1 {
-		return a[:idxA] == b
-	} else {
-		return a == b[:idxB]
-	}
-}
-
 func updateTransaction(c appengine.Context, r *http.Request, txId string, txKey *datastore.Key) error {
 	now := time.Now()
 
@@ -325,7 +311,7 @@ func updateTransaction(c appengine.Context, r *http.Request, txId string, txKey 
 			return fmt.Errorf("WorkerURL may not exceed 255 characters")
 		} else if u, err := url.Parse(rawurl); err != nil {
 			return err
-		} else if !hostsMatch(u.Host, r.RemoteAddr) {
+		} else if stripPort(u.Host) != stripPort(r.RemoteAddr) {
 			return fmt.Errorf("workerurl host %v and remote host %v do not match.", u.Host, r.RemoteAddr)
 		}
 	}
