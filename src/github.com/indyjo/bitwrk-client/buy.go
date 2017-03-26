@@ -273,6 +273,7 @@ func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
 	} else {
 		response, transmissionError = a.transmitWorkLinear(log, scopedClient)
 	}
+	log.Printf("Work transmission finished (error: %v)", transmissionError)
 	if response != nil {
 		defer response.Close()
 	}
@@ -346,7 +347,7 @@ func (a *BuyActivity) transmitWorkLinear(log bitwrk.Logger, client *http.Client)
 
 func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client, compressed bool) (io.ReadCloser, error) {
 	if r, err := a.requestMissingChunks(log.New("request missing chunks"), client); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Transmitting work (chunked) failed: %v", err)
 	} else {
 		defer r.Close()
 		numChunks := a.workFile.NumChunks()
