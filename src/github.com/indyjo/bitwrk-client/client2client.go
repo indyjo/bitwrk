@@ -183,7 +183,7 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 	} else if mreader, err := r.MultipartReader(); err == nil {
 		todo, err = receiver.handleMultipartMessage(mreader)
 		if err != nil {
-			return fmt.Errorf("Error multipart mesage: %v", err)
+			return fmt.Errorf("Error handling multipart message: %v", err)
 		}
 	} else {
 		return fmt.Errorf("Don't know how to handle message (Content-Type: %v)", r.Header.Get("Content-Type"))
