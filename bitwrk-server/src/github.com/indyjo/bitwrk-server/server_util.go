@@ -59,12 +59,19 @@ func checkArticle(_ appengine.Context, article string) error {
 
 // Given a string in format host, host:port or [host]:port, returns the host part.
 func stripPort(hostport string) string {
-	colon := strings.IndexByte(hostport, ':')
-	if colon == -1 {
-		return hostport
-	}
 	if i := strings.IndexByte(hostport, ']'); i != -1 {
 		return strings.TrimPrefix(hostport[:i], "[")
 	}
-	return hostport[:colon]
+	colon := strings.IndexByte(hostport, ':')
+	if colon == -1 {
+		// No colon, i.e. IP (v4) only
+		return hostport
+	}
+	if colon == strings.LastIndexByte(hostport, ':') {
+		// IPv4 case, only one colon to separate IP and port
+		return hostport[:colon]
+	} else {
+		// IPv6 case, more than one colon, but no port number
+		return hostport
+	}
 }
