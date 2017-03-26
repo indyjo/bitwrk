@@ -387,7 +387,7 @@ func GetParticipantsWithDepositAddressRequest(limit int) ([]string, error) {
 		for {
 			if line, _, err := reader.ReadLine(); err == io.EOF {
 				break
-			} err != nil {
+			} else if err != nil {
 				return nil, fmt.Errorf("Error reading from server: %v", err)
 			} else {
 				result = append(result, string(line))
