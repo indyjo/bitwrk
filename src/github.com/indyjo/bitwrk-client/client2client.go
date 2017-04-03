@@ -239,12 +239,10 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 				return nil, fmt.Errorf("Buyer's secret already received")
 			}
 			b := make([]byte, 64)
-			n, err := part.Read(b)
-			if err != nil || n != len(b) {
+			if n, err := io.ReadFull(part, b); err != nil {
 				return nil, fmt.Errorf("Error reading buyersecret: %v (%v bytes read)", err, n)
 			}
-			n, err = hex.Decode(receiver.buyerSecret[:], b)
-			if err != nil || n != len(receiver.buyerSecret) {
+			if n, err := hex.Decode(receiver.buyerSecret[:], b); err != nil || n != len(receiver.buyerSecret) {
 				return nil, fmt.Errorf("Error decoding buyersecret: %v (%v bytes written)", err, n)
 			}
 		case "work":

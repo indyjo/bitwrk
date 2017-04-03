@@ -85,7 +85,7 @@ func (m *ReceiveManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (m *ReceiveManager) NewEndpoint(info string) *Endpoint {
 	r := make([]byte, 4)
-	if _, err := rand.Reader.Read(r); err != nil {
+	if _, err := io.ReadFull(rand.Reader, r); err != nil {
 		panic(err)
 	}
 	key := hex.EncodeToString(r)
