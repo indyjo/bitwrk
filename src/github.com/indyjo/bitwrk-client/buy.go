@@ -105,7 +105,7 @@ func (a *BuyActivity) doRemoteBuy(log bitwrk.Logger, interrupt <-chan bool) (caf
 
 	// draw random bytes for buyer's secret
 	var secret bitwrk.Thash
-	if _, err := rand.Reader.Read(secret[:]); err != nil {
+	if _, err := io.ReadFull(rand.Reader, secret[:]); err != nil {
 		return nil, err
 	}
 	a.execSync(func() { a.buyerSecret = &secret })

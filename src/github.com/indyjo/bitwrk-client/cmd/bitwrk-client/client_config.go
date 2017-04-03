@@ -20,6 +20,8 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitcoin"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
@@ -75,10 +77,9 @@ func LoadOrCreateIdentity(name string, addrVersion byte) *bitcoin.KeyPair {
 	} else {
 		// Key file exists -> read and parse. On error, quit.
 		defer infile.Close()
-		encoded := make([]byte, 1025)
-		if n, err := infile.Read(encoded); err != nil {
-			log.Fatalf("Error reading from file: %v", err)
-		} else if key, err := bitcoin.FromPrivateKeyWIF(string(encoded[0:n]), bitcoin.AddrVersionBitcoin); err != nil {
+		if encoded, err := ioutil.ReadAll(infile); err != nil {
+			log.Fatalf("Error reading from %#v: %v", keyFilePath, err)
+		} else if key, err := bitcoin.FromPrivateKeyWIF(string(encoded), bitcoin.AddrVersionBitcoin); err != nil {
 			log.Fatalf("Error creating key: %v", err)
 		} else {
 			return key
@@ -90,7 +91,7 @@ func LoadOrCreateIdentity(name string, addrVersion byte) *bitcoin.KeyPair {
 
 func createRandomKey(addrVersion byte) *bitcoin.KeyPair {
 	data := make([]byte, 32)
-	if _, err := rand.Reader.Read(data); err != nil {
+	if _, err := io.ReadFull(rand.Reader, data); err != nil {
 		log.Fatalf("Error generating random key: %v", err)
 	}
 	if key, err := bitcoin.FromPrivateKeyRaw(data, true, addrVersion); err != nil {

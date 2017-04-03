@@ -23,6 +23,7 @@ import (
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
 	"github.com/indyjo/cafs"
+	"io"
 	"sort"
 	"strconv"
 	"sync"
@@ -138,7 +139,7 @@ func (m *ActivityManager) NewSell(worker Worker, localOnly bool) (*SellActivity,
 	}
 
 	// Get a random key for encrypting the result
-	if _, err := rand.Reader.Read(result.encResultKey[:]); err != nil {
+	if _, err := io.ReadFull(rand.Reader, result.encResultKey[:]); err != nil {
 		return nil, err
 	}
 
