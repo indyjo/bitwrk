@@ -1,10 +1,6 @@
 BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
 ======================================================================
 
-<a href="http://www.youtube.com/watch?feature=player_embedded&v=BHBe5g5KKiw"
-   target="_blank"><img src="http://img.youtube.com/vi/BHBe5g5KKiw/0.jpg" 
-   alt="IMAGE ALT TEXT HERE" width="240" height="180" border="10" /></a>
-
 BitWrk introduces a new kind of _cloud computing_, in which resources are shared in a peer-to-peer
 fashion.
 
@@ -22,11 +18,10 @@ bursts of high need for computing power by continuously providing some computing
 virtually no cost.
 
 > Keep in touch with this project and be informed about news and updates:<br>
-> **Website:** http://bitwrk.net/
-> **Facebook:** https://www.facebook.com/bitwrk
+> **Website:** https://bitwrk.net/  
+> **Facebook:** https://www.facebook.com/bitwrk  
 > **Twitter:** https://twitter.com/BitWrk
 
-tip4commit: [![tip for next commit](http://tip4commit.com/projects/541.svg)](http://tip4commit.com/projects/541)
 master: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=master)](https://travis-ci.org/indyjo/bitwrk)
 experimental: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=experimental)](https://travis-ci.org/indyjo/bitwrk)
 
@@ -43,6 +38,7 @@ What next?
 
 News
 ----
+  - **2017-04-05:** BitWrk got [featured in Bitcoin Magazine](https://bitcoinmagazine.com/articles/soon-youll-be-able-buy-and-sell-system-resources-p2p-bitcoin/)
   - **2015-11-01:** Release of BitWrk 0.5.1 "Moon": Support for Blender 2.76,
   compressed data transmission, revised transaction logic and lots of bugs fixed
   - **2015-08-10:** Release of BitWrk 0.5.0: Bitcoin integration is finally here, allowing
@@ -93,6 +89,3 @@ As of version 0.5.1:
   local programs and dispatching them to the BitWrk service. For sellers, it
   provides the service to offer local worker programs to the BitWrk
   exchange and to keep them busy.
-
-Have fun!
-2015-11-01, Jonas Eschenburg
