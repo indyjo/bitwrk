@@ -26,9 +26,6 @@ from render_bitwrk.tiling import optimal_tiling
 from render_bitwrk.blendfile import save_copy, process_file
 from render_bitwrk.bitwrkclient import probe_bitwrk_client
 
-# Features enabled beginning with certain Blender versions
-FEATURE_BUNDLE_RESOURCES = bpy.app.version >= (2, 71, 0)
-
 class Tile:
     def __init__(self, frame, minx, miny, resx, resy, color):
         self.conn = None
@@ -66,8 +63,7 @@ class Tile:
                 tagged.writeInt('xmax', self.minx+self.resx-1)
                 tagged.writeInt('ymax', self.miny+self.resy-1)
                 tagged.writeInt('fram', self.frame)
-                if FEATURE_BUNDLE_RESOURCES:
-                    tagged.bundleResources(engine, bpy.data)
+                tagged.bundleResources(engine, bpy.data)
                 with open(filepath, "rb") as file:
                     tagged.writeFile('blen', file)
             finally:

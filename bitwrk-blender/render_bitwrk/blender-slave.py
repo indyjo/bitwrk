@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# ##### BEGIN GPL LICENSE BLOCK #####
+#
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
 #  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 #
@@ -15,6 +17,8 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http:#www.gnu.org/licenses/>.
+#
+# ##### END GPL LICENSE BLOCK #####
 
 # Blender-slave.py - Offers Blender rendering to the BitWrk service
 
@@ -380,21 +384,7 @@ def register_with_bitwrk_client(addr):
 def get_blender_version():
     proc = subprocess.Popen([BLENDER_BIN, '-v'], stdout=subprocess.PIPE)
     output, _ = proc.communicate()
-    if b"Blender 2.69" in output:
-        return "2.69"
-    elif b"Blender 2.70 (sub 0)" in output:
-        return "2.70"
-    elif b"Blender 2.71 (sub 0)" in output:
-        return "2.71"
-    elif b"Blender 2.72 (sub 0)" in output:
-        return "2.72"
-    elif b"Blender 2.73 (sub 0)" in output:
-        return "2.73"
-    elif b"Blender 2.74 (sub 0)" in output:
-        return "2.74"
-    elif b"Blender 2.75 (sub 0)" in output:
-        return "2.75"
-    elif b"Blender 2.76 (sub 0)" in output:
+    if b"Blender 2.76 (sub 0)" in output:
         return "2.76"
     elif b"Blender 2.77 (sub 0)" in output:
         return "2.77"
@@ -404,7 +394,7 @@ def get_blender_version():
         raise RuntimeError("Blender version could not be detected.\n"
                            + "This version of " + __file__
                            + " will detect Blender versions "
-                           + "2.69 up to 2.78.")
+                           + "2.76 up to 2.78.")
 
 
 def parse_args():

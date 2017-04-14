@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2016  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -30,38 +30,8 @@ transferring it to a BitWrk worker:
 import bpy, subprocess, sys, traceback
 from render_bitwrk.resources import RESOURCE_COLLECTIONS, object_filepath, object_uniqpath, resource_path
 
-# Running save_as_mainfile breaks relative texture paths from textures linked from a library
-# https://developer.blender.org/T41328
-BUG_SAVE_AS_COPY = bpy.app.version < (2, 71, 1)
-
-def _save_filepaths():
-    """Workaround for T41328
-    Save filepaths before save_as_copy operation"""
-    result = {}
-    for collection_name in RESOURCE_COLLECTIONS:
-        saved = {}
-        result[collection_name] = saved
-        collection = getattr(bpy.data, collection_name)
-        for obj in collection:
-            saved[obj.name] = obj.filepath
-    return result
-
-def _restore_filepaths(saved):
-    """Workaround for T41328
-    Restore filepaths after save_as_copy operation"""
-    for collection_name, saved_filepaths in saved.items():
-        collection = getattr(bpy.data, collection_name)
-        for obj in collection:
-            obj.filepath = saved_filepaths[obj.name]
-
 def save_copy(filepath):
-    """Workaround for T41328
-    save_as_mainfile(copy=True) messes up filepaths, so we need to restore them afterwards."""
-    if BUG_SAVE_AS_COPY:
-        saved = _save_filepaths()
     bpy.ops.wm.save_as_mainfile(filepath=filepath, check_existing=False, copy=True, relative_remap=True, compress=False)
-    if BUG_SAVE_AS_COPY:
-        _restore_filepaths(saved)
 
 def process_file(filepath):
     """Opens the given blend file in a separate Blender process and substitutes
@@ -100,7 +70,7 @@ def _repath():
 
 def _remove_scripted_drivers():
     """Removes Python drivers which will not execute on the seller side.
-    Removing them has the benefit of materializing the values they have evaluate to
+    Removing them has the benefit of materializing the values they have evaluated to
     in the current context."""
 
     for collection_name in dir(bpy.data):

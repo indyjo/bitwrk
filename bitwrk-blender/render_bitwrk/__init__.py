@@ -22,8 +22,8 @@ bl_info = {
     "name": "BitWrk Distributed Rendering",
     "description": "Support for distributed rendering using BitWrk, a marketplace for computing power",
     "author": "Jonas Eschenburg",
-    "version": (0, 5, 2),
-    "blender": (2, 69, 0),
+    "version": (0, 6, 0),
+    "blender": (2, 76, 0),
     "category": "Render",
 }
 
