@@ -38,6 +38,7 @@ What next?
 
 News
 ----
+  - **2017-04-17:** Release candidate 1 of BitWrk 0.6.0 brings local network rendering and usabibility enhancements to Blender
   - **2017-04-05:** BitWrk got [featured in Bitcoin Magazine](https://bitcoinmagazine.com/articles/soon-youll-be-able-buy-and-sell-system-resources-p2p-bitcoin/)
   - **2015-11-01:** Release of BitWrk 0.5.1 "Moon": Support for Blender 2.76,
   compressed data transmission, revised transaction logic and lots of bugs fixed
@@ -60,7 +61,16 @@ News
 Status
 ------
 
-As of version 0.5.1:
+As of version 0.6.0:
+- BitWrk concentrates on the use case of providing peer-to-peer rendering for [Blender](http://blender.org),
+  the free rendering software, into which it integrates by use of an add-on. A feature often requested by
+  Blender users is local network rendering, even for single frames. By providing local workers with local
+  jobs without going through the BitWrk service, this version useful even for non-p2p users.
+  Renderings using Cycles (Blender's modern rendering engine) have been successfully accelerated
+  at a small scale. While some features may be missing or not work as expected, BitWrk has shown
+  to work very well with projects of small to medium size and high rendering complexity. With support
+  for linked resources and scripted drivers, bitwrk-blender is approaching a state where it can be
+  used for larger projects, too.
 - BitWrk is now integrated with a Bitcoin payment processing system, allowing users to pay for
   compute power, in Bitcoin. For this, the user has to request a deposit address, which will
   be provided after a couple of seconds by the payment processor. Bitcoin transactions need at
@@ -68,15 +78,6 @@ As of version 0.5.1:
   enabled yet for security reasons. Users are advised to keep the amount of money stored on BitWrk
   as small as possible (deposits can be as small as 0.001 BTC!). Of course, a pay-out can be
   triggered manually by the developer. Ask him!
-- BitWrk includes "bitwrk-blender", an add-on for [Blender](http://blender.org), the free
-  rendering software.
-  bitwrk-blender consists of *render_bitwrk.py*, a Python addon which registers
-  a new rendering engine, and *blender-slave.py*, a script for sellers.
-  Renderings using Cycles (Blender's modern rendering engine) have been successfully accelerated
-  at a small scale. While some features may be missing or not work as expected, BitWrk has shown
-  to work very well with projects of small to medium size and high rendering complexity. With support
-  for linked resources and scripted drivers, bitwrk-blender is approaching a state where it can be
-  used for larger projects, too. 
 - A central server, written in Go (http://golang.org/), is deployed on Google App Engine.
   It exports an API for entering bids and updating transactions. Every transaction's lifecycle can
   be traced, and all communication is secured with Elliptic-Curve cryptographic
