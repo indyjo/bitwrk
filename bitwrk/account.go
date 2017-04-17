@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -12,7 +12,8 @@
 //  GNU General Public License for more details.
 //
 //  You should have received a copy of the GNU General Public License
-//  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//  along with this program.  If not, see <http://www.gnu.org/licenses/>
+
 package bitwrk
 
 import (
@@ -25,6 +26,8 @@ import (
 	"time"
 )
 
+// A single account of money. Corresponds with either the 'Available' or the 'Blocked'
+// part of a BitWrk participant's account.
 type Account interface {
 	GetBalance() money.Money
 	CanApply(delta money.Money) bool
@@ -191,18 +194,20 @@ func (a participantAccountPart) GetLastMovementKey() *string {
 	return a.account.LastMovementKey
 }
 
+// Every transfer of money in BitWrk is associated with an AccountMovement.
+// A history of account movements is kept for every account.
 type AccountMovement struct {
 	Key       *string
 	Timestamp time.Time
 	Type      AccountMovementType
 
-	AvailableDelta          money.Money
-	AvailableAccount        string
-	AvailablePredecessorKey *string
+	AvailableDelta          money.Money // Money flowing into or out of the 'Available' part of the account
+	AvailableAccount        string      // The account that AvailableDelta refers to
+	AvailablePredecessorKey *string     // The previous AccountMovement of that account, if any
 
-	BlockedDelta          money.Money
-	BlockedAccount        string
-	BlockedPredecessorKey *string
+	BlockedDelta          money.Money // Money flowing into or out of the 'Blocked' part of the account
+	BlockedAccount        string      // The account that BlockedDelta refers to
+	BlockedPredecessorKey *string     // The previous AccountMovement of that account, if any
 
 	Fee   money.Money // Money immediately collectable by site owner
 	World money.Money // Money delta for the rest of the world
@@ -330,6 +335,7 @@ func (m *AccountMovement) String() string {
 		m.Fee, m.World)
 }
 
+// Utility function to check whether a number of money amounts are of the same currency.
 func validateCurrency(currency *money.Currency, otherCurrency money.Currency) (*money.Currency, error) {
 	if currency == nil {
 		return &otherCurrency, nil
@@ -340,21 +346,20 @@ func validateCurrency(currency *money.Currency, otherCurrency money.Currency) (*
 	return currency, nil
 }
 
-func checkFlowDirection(msg string, a int, b int64) error {
-	if a < -2 {
-		a = -2
-	} else if a > +2 {
-		a = 2
+// Checks that a value is <, <=, ==, >= or > zero. The comparison operator is encoded
+// into the op argument (-2: <, -1: <=, 0: =, 1: >=, 2: >). Any other value panicks.
+func checkFlowDirection(msg string, op int, val int64) error {
+	if op < -2 || op > 2 {
+		panic(fmt.Sprintf("op paramter must be -2 <= op <= 2  (was: %v)", op))
 	}
-	rel := []string{"<", "<=", "=", ">=", ">"}[a+2]
-	if a < 0 && b < 0 || a >= -1 && a <= 1 && b == 0 || a > 0 && b > 0 {
+	rel := []string{"<", "<=", "=", ">=", ">"}[op+2]
+	if op < 0 && val < 0 || op >= -1 && op <= 1 && val == 0 || op > 0 && val > 0 {
 		return nil
-	} else {
-		return fmt.Errorf("'%v' must be %v 0, but is %v", msg, rel, b)
 	}
-	return nil // never reached
+	return fmt.Errorf("'%v' must be %v 0, but is %v", msg, rel, val)
 }
 
+// Checks that money flows in the right direction.
 func (m *AccountMovement) checkCashFlowDirection(available, blocked, fee, world int) error {
 	if err := checkFlowDirection("available", available, m.AvailableDelta.Amount); err != nil {
 		return err
@@ -371,6 +376,10 @@ func (m *AccountMovement) checkCashFlowDirection(available, blocked, fee, world 
 	return nil
 }
 
+// Checks an account movement for soundness.
+//  - All amounts must be of same currency
+//  - Amounts must sum up to 0
+//  - Money must flow in the right direction depending on account movement type
 func (m *AccountMovement) Validate() (err error) {
 	var currency *money.Currency
 
@@ -409,17 +418,17 @@ func (m *AccountMovement) Validate() (err error) {
 	}
 
 	switch m.Type {
-	//checkCashFlowDirection(unblocked, blocked, fee, world int)
+	//checkCashFlowDirection(available, blocked, fee, world int)
 	case AccountMovementBid:
-		err = m.checkCashFlowDirection(-2, 2, 0, 0)
+		err = m.checkCashFlowDirection(-1, 1, 0, 0)
 	case AccountMovementBidReimburse:
-		err = m.checkCashFlowDirection(2, -2, 0, 0)
+		err = m.checkCashFlowDirection(1, -1, 0, 0)
 	case AccountMovementTransaction:
 		err = m.checkCashFlowDirection(1, -1, 0, 0)
 	case AccountMovementTransactionFinish:
-		err = m.checkCashFlowDirection(2, -2, 1, 0)
+		err = m.checkCashFlowDirection(1, -1, 1, 0)
 	case AccountMovementTransactionReimburse:
-		err = m.checkCashFlowDirection(2, -2, 0, 0)
+		err = m.checkCashFlowDirection(1, -1, 0, 0)
 	case AccountMovementPayIn:
 		err = m.checkCashFlowDirection(2, 0, 0, -2)
 	case AccountMovementPayOut:
@@ -439,6 +448,7 @@ func (m *AccountMovement) Validate() (err error) {
 	return
 }
 
+// Validate and panic if it doesn't.
 func (m *AccountMovement) MustValidate() {
 	err := m.Validate()
 	if err != nil {

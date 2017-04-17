@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -13,6 +13,7 @@
 //
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package bitwrk
 
 import (
@@ -109,7 +110,7 @@ func (bid *Bid) Verify() error {
 	return nil
 }
 
-var MinimumPrice = money.MustParse("uBTC 10")
+var MinimumPrice = money.MustParse("uBTC 0")
 
 func NewBid(bidType BidType, article ArticleId, price money.Money, participant, document, signature string) (*Bid, error) {
 	if bidType != Buy && bidType != Sell {
@@ -165,7 +166,7 @@ func (bid *Bid) CheckBalance(dao AccountingDao) error {
 	}
 
 	price := bid.Price.Add(bid.Fee)
-	if price.Amount <= 0 {
+	if price.Amount < 0 {
 		return fmt.Errorf("Invalid bid price (including fees) of %v", price)
 	}
 
@@ -190,7 +191,7 @@ func (bid *Bid) Book(dao CachedAccountingDao, key string) error {
 		priceIncludingFee.Neg(), priceIncludingFee,
 		zero, zero,
 		&key, nil, nil, nil,
-		)
+	)
 }
 
 func (bid *Bid) Retire(dao AccountingDao, key string, now time.Time) error {
