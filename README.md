@@ -38,7 +38,7 @@ What next?
 
 News
 ----
-  - **2017-04-17:** Release candidate 1 of BitWrk 0.6.0 brings local network rendering and usabibility enhancements to Blender
+  - **2017-04-17:** Release candidate 1 of BitWrk 0.6.0 brings local network rendering and usability enhancements to Blender
   - **2017-04-05:** BitWrk got [featured in Bitcoin Magazine](https://bitcoinmagazine.com/articles/soon-youll-be-able-buy-and-sell-system-resources-p2p-bitcoin/)
   - **2015-11-01:** Release of BitWrk 0.5.1 "Moon": Support for Blender 2.76,
   compressed data transmission, revised transaction logic and lots of bugs fixed
