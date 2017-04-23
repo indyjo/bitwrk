@@ -54,16 +54,14 @@ func getMessageOfTheDay(r *http.Request) motd {
 	minor, _ := strconv.ParseInt(matches[2], 10, 16)
 	micro, _ := strconv.ParseInt(matches[3], 10, 16)
 
-	if major == 0 && minor == 6 && micro == 0 {
-		return motd{"Thanks for supporting BitWrk by trying out Version 0.6.0!", false}
-	} else if major > 0 || major == 0 && (minor > 5 || minor == 5 && micro >= 1) {
+	if major > 0 || major == 0 && (minor > 6 || minor == 6 && micro >= 0) {
 		return motd{fmt.Sprintf("Welcome to the BitWrk network!"+
 			" Your client is up to date (version %d.%d.%d).", major, minor, micro), false}
 	} else {
-		return motd{fmt.Sprintf("BitWrk proudly announces version 0.5.1!"+
+		return motd{fmt.Sprintf("BitWrk proudly announces version 0.6.0!"+
 			" You are currently running client version %d.%d.%d."+
 			" For information on what's new and how to upgrade please visit"+
-			" <a target=\"_blank\" href=\"http://bitwrk.net/\">bitwrk.net</a>.",
+			" <a target=\"_blank\" href=\"https://bitwrk.net/\">bitwrk.net</a>.",
 			major, minor, micro), true}
 	}
 }

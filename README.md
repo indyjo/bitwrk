@@ -1,62 +1,31 @@
-BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-======================================================================
+BitWrk - Bitcoin-fueled Peer-to-Peer Rendering (and more)
+=========================================================
 
-BitWrk introduces a new kind of _cloud computing_, in which resources are shared in a peer-to-peer
-fashion.
+[![5 Minute introduction to BitWrk](https://img.youtube.com/vi/KmwcxwhIRr0/0.jpg)](https://www.youtube.com/watch?v=KmwcxwhIRr0)
+
+Artists use [Blender](http://blender.org), a powerful yet free 3D software, to create impressive
+pictures and movies. This a requires a time-consuming, and costly, production step called _rendering_.
+
+BitWrk integrates with Blender and makes rendering much quicker by dispatching it to a swarm of
+computers. 
+
+By creating a _marketplace for computing power_, BitWrk introduces a new kind of
+_cloud computing_, in which resources are shared in a peer-to-peer fashion. It
+works like a stock exchange, using crypto currency [Bitcoin](https://bitcoin.org/)
+for payment.
 
 This is interesting for two groups of people:
 - The **buyers**: Users who require lots of computing power at their finger tips.
-  For example, artists using rendering software such as [Blender](http://blender.org)
-  to create impressive movies.
 - The **sellers**: Hardware owners who have computing power to spare and would like to
-  monetize that resource in times of low workload.
-  
+  monetize that resource.
+
 BitWrk provides a service to both groups by connecting them in an easy-to-use way.
 
-Users of BitWrk can even be a buyer and a seller at the same time, enabling them to compensate for
-bursts of high need for computing power by continuously providing some computing power to others, at
-virtually no cost.
+### On the web
+[bitwrk.net](https://bitwrk.net/) | [Download](https://github.com/indyjo/bitwrk/releases) | [Facebook](https://www.facebook.com/bitwrk) | [Twitter](https://twitter.com/BitWrk)
 
-> Keep in touch with this project and be informed about news and updates:<br>
-> **Website:** https://bitwrk.net/  
-> **Facebook:** https://www.facebook.com/bitwrk  
-> **Twitter:** https://twitter.com/BitWrk
-
-master: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=master)](https://travis-ci.org/indyjo/bitwrk)
-experimental: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=experimental)](https://travis-ci.org/indyjo/bitwrk)
-
-What next?
-----------
-- Visit BitWrk's website at http://bitwrk.net
-- For the impatient: Following the [Quick Start Instructions](QUICKSTART.md) gets you
-  started in 5 minutes.
-- [About BitWrk](ABOUT.md) explains what BitWrk is and what it is meant to become.
-- [Compiling BitWrk Yourself](COMPILING.md) caters to developers and Linux users.
-- Read more about the [Concepts Behind BitWrk](CONCEPTS.md).
-- Consult [this file](COPYING) about the license under which BitWrk is distributed (GPLV3).
-
-
-News
-----
-  - **2017-04-17:** Release candidate 1 of BitWrk 0.6.0 brings local network rendering and usability enhancements to Blender
-  - **2017-04-05:** BitWrk got [featured in Bitcoin Magazine](https://bitcoinmagazine.com/articles/soon-youll-be-able-buy-and-sell-system-resources-p2p-bitcoin/)
-  - **2015-11-01:** Release of BitWrk 0.5.1 "Moon": Support for Blender 2.76,
-  compressed data transmission, revised transaction logic and lots of bugs fixed
-  - **2015-08-10:** Release of BitWrk 0.5.0: Bitcoin integration is finally here, allowing
-  users to pay in Bitcoin
-  - **2015-01-15:** News have moved to BitWrk's website: http://bitwrk.net
-  - **2014-12-30:** BitWrk was featured in a Lightning Talk by the lead developer on the
-  31st Chaos Communication Congress: https://www.youtube.com/watch?v=BHBe5g5KKiw
-  - **2014-12-05:** New participants now start with a zero balance as preparations for an upcoming
-  beta test have started. The test will include real Bitcoin transactions processed by the
-  payment system.
-  - **2014-11-11:** Payment system integration is progressing. Required refactoring BitWrk into
-  separate projects:
-  - **bitwrk** now contains code specific to client and server and may be refactored further at
-  a later time.
-  - **bitwrk-common** contains code that is shared amongst client, server, and payment processor.
-  - **cafs**, the Content-Addressable File System, has been extracted for use in third-party projects.
-- [More news...](NEWS.md)
+### Documentation
+[News](NEWS.md) | [Quickstart instructions](QUICKSTART.md) | [Concepts](CONCEPTS.md) | [Compiling](COMPILING.md) | [License information](COPYING)
 
 Status
 ------
@@ -90,3 +59,7 @@ As of version 0.6.0:
   local programs and dispatching them to the BitWrk service. For sellers, it
   provides the service to offer local worker programs to the BitWrk
   exchange and to keep them busy.
+
+### Build status
+master: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=master)](https://travis-ci.org/indyjo/bitwrk)
+| experimental: [![Build Status](https://travis-ci.org/indyjo/bitwrk.svg?branch=experimental)](https://travis-ci.org/indyjo/bitwrk)

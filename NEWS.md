@@ -1,5 +1,21 @@
 News
 ====
+- **2017-04-23:** Release of BitWrk 0.6.0 (Mars) brings local network rendering and usability enhancements for Blender
+- **2017-04-17:** Release candidate 1 of BitWrk 0.6.0
+- **2017-04-05:** BitWrk got [featured in Bitcoin Magazine](https://bitcoinmagazine.com/articles/soon-youll-be-able-buy-and-sell-system-resources-p2p-bitcoin/)
+- **2015-11-01:** Release of BitWrk 0.5.1 "Moon": Support for Blender 2.76,
+  compressed data transmission, revised transaction logic and lots of bugs fixed
+- **2015-08-10:** Release of BitWrk 0.5.0: Bitcoin integration is finally here, allowing
+  users to pay in Bitcoin
+- **2015-01-15:** News have moved to BitWrk's website: http://bitwrk.net
+- **2014-12-30:** BitWrk was featured in a Lightning Talk by the lead developer on the
+  31st Chaos Communication Congress: https://www.youtube.com/watch?v=BHBe5g5KKiw
+- **2014-12-05:** New participants now start with a zero balance as preparations for an upcoming
+  beta test have started. The test will include real Bitcoin transactions processed by the
+  payment system.
+- **2014-11-11:** Payment system integration is progressing. Required refactoring BitWrk into
+  separate projects:
+
 - **2014-11-11:** Payment system integration is progressing. Required refactoring BitWrk into
   separate projects:
   - **bitwrk** now contains code specific to client and server and may be refactored further at
