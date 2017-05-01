@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@ import (
 	"errors"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 )
 
 var (
@@ -35,7 +35,7 @@ type infoStruct struct {
 }
 
 func TestResourceDir(dir, name, version string) error {
-	infoPath := path.Join(dir, "info.json")
+	infoPath := filepath.Join(dir, "info.json")
 	var infoFile *os.File
 	if fi, err := os.Stat(dir); err != nil {
 		return err
@@ -65,12 +65,12 @@ func TestResourceDir(dir, name, version string) error {
 }
 
 func AutoFindResourceDir(name, version string) (string, error) {
-	cmdDir := path.Dir(os.Args[0])
+	cmdDir := filepath.Dir(os.Args[0])
 	candidates := []string{
-		path.Join(cmdDir, "share/", name),
-		path.Join(cmdDir, "../share/", name),
-		path.Join(cmdDir, "rsc/"),
-		path.Join(cmdDir, "resources/"),
+		filepath.Join(cmdDir, "share/", name),
+		filepath.Join(cmdDir, "../share/", name),
+		filepath.Join(cmdDir, "rsc/"),
+		filepath.Join(cmdDir, "resources/"),
 		cmdDir,
 	}
 	errors := make([]error, len(candidates))

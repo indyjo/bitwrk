@@ -27,7 +27,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -51,7 +51,7 @@ func TEXT(s string) string {
 
 func initTemplates() {
 	_templatesInitialized.Do(func() {
-		p := path.Join(ResourceDir, "templates", "index.html")
+		p := filepath.Join(ResourceDir, "templates", "index.html")
 
 		// see http://stackoverflow.com/questions/18276173
 		_homeTemplate = template.Must(template.New("").Funcs(template.FuncMap{

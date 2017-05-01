@@ -32,7 +32,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
+	"path/filepath"
 	"runtime/pprof"
 	"strings"
 	"time"
@@ -265,7 +265,7 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	myAccountRelay := NewHttpRelay("/myaccount", myAccountUrl, relay.client).WithFilterFunc(accountFilter)
 	public("/myaccount", myAccountRelay)
 
-	resource := http.FileServer(http.Dir(path.Join(ResourceDir, "htroot")))
+	resource := http.FileServer(http.Dir(filepath.Join(ResourceDir, "htroot")))
 	public("/js/", resource)
 	public("/css/", resource)
 	public("/img/", resource)

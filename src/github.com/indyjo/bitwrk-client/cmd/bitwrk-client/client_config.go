@@ -25,7 +25,7 @@ import (
 	"log"
 	"os"
 	"os/user"
-	"path"
+	"path/filepath"
 )
 
 func getMainConfigDir(name string) (string, error) {
@@ -33,7 +33,7 @@ func getMainConfigDir(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("Failed to query current user from OS: %v", err)
 	}
-	return path.Join(usr.HomeDir, "."+name), nil
+	return filepath.Join(usr.HomeDir, "."+name), nil
 }
 
 func LoadOrCreateIdentity(name string, addrVersion byte) *bitcoin.KeyPair {
@@ -44,7 +44,7 @@ func LoadOrCreateIdentity(name string, addrVersion byte) *bitcoin.KeyPair {
 		mainCfgDir = d
 	}
 
-	keyFilePath := path.Join(mainCfgDir, "privatekey.wif")
+	keyFilePath := filepath.Join(mainCfgDir, "privatekey.wif")
 
 	// Try to open key file
 	if infile, err := os.Open(keyFilePath); err != nil {
