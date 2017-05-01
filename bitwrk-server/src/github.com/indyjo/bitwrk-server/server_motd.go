@@ -29,6 +29,7 @@ type motd struct {
 	Warning bool
 }
 
+// Handler for the /motd URL path. Returns a JSON document containing a message for the user.
 func handleMessageOfTheDay(w http.ResponseWriter, r *http.Request) {
 	m := getMessageOfTheDay(r)
 
@@ -43,6 +44,7 @@ func handleMessageOfTheDay(w http.ResponseWriter, r *http.Request) {
 
 var uaRegexp = regexp.MustCompile("^BitWrkGoClient/([0-9]{1,4})\\.([0-9]{1,4})\\.([0-9]{1,4})")
 
+// Returns a message based on analyzing the HTTP "User-Agent" header.
 func getMessageOfTheDay(r *http.Request) motd {
 	ua := r.Header.Get("User-Agent")
 	matches := uaRegexp.FindStringSubmatch(ua)
@@ -54,14 +56,18 @@ func getMessageOfTheDay(r *http.Request) motd {
 	minor, _ := strconv.ParseInt(matches[2], 10, 16)
 	micro, _ := strconv.ParseInt(matches[3], 10, 16)
 
-	if major > 0 || major == 0 && (minor > 6 || minor == 6 && micro >= 0) {
+	const currentMajor = 0
+	const currentMinor = 6
+	const currentMicro = 1
+
+	if major > currentMajor || major == currentMajor && (minor > currentMinor || minor == currentMinor && micro >= currentMicro) {
 		return motd{fmt.Sprintf("Welcome to the BitWrk network!"+
 			" Your client is up to date (version %d.%d.%d).", major, minor, micro), false}
 	} else {
-		return motd{fmt.Sprintf("BitWrk proudly announces version 0.6.0!"+
+		return motd{fmt.Sprintf("BitWrk proudly announces version %v.%v.%v!"+
 			" You are currently running client version %d.%d.%d."+
 			" For information on what's new and how to upgrade please visit"+
 			" <a target=\"_blank\" href=\"https://bitwrk.net/\">bitwrk.net</a>.",
-			major, minor, micro), true}
+			currentMajor, currentMinor, currentMicro, major, minor, micro), true}
 	}
 }

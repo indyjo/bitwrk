@@ -15,7 +15,7 @@ You need at least Blender 2.76 (Blender 2.78 is recommended).
 
 Download the BitWrk binary release specific your OS and unpack it somewhere.
 
-Download **render_bitwrk-0.6.0.zip** and install it as a Blender add-on (see [Blender Manual](https://docs.blender.org/manual/en/dev/preferences/addons.html)).
+Download **render_bitwrk-[version].zip** and install it as a Blender add-on (see [Blender Manual](https://docs.blender.org/manual/en/dev/preferences/addons.html)).
 
 In the settings of the Blender add-on there is an option to select which BitWrk client you would like to start. Select the executable from the archive you downloaded (bitwrk-client.exe or just bitwrk-client). Click on "Start BitWrk client".
 

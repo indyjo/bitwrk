@@ -1,5 +1,6 @@
 News
 ====
+- **2017-05-01:** BitWrk 0.6.1 fixes a bug that affected Windows users
 - **2017-04-23:** Release of BitWrk 0.6.0 (Mars) brings local network rendering and usability enhancements for Blender
 - **2017-04-17:** Release candidate 1 of BitWrk 0.6.0
 - **2017-04-05:** BitWrk got [featured in Bitcoin Magazine](https://bitcoinmagazine.com/articles/soon-youll-be-able-buy-and-sell-system-resources-p2p-bitcoin/)

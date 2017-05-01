@@ -9,7 +9,7 @@ Client-side code changes
 ------------------------
 - blender-slave.py: Verify that get\_blender\_version supports the
   correct set of versions and prints the right message
-- render\_bitwrk.py: bl_info contains version number
+- render\_bitwrk/\_\_init\_\_.py: bl_info contains version number
 - client_version.go: ClientVersion contains version number
 - info.json: Contains version number
 
