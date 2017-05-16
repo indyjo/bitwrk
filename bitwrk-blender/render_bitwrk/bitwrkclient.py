@@ -18,26 +18,38 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
-import atexit, bpy.path, time, http, re, os, subprocess
+import atexit, bpy.path, time, http, re, os, subprocess, threading
 
 # Functions for probing host:port settings for a running BitWrk client
-LAST_PROBE_TIME = time.time()
+LAST_PROBE_LOCK = threading.RLock()
+LAST_PROBE_TIME = time.time() - 10.0
 LAST_PROBE_RESULT = False
 LAST_PROBE_SETTINGS = None
+LAST_PROBE_THREAD = None
 def probe_bitwrk_client(settings):
-    global LAST_PROBE_TIME, LAST_PROBE_RESULT, LAST_PROBE_SETTINGS
-    if settings_string(settings) == LAST_PROBE_SETTINGS and time.time() - LAST_PROBE_TIME < 1.0:
-        return LAST_PROBE_RESULT
+    global LAST_PROBE_LOCK, LAST_PROBE_TIME, LAST_PROBE_RESULT, LAST_PROBE_SETTINGS, LAST_PROBE_THREAD
+    with LAST_PROBE_LOCK:   
+        if LAST_PROBE_THREAD is None and time.time() - LAST_PROBE_TIME >= 1.0:
+            LAST_PROBE_THREAD = threading.Thread(target=do_probe_bitwrk_client, args=(settings,), daemon=True)
+            LAST_PROBE_THREAD.start()
         
-    LAST_PROBE_RESULT = do_probe_bitwrk_client(settings)
-    LAST_PROBE_TIME = time.time()
-    LAST_PROBE_SETTINGS = settings_string(settings)
-    return LAST_PROBE_RESULT
+        print("Last probe settings:", LAST_PROBE_SETTINGS, "current:", settings_string(settings))
+        print("  Last probe result:", LAST_PROBE_RESULT)
+        return LAST_PROBE_RESULT if settings_string(settings) == LAST_PROBE_SETTINGS else False
+    
+def do_probe_bitwrk_client(settings):
+    global LAST_PROBE_LOCK, LAST_PROBE_TIME, LAST_PROBE_RESULT, LAST_PROBE_SETTINGS, LAST_PROBE_THREAD
+    result = do_probe_bitwrk_client_pure(settings)
+    with LAST_PROBE_LOCK:
+        LAST_PROBE_RESULT = result
+        LAST_PROBE_TIME = time.time()
+        LAST_PROBE_SETTINGS = settings_string(settings)
+        LAST_PROBE_THREAD = None
     
 def settings_string(settings):
     return "{}:{}".format(settings.bitwrk_client_host, settings.bitwrk_client_port)
     
-def do_probe_bitwrk_client(settings):
+def do_probe_bitwrk_client_pure(settings):
     conn = http.client.HTTPConnection(
         host=settings.bitwrk_client_host, port=settings.bitwrk_client_port,
         timeout=1)
