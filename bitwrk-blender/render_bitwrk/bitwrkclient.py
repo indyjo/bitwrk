@@ -28,7 +28,7 @@ LAST_PROBE_SETTINGS = None
 LAST_PROBE_THREAD = None
 def probe_bitwrk_client(settings):
     global LAST_PROBE_LOCK, LAST_PROBE_TIME, LAST_PROBE_RESULT, LAST_PROBE_SETTINGS, LAST_PROBE_THREAD
-    with LAST_PROBE_LOCK:   
+    with LAST_PROBE_LOCK:
         if LAST_PROBE_THREAD is None and time.time() - LAST_PROBE_TIME >= 1.0:
             LAST_PROBE_THREAD = threading.Thread(target=do_probe_bitwrk_client, args=(settings,), daemon=True)
             LAST_PROBE_THREAD.start()

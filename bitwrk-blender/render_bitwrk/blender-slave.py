@@ -28,7 +28,7 @@ if sys.version_info[:2] < (3,2):
     raise RuntimeError("Python >= 3.2 required. Detected: %s" % sys.version_info)
 
 import urllib.request, urllib.parse, urllib.error
-import http.server, struct, os, tempfile, subprocess
+import http.server, socket, struct, os, tempfile, subprocess
 from select import select
 from threading import Thread
         
@@ -173,10 +173,12 @@ except:
 """
 
 def checkRange(val, min, max):
+    """Checks whether a value is between min and max"""
     if val < min or val > max:
         raise RuntimeError("Value %d not in range [%d, %d]", val, min, max)
 
 class BlenderHandler(http.server.BaseHTTPRequestHandler):
+    """HTTP handler that handles incoming work requests by dispatching them to Blender"""
     def do_POST(self):
         if self.path != "/work":
             self.send_error(404)
@@ -342,14 +344,16 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(data)
                 data = f.read(32768)
 
-def register_with_bitwrk_client(addr):
-    query = urllib.parse.urlencode({
-        'id' : 'blender-%d' % addr[1],
-        'article' : ARTICLE_ID,
-        'pushurl' : 'http://%s:%d/work' % addr
-    })
-    
-    bitwrkurl = "http://%s:%d" % (BITWRK_HOST, BITWRK_PORT)
+def get_bitwrk_url():
+    """Returns the defined BitWrk client URL"""
+    if ":" in BITWRK_HOST:
+        return "http://[%s]:%d" % (BITWRK_HOST, BITWRK_PORT)
+    else:
+        return "http://%s:%d" % (BITWRK_HOST, BITWRK_PORT)
+
+def probe_bitwrk_client():
+    """Tries to find out whether there is a BitWrk client at the defined URL"""
+    bitwrkurl = get_bitwrk_url()
     try:
         id_resp = urllib.request.urlopen(bitwrkurl + "/id", None, 10)
         vrs_resp = urllib.request.urlopen(bitwrkurl + "/version", None, 10)
@@ -369,7 +373,28 @@ def register_with_bitwrk_client(addr):
         print("   This usually means that the BitWrk client is not running.")
         print("   It could also be listening on another port.")
         return False
-        
+    return True
+    
+def get_push_url():
+    """Returns the URL that is used by the BitWrk client to push work to this worker."""
+    if ":" in OWN_ADDRESS[0]:
+        return 'http://[%s]:%d/work' % OWN_ADDRESS
+    else:
+        return 'http://%s:%d/work' % OWN_ADDRESS
+
+def get_worker_id():
+    """Returns the ID this worker is registered under at the BitWrk client."""
+    return 'blender-%s-%d' % OWN_ADDRESS
+
+def register_with_bitwrk_client():
+    """Connects to the BitWrk client to advertise this worker"""
+    query = urllib.parse.urlencode({
+        'id' : get_worker_id(),
+        'article' : ARTICLE_ID,
+        'pushurl' : get_push_url()
+    })
+    
+    bitwrkurl = get_bitwrk_url()
     try:
         urllib.request.urlopen(bitwrkurl + "/registerworker", query.encode('ascii'), 10)
     except urllib.error.HTTPError as ex:
@@ -381,7 +406,26 @@ def register_with_bitwrk_client(addr):
         return False
     return True
 
+def detect_own_address():
+    """Connects to the BitWrk client to find out which address this worker is reachable at"""
+    bitwrkurl = get_bitwrk_url()
+    try:
+        myip = urllib.request.urlopen(bitwrkurl + "/myip", None, 10).read(200).decode('ascii')
+        if myip.startswith("["):
+            return myip[1:myip.index(']')]
+        elif ":" in myip:
+            return myip[0:myip.index(":")]
+        else:
+            return myip
+    except urllib.error.HTTPError as ex:
+        print(" > Got a {} ({}) error when trying to probe own network address on {}"
+              .format(ex.code, ex.reason, bitwrkurl + "/myip"))
+        if ex.code == 404:
+            print("   This usually means that the BitWrk client is older than 0.6.2.")
+        return None
+
 def get_blender_version():
+    """Starts the Blender executable to find out its version"""
     proc = subprocess.Popen([BLENDER_BIN, '-v'], stdout=subprocess.PIPE)
     output, _ = proc.communicate()
     if b"Blender 2.76 (sub 0)" in output:
@@ -396,22 +440,28 @@ def get_blender_version():
                            + " will detect Blender versions "
                            + "2.76 up to 2.78.")
 
-
 def parse_args():
-    global BLENDER_BIN, BLENDER_VERSION, BITWRK_HOST, BITWRK_PORT, ARTICLE_ID, MAX_COST
-    
     import argparse
     parser = argparse.ArgumentParser(description="Provides Blender rendering to the BitWrk service (http://bitwrk.net)")
     parser.add_argument('--blender', metavar='PATH', help="Blender executable to call", required=True)
-    parser.add_argument('--bitwrk-host', metavar='HOST', help="BitWrk client host", default="localhost")
-    parser.add_argument('--bitwrk-port', metavar='PORT', help="BitWrk client port", type=int, default=8081)
-    parser.add_argument('--max-cost', metavar='CLASS', help="Maximum cost of one task (in mega- and giga-rays)",
+    parser.add_argument('--bitwrk-host', metavar='HOST', help="BitWrk client host [localhost]", default="localhost")
+    parser.add_argument('--bitwrk-port', metavar='PORT', help="BitWrk client port [8081]", type=int, default=8081)
+    parser.add_argument('--max-cost', metavar='CLASS', help="Maximum cost of one task (in mega- and giga-rays) [512M]",
         choices=["512M", "2G", "8G", "32G"], default="512M")
     parser.add_argument('--listen-port', metavar='PORT',
-        help="TCP port on which to listen for jobs (0=any)", type=int, default=0)
+        help="TCP port on which to listen for jobs (0=any) [0]", type=int, default=0)
     parser.add_argument('--listen-iface', metavar='IP',
-        help="Network interface on which to listen for jobs", default="127.0.0.1")
-    args = parser.parse_args()
+        help="Network interface on which to listen for jobs [auto]", default="auto")
+    parser.add_argument("--own-address", metavar='IP',
+        help="Network address of this worker [auto]", default="auto")
+    return parser.parse_args()
+        
+if __name__ == "__main__":
+    try:
+        args = parse_args()
+    except Exception as e:
+        print(e)
+        sys.exit(2)
     
     BLENDER_BIN=args.blender
     BLENDER_VERSION=get_blender_version()
@@ -429,28 +479,45 @@ def parse_args():
         MAX_COST=32*1024*1024*1024
     else:
         raise RuntimeError()
-
-    return args
-        
-if __name__ == "__main__":
-    try:
-        args = parse_args()
-    except Exception as e:
-        print(e)
-        sys.exit(2)
     
     print(" > Detected Blender", BLENDER_VERSION)
     print(" > Maximum number of rays is", MAX_COST)
     print(" > Article ID is", ARTICLE_ID)
+    print()
     
-    httpd = http.server.HTTPServer((args.listen_iface, args.listen_port), BlenderHandler)
-    
-    if not register_with_bitwrk_client(httpd.server_address):
+    if not probe_bitwrk_client():
         sys.exit(3)
+        
+    # Detect this worker's public IP if required
+    if args.own_address == "auto" or args.listen_iface == "auto":
+        myip = detect_own_address()
+        if myip is None:
+            sys.exit(4)
+            
+    # Listen on network interface with that (or the configured) IP
+    listen_iface = myip if args.listen_iface == "auto" else args.listen_iface
+    addr_infos = socket.getaddrinfo(host=listen_iface, port=args.listen_port, type=socket.SOCK_STREAM)
+    if addr_infos is None or len(addr_infos) == 0:
+        print("Couldn't find out address family for address", listen_iface, "getsocketaddr returned", addr_infos)
+    
+    print(" > Listening on {}".format(addr_infos[0][4]))
+    class Server(http.server.HTTPServer):
+        address_family = addr_infos[0][0]
+    httpd = Server(addr_infos[0][4], BlenderHandler)
+    
+    # Advertise auto-detected or manually given IP
+    if args.own_address == "auto":
+        OWN_ADDRESS = (myip, httpd.server_address[1])
+    else:
+        OWN_ADDRESS = httpd.server_address
+
+    print(" > Registering worker URL", get_push_url())
+    if not register_with_bitwrk_client():
+        sys.exit(4)
     
     global reregister_with_bitwrk_client
     def reregister_with_bitwrk_client():
-        return register_with_bitwrk_client(httpd.server_address)
+        return register_with_bitwrk_client()
     
     def handler(sig, stack):
         t = Thread(target=httpd.shutdown)
@@ -458,14 +525,13 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
     
-    print(" > Listening on", httpd.server_address)
     httpd.serve_forever()
 
     # Unregister on exit
     print(" > Shutdown. Unregistering from BitWrk client.")
     addr = httpd.server_address
     query = urllib.parse.urlencode({
-        'id' : 'blender-%d' % addr[1]
+        'id' : get_worker_id()
     })
     urllib.request.urlopen("http://%s:%d/unregisterworker" % (BITWRK_HOST, BITWRK_PORT), query.encode('ascii'), 10)
     print(" > Worker stopped")

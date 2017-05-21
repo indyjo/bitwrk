@@ -302,6 +302,7 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	})
 	publicFunc("/id", handleId)
 	publicFunc("/version", handleVersion)
+	publicFunc("/myip", handleMyIp)
 	protectedFunc("/cafsdebug", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		client.GetActivityManager().GetStorage().DumpStatistics(cafs.NewWriterPrinter(w))
@@ -489,4 +490,14 @@ func handleId(w http.ResponseWriter, r *http.Request) {
 
 func handleVersion(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(ClientVersion))
+}
+
+func handleMyIp(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	addr := r.RemoteAddr
+	w.Write([]byte(addr))
 }
