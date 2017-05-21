@@ -85,14 +85,7 @@ func (m *WorkerManager) RegisterWorker(info WorkerInfo) {
 	log := bitwrk.Root().Newf("Worker %#v", info.Id)
 	if s, ok := m.workers[info.Id]; ok {
 		log.Printf("Reported idle: %v", info)
-		s.cond.L.Lock()
-		defer s.cond.L.Unlock()
-		s.Info = info
-		if !s.Idle {
-			s.Idle = true
-			s.Blockers--
-		}
-		s.cond.Broadcast()
+		s.setIdle(true)
 	} else {
 		log.Printf("Registered: %v", info)
 		s = &WorkerState{
@@ -165,6 +158,8 @@ func (s *WorkerState) executeSell(log bitwrk.Logger, sell *SellActivity, interru
 	}
 }
 
+// Increases blockers count and starts a timer that decreases it again after the specified duration.
+// Assumes that the mutex is held at the time of the call.
 func (s *WorkerState) blockFor(d time.Duration) {
 	s.Blockers++ // Unlocked after N seconds
 	s.cond.Broadcast()
@@ -177,12 +172,18 @@ func (s *WorkerState) blockFor(d time.Duration) {
 	}()
 }
 
-func (s *WorkerState) setBusy() {
+// As long as a worker is marked as busy (not idle), no attempt is made to sell with it.
+func (s *WorkerState) setIdle(idle bool) {
 	s.cond.L.Lock()
-	defer s.cond.L.Unlock()
-	if s.Idle {
-		s.Idle = false
-		s.Blockers++ // Wait for worker reporting back
+	s.cond.L.Unlock()
+	if s.Idle != idle {
+		s.Idle = idle
+		if idle {
+			s.Blockers--
+		} else {
+			s.Blockers++
+		}
+		s.cond.Broadcast()
 	}
 }
 
@@ -191,13 +192,20 @@ func (s *WorkerState) GetWorkerState() WorkerState {
 }
 
 func (s *WorkerState) DoWork(workReader io.Reader, client *http.Client) (io.ReadCloser, error) {
-	// Mark worker as busy
-	s.setBusy()
+	// Mark worker as busy until it reports back.
+	s.setIdle(false)
 
 	// Do ectual HTTP request
 	resp, err := client.Post(s.Info.PushURL, "application/octet-stream", workReader)
 	if err != nil {
+		// There is no guarantee that the worker will report back, so we need to assume it is idle
+		s.setIdle(true)
 		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusInternalServerError {
+		// TODO: Need a way for the worker to signal it will report back after an error
+		s.setIdle(true)
 	}
 
 	if resp.StatusCode != http.StatusOK {
