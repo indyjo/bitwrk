@@ -50,7 +50,7 @@ the command line.
 
 For selling to work, you will need to open a TCP port of your choice. This
 usually means configuring your local DSL router. If you don't know what this
-means, please Google for "open incoming tcp port" :-)
+means, please google for "open incoming tcp port" :-)
 
 Without an open port, you can't sell, but you can still buy computing power on
 the BitWrk network (this is what you will typically do)!

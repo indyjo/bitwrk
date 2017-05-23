@@ -1,9 +1,12 @@
 News
 ====
+- **2017-05-23:** BitWrk 0.6.2 fixes a bug that prevented local network rendering from working when the
+  worker was started in the Blender UI, removes some usability weaknesses and fixes a bug that caused
+  workers to stop permanently after an error   
 - **2017-05-01:** BitWrk 0.6.1 fixes a bug that affected Windows users
 - **2017-04-23:** Release of BitWrk 0.6.0 (Mars) brings local network rendering and usability enhancements for Blender
 - **2017-04-17:** Release candidate 1 of BitWrk 0.6.0
-- **2017-04-05:** BitWrk got [featured in Bitcoin Magazine](https://bitcoinmagazine.com/articles/soon-youll-be-able-buy-and-sell-system-resources-p2p-bitcoin/)
+- **2017-04-05:** BitWrk got featured in an [article on Bitcoin Magazine](https://bitcoinmagazine.com/articles/soon-youll-be-able-buy-and-sell-system-resources-p2p-bitcoin/)
 - **2015-11-01:** Release of BitWrk 0.5.1 "Moon": Support for Blender 2.76,
   compressed data transmission, revised transaction logic and lots of bugs fixed
 - **2015-08-10:** Release of BitWrk 0.5.0: Bitcoin integration is finally here, allowing
