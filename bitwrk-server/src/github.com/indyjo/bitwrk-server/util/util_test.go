@@ -1,4 +1,4 @@
-package server
+package util
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 
 func TestStripPort(t *testing.T) {
 	expect := func(argument, expected string) {
-		actual := stripPort(argument)
+		actual := StripPort(argument)
 		if actual != expected {
 			t.Errorf("Expected: stripPort(%#v) = %#v  --  Got: %#v", argument, expected, actual)
 		}

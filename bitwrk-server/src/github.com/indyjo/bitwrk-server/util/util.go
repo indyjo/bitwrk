@@ -14,27 +14,29 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package server
+// Package util provides simple utility functions for the App Engine bitWrk server
+package util
 
 import (
 	"appengine"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk-server/config"
 	"regexp"
 	"strings"
 )
 
 // Check whether a bitcoin address is from the 'right' network,
 // i.e. main or test network (depends on config)
-func checkBitcoinAddress(address string) error {
+func CheckBitcoinAddress(address string) error {
 	networkId, _, err := bitcoin.DecodeBitcoinAddress(address)
 	if err != nil {
 		return err
 	}
 
-	if networkId != CfgBitcoinNetworkId {
+	if networkId != config.CfgBitcoinNetworkId {
 		return fmt.Errorf("Invalid bitcoin network id %v in address %#v."+
-			" This server accepts %v.", networkId, address, CfgBitcoinNetworkId)
+			" This server accepts %v.", networkId, address, config.CfgBitcoinNetworkId)
 	}
 
 	return nil
@@ -42,7 +44,7 @@ func checkBitcoinAddress(address string) error {
 
 var blenderRegexp = regexp.MustCompile(`^(net\.bitwrk/blender/0/2\.(69|7[0-9])/(512M|2G|8G|32G))$`)
 
-func checkArticle(_ appengine.Context, article string) error {
+func CheckArticle(_ appengine.Context, article string) error {
 	switch article {
 	case "fnord", "snafu", "foobar",
 		"net.bitwrk/gorays/0":
@@ -58,7 +60,7 @@ func checkArticle(_ appengine.Context, article string) error {
 }
 
 // Given a string in format host, host:port or [host]:port, returns the host part.
-func stripPort(hostport string) string {
+func StripPort(hostport string) string {
 	if i := strings.IndexByte(hostport, ']'); i != -1 {
 		return strings.TrimPrefix(hostport[:i], "[")
 	}

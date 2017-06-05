@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@ import (
 	"appengine"
 	"appengine/user"
 	"fmt"
+	"github.com/indyjo/bitwrk-server/query"
 	"net/http"
 )
 
@@ -36,9 +37,10 @@ func init() {
 	http.HandleFunc("/motd", handleMessageOfTheDay)
 	http.HandleFunc("/deposit", handleCreateDeposit)
 	http.HandleFunc("/deposit/", handleRenderDeposit)
-	http.HandleFunc("/query/accounts", handleQueryAccounts)
-	http.HandleFunc("/query/prices", handleQueryPrices)
-	http.HandleFunc("/query/trades", handleQueryTrades)
+	http.HandleFunc("/query/accounts", query.HandleQueryAccounts)
+	http.HandleFunc("/query/ledger", query.HandleQueryAccountMovements)
+	http.HandleFunc("/query/prices", query.HandleQueryPrices)
+	http.HandleFunc("/query/trades", query.HandleQueryTrades)
 	http.HandleFunc("/_ah/queue/apply-changes", handleApplyChanges)
 	http.HandleFunc("/_ah/queue/retire-tx", handleRetireTransaction)
 	http.HandleFunc("/_ah/queue/retire-bid", handleRetireBid)

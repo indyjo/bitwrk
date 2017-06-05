@@ -23,7 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-server/config"
 	db "github.com/indyjo/bitwrk-server/gae"
+	"github.com/indyjo/bitwrk-server/util"
 	"html/template"
 	"io"
 	"net/http"
@@ -51,7 +53,7 @@ const depositCreateHtml = `
 <input type="submit" />
 </form>
 <br />
-Sign this text using address ` + CfgTrustedAccount + ` to confirm bid:<br />
+Sign this text using address ` + config.CfgTrustedAccount + ` to confirm bid:<br />
 <input id="query" type="text" size="180" onclick="select()" readonly/>
 </body>
 <script>
@@ -113,12 +115,12 @@ func handleCreateDeposit(w http.ResponseWriter, r *http.Request) {
 func createDeposit(c appengine.Context, depositType, depositAccount, depositAmount, depositNonce, depositUid, depositRef, depositSig string) (err error) {
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
 	err = checkNonce(c, depositNonce)
-	if CfgRequireValidNonce && err != nil {
+	if config.CfgRequireValidNonce && err != nil {
 		return fmt.Errorf("Error in checkNonce: %v", err)
 	}
 
 	// Bitcoin addresses must have the right network id
-	err = checkBitcoinAddress(depositAccount)
+	err = util.CheckBitcoinAddress(depositAccount)
 	if err != nil {
 		return
 	}
@@ -128,8 +130,8 @@ func createDeposit(c appengine.Context, depositType, depositAccount, depositAmou
 		return fmt.Errorf("Error in ParseDeposit: %v", err)
 	}
 
-	if CfgRequireValidSignature {
-		err = deposit.Verify(CfgTrustedAccount)
+	if config.CfgRequireValidSignature {
+		err = deposit.Verify(config.CfgTrustedAccount)
 		if err != nil {
 			return
 		}

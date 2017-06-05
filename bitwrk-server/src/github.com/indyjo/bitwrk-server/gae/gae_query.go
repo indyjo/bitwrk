@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ func QueryAccountKeys(c appengine.Context, limit int, requestdepositaddress bool
 			handler(key.StringID())
 		}
 	}
-	
+
 	return nil
 }
 
@@ -71,4 +71,33 @@ func QueryTransactions(c appengine.Context, limit int, article bitwrk.ArticleId,
 	}
 
 	return nil
+}
+
+// Queries account movements (ledger entries) in ascending timestamp order, beginning at a specific point in time.
+func QueryAccountMovements(c appengine.Context, begin time.Time, limit int) ([]bitwrk.AccountMovement, error) {
+	result := make([]bitwrk.AccountMovement, 0, limit)
+
+	query := datastore.NewQuery("AccountMovement").Limit(limit)
+	if !begin.IsZero() {
+		query = query.Filter("Timestamp >=", begin)
+	}
+	query = query.Order("Timestamp")
+	iter := query.Run(c)
+
+	for {
+		var movement bitwrk.AccountMovement
+
+		// Iterate transactions in datastore
+		if key, err := iter.Next(movementCodec{c, &movement}); err == datastore.Done {
+			break
+		} else if err != nil {
+			return nil, err
+		} else {
+			keyStr := key.Encode()
+			movement.Key = &keyStr
+			result = append(result, movement)
+		}
+	}
+
+	return result, nil
 }

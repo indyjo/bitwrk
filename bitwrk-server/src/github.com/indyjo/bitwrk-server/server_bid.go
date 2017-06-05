@@ -23,7 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-server/config"
 	db "github.com/indyjo/bitwrk-server/gae"
+	"github.com/indyjo/bitwrk-server/util"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -166,16 +168,16 @@ func enqueueBid(c appengine.Context, w http.ResponseWriter, r *http.Request) (er
 
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
 	err = checkNonce(c, bidNonce)
-	if CfgRequireValidNonce && err != nil {
+	if config.CfgRequireValidNonce && err != nil {
 		return fmt.Errorf("Error in checkNonce: %v", err)
 	}
 
-	err = checkArticle(c, bidArticle)
+	err = util.CheckArticle(c, bidArticle)
 	if err != nil {
 		return
 	}
-	
-	err = checkBitcoinAddress(bidAddress)
+
+	err = util.CheckBitcoinAddress(bidAddress)
 	if err != nil {
 		return
 	}
@@ -185,7 +187,7 @@ func enqueueBid(c appengine.Context, w http.ResponseWriter, r *http.Request) (er
 		return
 	}
 
-	if CfgRequireValidSignature {
+	if config.CfgRequireValidSignature {
 		err = bid.Verify()
 		if err != nil {
 			return
@@ -199,7 +201,7 @@ func enqueueBid(c appengine.Context, w http.ResponseWriter, r *http.Request) (er
 
 	// Send headers to client
 	redirectToBid(bidKey, w, r)
-	
+
 	// Trigger batch processing
 	if err := db.TriggerBatchProcessing(c, bid.Article); err != nil {
 		c.Errorf("Batch processing bids failed: %v", err)

@@ -24,7 +24,9 @@ import (
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-server/config"
 	db "github.com/indyjo/bitwrk-server/gae"
+	"github.com/indyjo/bitwrk-server/util"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -305,13 +307,13 @@ func updateTransaction(c appengine.Context, r *http.Request, txId string, txKey 
 	}
 
 	// Check whether "workerurl" parameter actually points to origin of request
-	if CfgRequireValidWorkerURL {
+	if config.CfgRequireValidWorkerURL {
 		if rawurl, ok := values["workerurl"]; !ok {
 		} else if len(rawurl) >= 256 {
 			return fmt.Errorf("WorkerURL may not exceed 255 characters")
 		} else if u, err := url.Parse(rawurl); err != nil {
 			return err
-		} else if stripPort(u.Host) != stripPort(r.RemoteAddr) {
+		} else if util.StripPort(u.Host) != util.StripPort(r.RemoteAddr) {
 			return fmt.Errorf("workerurl host %v and remote host %v do not match.", u.Host, r.RemoteAddr)
 		}
 	}
@@ -335,7 +337,7 @@ func updateTransaction(c appengine.Context, r *http.Request, txId string, txKey 
 	}
 
 	document := makeDocument(values)
-	if CfgRequireValidSignature {
+	if config.CfgRequireValidSignature {
 		if err := bitcoin.VerifySignatureBase64(document, address, signature); err != nil {
 			return err
 		}

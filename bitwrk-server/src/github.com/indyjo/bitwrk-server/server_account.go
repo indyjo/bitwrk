@@ -23,7 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-server/config"
 	db "github.com/indyjo/bitwrk-server/gae"
+	"github.com/indyjo/bitwrk-server/util"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -100,7 +102,7 @@ func handleAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := checkBitcoinAddress(accountId); err != nil {
+		if err := util.CheckBitcoinAddress(accountId); err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
@@ -157,7 +159,7 @@ func renderAccountHtml(w http.ResponseWriter, account *bitwrk.ParticipantAccount
 		Account        *bitwrk.ParticipantAccount
 		DeveloperMode  bool
 		TrustedAccount string
-	}{account, devmode, CfgTrustedAccount})
+	}{account, devmode, config.CfgTrustedAccount})
 }
 
 func renderAccountJson(w http.ResponseWriter, account *bitwrk.ParticipantAccount) (err error) {
@@ -167,7 +169,7 @@ func renderAccountJson(w http.ResponseWriter, account *bitwrk.ParticipantAccount
 func requestDepositAddress(c appengine.Context, r *http.Request, participant string) (err error) {
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
 	err = checkNonce(c, r.FormValue("nonce"))
-	if CfgRequireValidNonce && err != nil {
+	if config.CfgRequireValidNonce && err != nil {
 		return fmt.Errorf("Error in checkNonce: %v", err)
 	}
 
@@ -178,12 +180,12 @@ func requestDepositAddress(c appengine.Context, r *http.Request, participant str
 		return fmt.Errorf("Participant must be %#v", participant)
 	}
 
-	if m.Signer != CfgTrustedAccount && m.Signer != participant {
-		return fmt.Errorf("Signer must be participant or %#v", CfgTrustedAccount)
+	if m.Signer != config.CfgTrustedAccount && m.Signer != participant {
+		return fmt.Errorf("Signer must be participant or %#v", config.CfgTrustedAccount)
 	}
 
 	// Verify that the request was indeed signed correctly
-	if CfgRequireValidSignature {
+	if config.CfgRequireValidSignature {
 		if err := m.VerifyWith(m.Signer); err != nil {
 			return fmt.Errorf("After verifying %#v against %v: %v", m, m.Signer, err)
 		}
@@ -221,7 +223,7 @@ func requestDepositAddress(c appengine.Context, r *http.Request, participant str
 func storeDepositInfo(c appengine.Context, r *http.Request, participant string) (err error) {
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
 	err = checkNonce(c, r.FormValue("nonce"))
-	if CfgRequireValidNonce && err != nil {
+	if config.CfgRequireValidNonce && err != nil {
 		return fmt.Errorf("Error in checkNonce: %v", err)
 	}
 
@@ -232,18 +234,18 @@ func storeDepositInfo(c appengine.Context, r *http.Request, participant string) 
 		return fmt.Errorf("Participant must be %#v", participant)
 	}
 
-	if m.Signer != CfgTrustedAccount {
-		return fmt.Errorf("Signer must be %#v", CfgTrustedAccount)
+	if m.Signer != config.CfgTrustedAccount {
+		return fmt.Errorf("Signer must be %#v", config.CfgTrustedAccount)
 	}
 
 	// Bitcoin addresses must have the right network id
-	if err := checkBitcoinAddress(m.DepositAddress); err != nil {
+	if err := util.CheckBitcoinAddress(m.DepositAddress); err != nil {
 		return err
 	}
 
 	// Verify that the message was indeed signed by the trusted account
-	if CfgRequireValidSignature {
-		if err := m.VerifyWith(CfgTrustedAccount); err != nil {
+	if config.CfgRequireValidSignature {
+		if err := m.VerifyWith(config.CfgTrustedAccount); err != nil {
 			return err
 		}
 	}
