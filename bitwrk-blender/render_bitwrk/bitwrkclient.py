@@ -33,8 +33,6 @@ def probe_bitwrk_client(settings):
             LAST_PROBE_THREAD = threading.Thread(target=do_probe_bitwrk_client, args=(settings,), daemon=True)
             LAST_PROBE_THREAD.start()
         
-        print("Last probe settings:", LAST_PROBE_SETTINGS, "current:", settings_string(settings))
-        print("  Last probe result:", LAST_PROBE_RESULT)
         return LAST_PROBE_RESULT if settings_string(settings) == LAST_PROBE_SETTINGS else False
     
 def do_probe_bitwrk_client(settings):
