@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@ import (
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	. "github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/cafs"
+	"github.com/indyjo/cafs/remotesync"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -35,20 +36,39 @@ import (
 
 var ErrAlreadyDisposed = errors.New("Already disposed")
 
+// Interface WorkHandler is where a WorkReceiver delegates its main lifecycle events to.
+// It is implemented by SellActivity.
 type WorkHandler interface {
-	// Called when the work file arrives.
-	// Returns a ReadCloser (which must be closed by the caller) and/or an error.
+	// Function HandleWork is called when the buyer has finished transmitting the work file.
+	// Returns a ReadCloser for the result (which must be closed by the caller) and/or an error.
 	HandleWork(log bitwrk.Logger, work cafs.File, buyerSecret bitwrk.Thash) (io.ReadCloser, error)
 
-	HandleReceipt(log bitwrk.Logger, encresultHash, encResultHashSig string) error
+	// Function HandleReceipt is called when the buyer confirms receival of the result file.
+	// The encoded result hash is the actual hash of the encoded result data in hexadecimal.
+	// The signature is supposed to be a valid Bitcoin signature thereof.
+	// The implementation is supposed to actually verify the signature, for which it needs
+	// information about the buyer.
+	HandleReceipt(log bitwrk.Logger, encResultHash, encResultHashSig string) error
 }
 
+// Interface WorkReceiver is how the SellActivity controls a work receiver. It has the same life cycle as
+// the sell operation itself.
 type WorkReceiver interface {
+	// Must be called by user.
 	Dispose()
-	IsDisposed() (bool, error) // Returns whether the work receiver was disposed, and if so, if there was an error
+	// Function IsDisposed() returns whether the work receiver was disposed, and if so, if there was an error.
+	// A work receiver will auto-dispose on error.
+	IsDisposed() (bool, error)
+	// Function URL returns the URL the receiver listens on for requests by the buyer.
 	URL() string
 }
 
+// A work receiver accepts incoming connections on a private URL and implements the seller side of a BitWrk
+// transaction.
+//
+// `info` is forwarded to CAFS for marking files appropriately.
+// `key` contains an AES-256 key for encrypting result data.
+// `handler` delegate for performing actual work.
 func NewWorkReceiver(log bitwrk.Logger,
 	info string,
 	receiveManager *ReceiveManager,
@@ -92,7 +112,7 @@ type endpointReceiver struct {
 	log              bitwrk.Logger
 	handler          WorkHandler
 	encResultKey     bitwrk.Tkey
-	builder          *cafs.Builder
+	builder          *remotesync.Builder
 	buyerSecret      bitwrk.Thash
 	workFile         cafs.File
 	encResultFile    cafs.File
@@ -220,6 +240,7 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 	}
 }
 
+// Decodes MIME multipart/form-data messages and returns a todoList or an error.
 func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Reader) (*todoList, error) {
 	todo := &todoList{}
 	// iterate through parts of multipart/form-data content
@@ -235,6 +256,7 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 		receiver.log.Printf("Handling part: %v", formName)
 		switch formName {
 		case "buyersecret":
+			// Buyer sends a random value to seller to prevent the seller from hijacking other seller's workers.
 			if receiver.buyerSecret != ZEROHASH {
 				return nil, fmt.Errorf("Buyer's secret already received")
 			}
@@ -246,6 +268,7 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 				return nil, fmt.Errorf("Error decoding buyersecret: %v (%v bytes written)", err, n)
 			}
 		case "work":
+			// Direct work data transmission without chunking. Up to 16MB.
 			if receiver.builder != nil || receiver.workFile != nil {
 				return nil, fmt.Errorf("Work already received")
 			}
@@ -262,16 +285,18 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			receiver.workFile = temp.File()
 			todo.mustHandleWork = true
 		case "a32chunks":
+			// Transmission of hashes of chunked work data.
 			if receiver.builder != nil || receiver.workFile != nil {
 				return nil, fmt.Errorf("Work already received on 'a32chunks'")
 			}
-			if b, err := cafs.NewBuilder(receiver.storage, part, receiver.info); err != nil {
+			if b, err := remotesync.NewBuilder(receiver.storage, part, receiver.info); err != nil {
 				return nil, fmt.Errorf("Error receiving chunk hashes: %v", err)
 			} else {
 				receiver.builder = b
 				todo.mustHandleChunkHashes = true
 			}
 		case "chunkdata":
+			// Subset of the actual chunk data requested in response to hashes.
 			if receiver.builder == nil {
 				return nil, fmt.Errorf("Didn't receive chunk hashes")
 			}
@@ -291,6 +316,7 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 	return todo, nil
 }
 
+// Decodes URL encoded messages and returns a todoList or an error.
 func (receiver *endpointReceiver) handleUrlEncodedMessage(form url.Values) (*todoList, error) {
 	todo := &todoList{}
 	if form.Get("encresulthash") != "" {
@@ -300,7 +326,7 @@ func (receiver *endpointReceiver) handleUrlEncodedMessage(form url.Values) (*tod
 		if form.Get("encresulthash") != receiver.encResultFile.Key().String() {
 			return nil, fmt.Errorf("Hash sum of encrypted result is wrong")
 		}
-		// Informtion is redundant, so no need to do anything here
+		// Information is redundant, so no need to do anything here
 	}
 	if form.Get("encresulthashsig") != "" {
 		if receiver.encResultFile == nil {

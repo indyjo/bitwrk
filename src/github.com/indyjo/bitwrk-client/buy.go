@@ -27,6 +27,7 @@ import (
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	. "github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/cafs"
+	"github.com/indyjo/cafs/remotesync"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -422,7 +423,7 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 		if part, err := mwriter.CreateFormFile("chunkdata", "chunkdata.bin"); err != nil {
 			pipeOut.CloseWithError(err)
 			return
-		} else if err := cafs.WriteRequestedChunks(a.workFile, wishList, part, progressCallback); err != nil {
+		} else if err := remotesync.WriteRequestedChunks(a.workFile, wishList, part, progressCallback); err != nil {
 			pipeOut.CloseWithError(err)
 			return
 		}
@@ -450,7 +451,7 @@ func (a *BuyActivity) encodeChunkedFirstTransmission(log bitwrk.Logger, mwriter 
 		return
 	}
 	log.Printf("Sending work chunk hashes to seller [%v].", *a.tx.WorkerURL)
-	err = cafs.WriteChunkHashes(a.workFile, part)
+	err = remotesync.WriteChunkHashes(a.workFile, part)
 	if err != nil {
 		return
 	}

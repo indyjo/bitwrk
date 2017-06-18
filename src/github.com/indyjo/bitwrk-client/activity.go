@@ -23,6 +23,7 @@ import (
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
 	"github.com/indyjo/cafs"
+	"github.com/indyjo/cafs/ram"
 	"io"
 	"sort"
 	"strconv"
@@ -91,7 +92,7 @@ var activityManager = ActivityManager{
 	make(map[ActivityKey]*Mandate),
 	make([]Activity, 0, 5), //history
 	1,
-	cafs.NewRamStorage(512 * 1024 * 1024), // 512 MByte
+	ram.NewRamStorage(512 * 1024 * 1024), // 512 MByte
 	make(map[string]chan bool),
 }
 
