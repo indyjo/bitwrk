@@ -14,8 +14,6 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// KeyPair keeps all Bitcoin identity data in one place
-
 package bitcoin
 
 import (
@@ -25,6 +23,7 @@ import (
 	"math/big"
 )
 
+// Type KeyPair keeps all Bitcoin identity data in one place
 type KeyPair struct {
 	privKey     []byte
 	compressed  bool
@@ -33,6 +32,7 @@ type KeyPair struct {
 	address     string
 }
 
+// Decodes a Bitcoin private key in WIF format into a KeyPair.
 func FromPrivateKeyWIF(key string, addrVersion byte) (*KeyPair, error) {
 	if priv, comp, err := DecodePrivateKeyWIF(key); err != nil {
 		return nil, err

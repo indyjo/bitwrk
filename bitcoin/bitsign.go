@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -13,15 +13,16 @@
 //
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package bitcoin
 
 import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/ripemd160"
 	"github.com/indyjo/bitwrk-common/bitecdsa"
 	"github.com/indyjo/bitwrk-common/bitelliptic"
+	"github.com/indyjo/bitwrk-common/ripemd160"
 	"io"
 	"math/big"
 )

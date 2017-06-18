@@ -14,6 +14,8 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// Package money provides a well-tested framework to parse, format and calculate
+// with monetary amounts, principally Bitcoin.
 package money
 
 import (
