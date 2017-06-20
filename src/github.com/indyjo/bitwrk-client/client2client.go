@@ -239,7 +239,7 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 // Decodes MIME multipart/form-data messages and returns a todoList or an error.
 func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Reader, w http.ResponseWriter) (*todoList, error) {
 	todo := &todoList{}
-	mustBeLastPart := false
+	responseGiven := false
 	// iterate through parts of multipart/form-data content
 	for {
 		part, err := mreader.NextPart()
@@ -248,11 +248,22 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			break
 		} else if err != nil {
 			return nil, fmt.Errorf("Error reading part: %v", err)
-		} else if mustBeLastPart {
-			return nil, fmt.Errorf("Received illegal trailing message part '%v'", part.FormName())
 		}
 		formName := part.FormName()
 		receiver.log.Printf("Handling part: %v", formName)
+		switch formName {
+		case "buyersecret":
+			fallthrough
+		case "work":
+			fallthrough
+		case "a32chunks":
+			fallthrough
+		case "chunkdata":
+			if responseGiven {
+				return nil, fmt.Errorf("Received illegal trailing message part '%v'", part.FormName())
+			}
+			responseGiven = true
+		}
 		switch formName {
 		case "buyersecret":
 			// Buyer sends a random value to seller to prevent the seller from hijacking other seller's workers.
@@ -285,7 +296,6 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			todo.mustHandleWork = true
 		case "a32chunks":
 			// Transmission of hashes of chunked work data.
-			mustBeLastPart = true
 			if receiver.builder != nil || receiver.workFile != nil {
 				return nil, fmt.Errorf("Work already received on 'a32chunks'")
 			}
