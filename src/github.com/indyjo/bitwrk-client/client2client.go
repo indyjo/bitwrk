@@ -231,8 +231,6 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 			return fmt.Errorf("Error sending work result back to buyer: %v", err)
 		}
 		return nil
-	} else {
-		panic("Shouldn't get here")
 	}
 }
 
