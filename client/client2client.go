@@ -204,7 +204,7 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 		}
 		todo = t
 	} else if mreader, err := r.MultipartReader(); err == nil {
-		todo, err = receiver.handleMultipartMessage(mreader)
+		todo, err = receiver.handleMultipartMessage(mreader, w)
 		if err != nil {
 			return fmt.Errorf("Error handling multipart message: %v", err)
 		}
@@ -289,7 +289,7 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			todo.mustHandleWork = true
 		case "a32chunks":
 			// Transmission of hashes of chunked work data.
-			mustBeLastPart := true
+			mustBeLastPart = true
 			if receiver.builder != nil || receiver.workFile != nil {
 				return nil, fmt.Errorf("Work already received on 'a32chunks'")
 			}
