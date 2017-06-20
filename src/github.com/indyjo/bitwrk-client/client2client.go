@@ -230,8 +230,8 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 		if _, err := io.Copy(w, reader); err != nil {
 			return fmt.Errorf("Error sending work result back to buyer: %v", err)
 		}
-		return nil
 	}
+	return nil
 }
 
 // Decodes MIME multipart/form-data messages and returns a todoList or an error.
