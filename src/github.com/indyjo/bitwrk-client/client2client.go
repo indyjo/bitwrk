@@ -158,9 +158,8 @@ func (receiver *endpointReceiver) IsDisposed() (bool, error) {
 var ZEROHASH bitwrk.Thash
 
 type todoList struct {
-	mustHandleChunkHashes bool
-	mustHandleWork        bool
-	mustHandleReceipt     bool
+	mustHandleWork    bool
+	mustHandleReceipt bool
 }
 
 // This function handles all (http) requests from buyer to seller.
@@ -215,9 +214,6 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 
 	if todo.mustHandleReceipt {
 		return receiver.handleReceipt()
-	} else if todo.mustHandleChunkHashes {
-		w.Header().Set("Content-Type", "application/x-wishlist")
-		return receiver.builder.WriteWishList(w)
 	} else if todo.mustHandleWork {
 		if r, err := receiver.handleWorkAndReturnEncryptedResult(); err != nil {
 			return err
@@ -241,8 +237,9 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 }
 
 // Decodes MIME multipart/form-data messages and returns a todoList or an error.
-func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Reader) (*todoList, error) {
+func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Reader, w http.ResponseWriter) (*todoList, error) {
 	todo := &todoList{}
+	mustBeLastPart := false
 	// iterate through parts of multipart/form-data content
 	for {
 		part, err := mreader.NextPart()
@@ -251,6 +248,8 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			break
 		} else if err != nil {
 			return nil, fmt.Errorf("Error reading part: %v", err)
+		} else if mustBeLastPart {
+			return nil, fmt.Errorf("Received illegal trailing message part '%v'", part.FormName())
 		}
 		formName := part.FormName()
 		receiver.log.Printf("Handling part: %v", formName)
@@ -286,14 +285,14 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			todo.mustHandleWork = true
 		case "a32chunks":
 			// Transmission of hashes of chunked work data.
+			mustBeLastPart := true
 			if receiver.builder != nil || receiver.workFile != nil {
 				return nil, fmt.Errorf("Work already received on 'a32chunks'")
 			}
-			if b, err := remotesync.NewBuilder(receiver.storage, part, receiver.info); err != nil {
-				return nil, fmt.Errorf("Error receiving chunk hashes: %v", err)
-			} else {
-				receiver.builder = b
-				todo.mustHandleChunkHashes = true
+			receiver.builder = remotesync.NewBuilder(receiver.storage, receiver.info)
+			w.Header().Set("Content-Type", "application/x-wishlist")
+			if err := receiver.builder.WriteWishList(part, w); err != nil {
+				return nil, fmt.Errorf("Error handling chunk hashes: %v", err)
 			}
 		case "chunkdata":
 			// Subset of the actual chunk data requested in response to hashes.
