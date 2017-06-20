@@ -251,19 +251,23 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 		}
 		formName := part.FormName()
 		receiver.log.Printf("Handling part: %v", formName)
+
+		// The following cases are the messages which require a response.
+		// As only one response may be given per request, they need to
+		// check and complain.
 		switch formName {
-		case "buyersecret":
-			fallthrough
 		case "work":
 			fallthrough
 		case "a32chunks":
 			fallthrough
 		case "chunkdata":
 			if responseGiven {
-				return nil, fmt.Errorf("Received illegal trailing message part '%v'", part.FormName())
+				return nil, fmt.Errorf("Received illegal trailing message part '%v'", formName)
 			}
 			responseGiven = true
 		}
+
+		// Handle individual messages
 		switch formName {
 		case "buyersecret":
 			// Buyer sends a random value to seller to prevent the seller from hijacking other seller's workers.
