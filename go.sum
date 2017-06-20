@@ -6,6 +6,8 @@ github.com/indyjo/bitwrk-common v0.0.0-20190807174825-b6eccd2e81a2 h1:prdk7FE85k
 github.com/indyjo/bitwrk-common v0.0.0-20190807174825-b6eccd2e81a2/go.mod h1:WqavFz1R6xEcGfOcuKGsVb5LNMrPrEj9IA4Mr5fRDVQ=
 github.com/indyjo/cafs v0.0.0-20170618142142-82b9e9a1a07f h1:hEu869pyFgJPasT/jedCDtI6DuU93QpASCtyX9Xkn5U=
 github.com/indyjo/cafs v0.0.0-20170618142142-82b9e9a1a07f/go.mod h1:cD8L1f+CWl3RioFpdmcKmi088yWsZjbvtZm1XCP8iIk=
+github.com/indyjo/cafs v0.0.0-20170620193849-a9ea1ed6dec9 h1:1C1vcow9rlGgAW7/Yq1PE7w9Q2IWs8paGvJzOvAUjbM=
+github.com/indyjo/cafs v0.0.0-20170620193849-a9ea1ed6dec9/go.mod h1:cD8L1f+CWl3RioFpdmcKmi088yWsZjbvtZm1XCP8iIk=
 github.com/indyjo/cafs v0.0.0-20180429213316-12eec4aae6f8 h1:Tyfqz7nmdCaNTEHMBhmzCMik05KFwnxHzal1H6n/33Q=
 github.com/indyjo/cafs v0.0.0-20180429213316-12eec4aae6f8/go.mod h1:cD8L1f+CWl3RioFpdmcKmi088yWsZjbvtZm1XCP8iIk=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
