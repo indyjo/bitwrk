@@ -17,6 +17,7 @@
 package client
 
 import (
+	"bufio"
 	"compress/gzip"
 	"crypto/aes"
 	"crypto/cipher"
@@ -355,11 +356,7 @@ func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client
 		if numChunks > MaxNumberOfChunksInWorkFile {
 			return nil, fmt.Errorf("Work file too big: %d chunks (only %d allowed).", numChunks, MaxNumberOfChunksInWorkFile)
 		}
-		wishList := make([]byte, int(numChunks+7)/8)
-		if _, err := io.ReadFull(r, wishList); err != nil {
-			return nil, fmt.Errorf("Error decoding list of missing chunks: %v", err)
-		}
-		return a.sendMissingChunksAndReturnResult(log.New("send work chunk data"), client, wishList, compressed)
+		return a.sendMissingChunksAndReturnResult(log.New("send work chunk data"), client, bufio.NewReader(r), compressed)
 	}
 }
 
@@ -390,7 +387,7 @@ func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Clien
 	}
 }
 
-func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client *http.Client, wishList []byte, compressed bool) (io.ReadCloser, error) {
+func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client *http.Client, wishList io.ByteReader, compressed bool) (io.ReadCloser, error) {
 	// Send data of missing chunks to seller
 	pipeIn, pipeOut := io.Pipe()
 	defer pipeIn.Close()
@@ -410,7 +407,7 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 	mwriter := multipart.NewWriter(compressor)
 
 	// Communicate status back
-	progressCallback := func(bytesToTransfer, bytesTransferred uint64) {
+	progressCallback := func(bytesToTransfer, bytesTransferred int64) {
 		a.execSync(func() {
 			a.bytesToTransfer = bytesToTransfer
 			a.bytesTransferred = bytesTransferred

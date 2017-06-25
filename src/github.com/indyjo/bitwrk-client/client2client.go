@@ -301,7 +301,7 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			if receiver.builder != nil || receiver.workFile != nil {
 				return nil, fmt.Errorf("Work already received on 'a32chunks'")
 			}
-			receiver.builder = remotesync.NewBuilder(receiver.storage, receiver.info)
+			receiver.builder = remotesync.NewBuilder(receiver.storage, MaxNumberOfChunksInWorkFile, receiver.info)
 			w.Header().Set("Content-Type", "application/x-wishlist")
 			if err := receiver.builder.WriteWishList(part, w); err != nil {
 				return nil, fmt.Errorf("Error handling chunk hashes: %v", err)

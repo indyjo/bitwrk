@@ -69,9 +69,9 @@ type ActivityState struct {
 	Phase       string // The phase the activity's active object is in
 
 	// Information about a transmission in progress
-	BytesTotal       uint64
-	BytesToTransfer  uint64
-	BytesTransferred uint64
+	BytesTotal       int64
+	BytesToTransfer  int64
+	BytesTransferred int64
 }
 
 type ActivityManager struct {
