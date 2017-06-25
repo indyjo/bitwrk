@@ -417,7 +417,7 @@ func (t *Trade) GetState() *ActivityState {
 	}
 
 	if t.workFile != nil {
-		result.BytesTotal = uint64(t.workFile.Size())
+		result.BytesTotal = t.workFile.Size()
 	}
 
 	return result
