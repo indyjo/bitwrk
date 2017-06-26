@@ -17,6 +17,7 @@
 package client
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
@@ -314,8 +315,16 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			}
 			receiver.builder = remotesync.NewBuilder(receiver.storage, transmissionWindow, receiver.info)
 			w.Header().Set("Content-Type", "application/x-wishlist")
-			if err := receiver.builder.WriteWishList(part, w.(remotesync.FlushWriter)); err != nil {
-				return nil, fmt.Errorf("Error handling chunk hashes: %v", err)
+
+			// Unfortunately, Go's http implementation doesn't permit us to stream an HTTP response while
+			// the request body hasn't been read completely. That's why we buffer it up to the maximum
+			// allowed size.
+			var buf bytes.Buffer
+			if _, err := io.CopyN(&buf, part, 35*MaxNumberOfChunksInWorkFile+1); err != io.EOF {
+				return nil, fmt.Errorf("Error reading chunk hashes: %v", err)
+			}
+			if err := receiver.builder.WriteWishList(&buf, w.(remotesync.FlushWriter)); err != nil {
+				return nil, fmt.Errorf("Error writing wishlist: %v", err)
 			}
 		case "chunkdata":
 			// Subset of the actual chunk data requested in response to hashes.
