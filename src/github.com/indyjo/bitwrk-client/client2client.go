@@ -115,6 +115,7 @@ type endpointReceiver struct {
 	handler          WorkHandler
 	encResultKey     bitwrk.Tkey
 	builder          *remotesync.Builder
+	chunkHashes      *bytes.Buffer
 	buyerSecret      bitwrk.Thash
 	workFile         cafs.File
 	encResultFile    cafs.File
@@ -160,8 +161,9 @@ func (receiver *endpointReceiver) IsDisposed() (bool, error) {
 var ZEROHASH bitwrk.Thash
 
 type todoList struct {
-	mustHandleWork    bool
-	mustHandleReceipt bool
+	mustHandleChunkHashes bool
+	mustHandleWork        bool
+	mustHandleReceipt     bool
 }
 
 // This function handles all (http) requests from buyer to seller.
@@ -202,7 +204,7 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 		}
 		todo = t
 	} else if mreader, err := r.MultipartReader(); err == nil {
-		todo, err = receiver.handleMultipartMessage(mreader, w)
+		todo, err = receiver.handleMultipartMessage(mreader)
 		if err != nil {
 			return fmt.Errorf("Error handling multipart message: %v", err)
 		}
@@ -216,6 +218,13 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 
 	if todo.mustHandleReceipt {
 		return receiver.handleReceipt()
+	} else if todo.mustHandleChunkHashes {
+		w.Header().Set("Content-Type", "application/x-wishlist")
+		buf := receiver.chunkHashes
+		// Leave lock temporarily to enable streaming
+		receiver.mutex.Unlock()
+		defer receiver.mutex.Lock()
+		return receiver.builder.WriteWishList(buf, w.(remotesync.FlushWriter))
 	} else if todo.mustHandleWork {
 		if r, err := receiver.handleWorkAndReturnEncryptedResult(); err != nil {
 			return err
@@ -232,14 +241,15 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 		if _, err := io.Copy(w, reader); err != nil {
 			return fmt.Errorf("Error sending work result back to buyer: %v", err)
 		}
+		return nil
+	} else {
+		panic("Shouldn't get here")
 	}
-	return nil
 }
 
 // Decodes MIME multipart/form-data messages and returns a todoList or an error.
-func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Reader, w http.ResponseWriter) (*todoList, error) {
+func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Reader) (*todoList, error) {
 	todo := &todoList{}
-	responseGiven := false
 	streamingEnabled := false
 	// iterate through parts of multipart/form-data content
 	for {
@@ -252,23 +262,6 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 		}
 		formName := part.FormName()
 		receiver.log.Printf("Handling part: %v", formName)
-
-		// The following cases are the messages which require a response.
-		// As only one response may be given per request, they need to
-		// check and complain.
-		switch formName {
-		case "work":
-			fallthrough
-		case "a32chunks":
-			fallthrough
-		case "chunkdata":
-			if responseGiven {
-				return nil, fmt.Errorf("Received illegal trailing message part '%v'", formName)
-			}
-			responseGiven = true
-		}
-
-		// Handle individual messages
 		switch formName {
 		case "streaming":
 			streamingEnabled = true
@@ -314,7 +307,7 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 				transmissionWindow = 32
 			}
 			receiver.builder = remotesync.NewBuilder(receiver.storage, transmissionWindow, receiver.info)
-			w.Header().Set("Content-Type", "application/x-wishlist")
+			todo.mustHandleChunkHashes = true
 
 			// Unfortunately, Go's http implementation doesn't permit us to stream an HTTP response while
 			// the request body hasn't been read completely. That's why we buffer it up to the maximum
@@ -323,9 +316,7 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			if _, err := io.CopyN(&buf, part, 35*MaxNumberOfChunksInWorkFile+1); err != io.EOF {
 				return nil, fmt.Errorf("Error reading chunk hashes: %v", err)
 			}
-			if err := receiver.builder.WriteWishList(&buf, w.(remotesync.FlushWriter)); err != nil {
-				return nil, fmt.Errorf("Error writing wishlist: %v", err)
-			}
+			receiver.chunkHashes = &buf
 		case "chunkdata":
 			// Subset of the actual chunk data requested in response to hashes.
 			if receiver.builder == nil {
@@ -334,7 +325,16 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			if receiver.workFile != nil {
 				return nil, fmt.Errorf("Work already received")
 			}
-			if f, err := receiver.builder.ReconstructFileFromRequestedChunks(part); err != nil {
+
+			reconstruct := func() (cafs.File, error) {
+				// Reconstruct file but drop mutex to enable concurrent download of wishlist
+				b := receiver.builder
+				receiver.mutex.Unlock()
+				defer receiver.mutex.Lock()
+				return b.ReconstructFileFromRequestedChunks(part)
+			}
+
+			if f, err := reconstruct(); err != nil {
 				return nil, fmt.Errorf("Error reconstructing work from sent chunks: %v", err)
 			} else {
 				receiver.workFile = f
