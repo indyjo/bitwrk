@@ -118,17 +118,15 @@ func (a *SellActivity) doRemoteSell(log bitwrk.Logger, receiveManager *ReceiveMa
 
 	// Start polling for state changes in background
 	abortPolling := make(chan bool)
-	defer func() {
-		// Stop polling when sell has ended
-		abortPolling <- true
-	}()
-	go func() {
-		a.pollTransaction(log, abortPolling)
-	}()
+	// Stop polling when sell has ended
+	defer close(abortPolling)
 
 	info := fmt.Sprintf("Sell #%v", a.GetKey())
 	receiver := NewWorkReceiver(log, info, receiveManager, a.manager.GetStorage(), *a.encResultKey, a)
-	defer receiver.Dispose()
+	go func() {
+		a.pollTransaction(log, abortPolling)
+		receiver.Dispose()
+	}()
 
 	// Announce receive URL
 	if err := SendTxMessageEstablishSeller(a.txId, a.identity, receiver.URL()); err != nil {
