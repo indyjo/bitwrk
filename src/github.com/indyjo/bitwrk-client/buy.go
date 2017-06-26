@@ -352,15 +352,16 @@ func (a *BuyActivity) transmitWorkLinear(log bitwrk.Logger, client *http.Client)
 }
 
 func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client, compressed bool, streamed bool) (io.ReadCloser, error) {
+	numChunks := a.workFile.NumChunks()
+	if numChunks > MaxNumberOfChunksInWorkFile {
+		return nil, fmt.Errorf("Work file too big: %d chunks (only %d allowed).", numChunks, MaxNumberOfChunksInWorkFile)
+	}
+
 	if r, err := a.requestMissingChunks(log.New("request missing chunks"), client, streamed); err != nil {
 		return nil, fmt.Errorf("Transmitting work (chunked) failed: %v", err)
 	} else {
 		defer r.Close()
-		numChunks := a.workFile.NumChunks()
-		if numChunks > MaxNumberOfChunksInWorkFile {
-			return nil, fmt.Errorf("Work file too big: %d chunks (only %d allowed).", numChunks, MaxNumberOfChunksInWorkFile)
-		}
-		return a.sendMissingChunksAndReturnResult(log.New("send work chunk data"), client, bufio.NewReader(r), compressed)
+		return a.sendMissingChunksAndReturnResult(log.New("send work chunk data"), client, bufio.NewReader(r), compressed, streamed)
 	}
 }
 
@@ -400,7 +401,35 @@ func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Clien
 	}
 }
 
-func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client *http.Client, wishList io.ByteReader, compressed bool) (io.ReadCloser, error) {
+// When streaming chunk data in compressed mode, we must make sure that the gzip stream is
+// flushed every couple of writes in order to avoid deadlocking.
+type flushingCompressor struct {
+	w   *gzip.Writer
+	n   int
+	err error
+}
+
+// Flush every 8 writes. We can assume that 1 write == 1 chunk.
+func (c *flushingCompressor) Write(buf []byte) (int, error) {
+	if c.err != nil {
+		return 0, c.err
+	} else if written, err := c.w.Write(buf); err != nil {
+		c.err = err
+		return written, err
+	} else {
+		return written, nil
+	}
+}
+
+func (c *flushingCompressor) maybeFlush() {
+	c.n++
+	if c.err == nil && c.n == 8 {
+		c.n = 0
+		c.err = c.w.Flush()
+	}
+}
+
+func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client *http.Client, wishList io.ByteReader, compressed bool, streamed bool) (io.ReadCloser, error) {
 	// Send data of missing chunks to seller
 	pipeIn, pipeOut := io.Pipe()
 	defer pipeIn.Close()
@@ -408,27 +437,35 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 	// Setup compression layer with dummy impl in case of uncompressed transmisison
 	var compressor io.Writer
 	var closeCompressor func() error
+	var maybeFlush func()
 	if compressed {
 		c := gzip.NewWriter(pipeOut)
-		compressor = c
+		fc := &flushingCompressor{w: c}
+		compressor = fc
 		closeCompressor = c.Close
+		maybeFlush = fc.maybeFlush
 	} else {
 		compressor = pipeOut
 		closeCompressor = func() error { return nil }
+		maybeFlush = func() {}
 	}
 
 	mwriter := multipart.NewWriter(compressor)
 
-	// Communicate status back
+	// Communicate status back. Also misused to flush the gzip stream.
 	progressCallback := func(bytesToTransfer, bytesTransferred int64) {
 		a.execSync(func() {
 			a.bytesToTransfer = bytesToTransfer
 			a.bytesTransferred = bytesTransferred
+			if streamed {
+				maybeFlush()
+			}
 		})
 	}
 
 	// Write work chunks into pipe for HTTP request
 	go func() {
+		log.Printf("Transmitting chunk data (compressed: %v, streamed: %v)", compressed, streamed)
 		defer pipeOut.Close()
 		if part, err := mwriter.CreateFormFile("chunkdata", "chunkdata.bin"); err != nil {
 			pipeOut.CloseWithError(err)
