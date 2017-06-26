@@ -197,7 +197,7 @@ func (a *BuyActivity) finishBuy(log bitwrk.Logger) error {
 }
 
 // Performs an OPTIONS request to the seller's WorkerURL and finds out the sellers' capabilities.
-func (a *BuyActivity) testSellerForCapabilities(log bitwrk.Logger, client *http.Client) (supportsChunked, supportsCompressed bool, err error) {
+func (a *BuyActivity) testSellerForCapabilities(log bitwrk.Logger, client *http.Client) (supportsChunked, supportsCompressed, supportsStreaming bool, err error) {
 	req, err := NewRequest("OPTIONS", *a.tx.WorkerURL, nil)
 	if err != nil {
 		return
@@ -215,6 +215,7 @@ func (a *BuyActivity) testSellerForCapabilities(log bitwrk.Logger, client *http.
 	var caps struct {
 		Adler32Chunking bool
 		GZIPCompression bool
+		Streaming       bool
 	}
 	err = decoder.Decode(&caps)
 	if err != nil {
@@ -223,6 +224,7 @@ func (a *BuyActivity) testSellerForCapabilities(log bitwrk.Logger, client *http.
 
 	supportsChunked = caps.Adler32Chunking
 	supportsCompressed = caps.GZIPCompression
+	supportsStreaming = caps.Streaming
 
 	return
 }
@@ -258,20 +260,22 @@ func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
 
 	chunked := false
 	compressed := false
+	streaming := false
 	if a.workFile.IsChunked() {
-		if chunkedSupported, compressedSupported, err := a.testSellerForCapabilities(log, scopedClient); err != nil {
+		if chunkedSupported, compressedSupported, streamingSupported, err := a.testSellerForCapabilities(log, scopedClient); err != nil {
 			log.Printf("Failed to probe seller for capabilities: %v", err)
 		} else {
 			chunked = chunkedSupported
 			compressed = compressedSupported
-			log.Printf("Chunked/compressed work transmission supported by seller: %v/%v", chunked, compressed)
+			streaming = streamingSupported
+			log.Printf("Chunked/compressed/streaming work transmission supported by seller: %v/%v/%v", chunked, compressed, streaming)
 		}
 	}
 
 	var response io.ReadCloser
 	var transmissionError error
 	if chunked {
-		response, transmissionError = a.transmitWorkChunked(log, scopedClient, compressed)
+		response, transmissionError = a.transmitWorkChunked(log, scopedClient, compressed, streaming)
 	} else {
 		response, transmissionError = a.transmitWorkLinear(log, scopedClient)
 	}
@@ -347,8 +351,8 @@ func (a *BuyActivity) transmitWorkLinear(log bitwrk.Logger, client *http.Client)
 	return a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client)
 }
 
-func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client, compressed bool) (io.ReadCloser, error) {
-	if r, err := a.requestMissingChunks(log.New("request missing chunks"), client); err != nil {
+func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client, compressed bool, streamed bool) (io.ReadCloser, error) {
+	if r, err := a.requestMissingChunks(log.New("request missing chunks"), client, streamed); err != nil {
 		return nil, fmt.Errorf("Transmitting work (chunked) failed: %v", err)
 	} else {
 		defer r.Close()
@@ -360,7 +364,7 @@ func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client
 	}
 }
 
-func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Client) (io.ReadCloser, error) {
+func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Client, streamed bool) (io.ReadCloser, error) {
 	// Send chunk list of work to client
 	pipeIn, pipeOut := io.Pipe()
 	defer pipeIn.Close()
@@ -369,6 +373,15 @@ func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Clien
 	// Write chunk hashes into pipe for HTTP request
 	go func() {
 		defer pipeOut.Close()
+
+		if streamed {
+			if w, err := mwriter.CreateFormField("streaming"); err != nil {
+				pipeOut.CloseWithError(err)
+			} else if _, err := w.Write([]byte("true")); err != nil {
+				pipeOut.CloseWithError(err)
+			}
+		}
+
 		if err := a.encodeChunkedFirstTransmission(log, mwriter); err != nil {
 			pipeOut.CloseWithError(err)
 			return

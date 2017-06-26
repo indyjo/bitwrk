@@ -28,6 +28,7 @@ import (
 	"github.com/indyjo/cafs"
 	"github.com/indyjo/cafs/remotesync"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -174,7 +175,7 @@ type todoList struct {
 func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "OPTIONS" {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"Adler32Chunking": true, "GZIPCompression": true}`))
+		w.Write([]byte(`{"Adler32Chunking": true, "GZIPCompression": true, "Streaming": true}`))
 		return nil
 	}
 	if r.Method != "POST" {
@@ -238,6 +239,7 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Reader, w http.ResponseWriter) (*todoList, error) {
 	todo := &todoList{}
 	responseGiven := false
+	streamingEnabled := false
 	// iterate through parts of multipart/form-data content
 	for {
 		part, err := mreader.NextPart()
@@ -267,6 +269,11 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 
 		// Handle individual messages
 		switch formName {
+		case "streaming":
+			streamingEnabled = true
+			if _, err := io.Copy(ioutil.Discard, part); err != nil {
+				return nil, fmt.Errorf("Error enabling streaming: %v", err)
+			}
 		case "buyersecret":
 			// Buyer sends a random value to seller to prevent the seller from hijacking other seller's workers.
 			if receiver.buyerSecret != ZEROHASH {
@@ -301,9 +308,13 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			if receiver.builder != nil || receiver.workFile != nil {
 				return nil, fmt.Errorf("Work already received on 'a32chunks'")
 			}
-			receiver.builder = remotesync.NewBuilder(receiver.storage, MaxNumberOfChunksInWorkFile, receiver.info)
+			transmissionWindow := MaxNumberOfChunksInWorkFile
+			if streamingEnabled {
+				transmissionWindow = 32
+			}
+			receiver.builder = remotesync.NewBuilder(receiver.storage, transmissionWindow, receiver.info)
 			w.Header().Set("Content-Type", "application/x-wishlist")
-			if err := receiver.builder.WriteWishList(part, w); err != nil {
+			if err := receiver.builder.WriteWishList(part, w.(remotesync.FlushWriter)); err != nil {
 				return nil, fmt.Errorf("Error handling chunk hashes: %v", err)
 			}
 		case "chunkdata":
