@@ -434,11 +434,13 @@ def get_blender_version():
         return "2.77"
     elif b"Blender 2.78 (sub 0)" in output:
         return "2.78"
+    elif b"Blender 2.79 (sub" in output:
+        return "2.79"
     else:
         raise RuntimeError("Blender version could not be detected.\n"
                            + "This version of " + __file__
                            + " will detect Blender versions "
-                           + "2.76 up to 2.78.")
+                           + "2.76 up to 2.79.")
 
 def parse_args():
     import argparse

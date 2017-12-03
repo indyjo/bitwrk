@@ -1,8 +1,9 @@
 News
 ====
+- **2017-12-03:** BitWrk 0.6.3 enables support for Blender 2.79
 - **2017-05-23:** BitWrk 0.6.2 fixes a bug that prevented local network rendering from working when the
   worker was started in the Blender UI, removes some usability weaknesses and fixes a bug that caused
-  workers to stop permanently after an error   
+  workers to stop permanently after an error
 - **2017-05-01:** BitWrk 0.6.1 fixes a bug that affected Windows users
 - **2017-04-23:** Release of BitWrk 0.6.0 (Mars) brings local network rendering and usability enhancements for Blender
 - **2017-04-17:** Release candidate 1 of BitWrk 0.6.0
@@ -17,9 +18,6 @@ News
 - **2014-12-05:** New participants now start with a zero balance as preparations for an upcoming
   beta test have started. The test will include real Bitcoin transactions processed by the
   payment system.
-- **2014-11-11:** Payment system integration is progressing. Required refactoring BitWrk into
-  separate projects:
-
 - **2014-11-11:** Payment system integration is progressing. Required refactoring BitWrk into
   separate projects:
   - **bitwrk** now contains code specific to client and server and may be refactored further at

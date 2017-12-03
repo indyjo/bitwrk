@@ -58,7 +58,7 @@ func getMessageOfTheDay(r *http.Request) motd {
 
 	const currentMajor = 0
 	const currentMinor = 6
-	const currentMicro = 2
+	const currentMicro = 3
 
 	if major > currentMajor || major == currentMajor && (minor > currentMinor || minor == currentMinor && micro >= currentMicro) {
 		return motd{fmt.Sprintf("Welcome to the BitWrk network!"+
