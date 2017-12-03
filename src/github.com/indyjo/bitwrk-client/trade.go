@@ -124,10 +124,8 @@ func (t *Trade) awaitClearance(log bitwrk.Logger, interrupt <-chan bool) error {
 	err := t.interruptibleWaitWhile(interrupt, func() bool { return t.awaitingClearance })
 
 	if err != nil {
-		fmt.Errorf("Error awaiting clearance: %v", err)
-		return err
+		return fmt.Errorf("Error awaiting clearance: %v", err)
 	} else if t.clearanceDenied {
-		fmt.Errorf("Clearance denied")
 		return ErrNoPermission
 	} else {
 		if t.published {
@@ -150,9 +148,9 @@ func (t *Trade) awaitBid() error {
 	}()
 
 	rawBid := bitwrk.RawBid{
-		t.bidType,
-		t.article,
-		t.price,
+		Type:    t.bidType,
+		Article: t.article,
+		Price:   t.price,
 	}
 	if bidId, err := protocol.PlaceBid(&rawBid, t.identity); err != nil {
 		return err

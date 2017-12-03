@@ -83,7 +83,7 @@ func main() {
 		}
 	} else {
 		if err := TestResourceDir(ResourceDir, "bitwrk-client", ClientVersion); err != nil {
-			log.Fatalf("Directory [%v] is not a valid resource directory: %v", err)
+			log.Fatalf("Directory [%v] is not a valid resource directory: %v", ResourceDir, err)
 		}
 	}
 
