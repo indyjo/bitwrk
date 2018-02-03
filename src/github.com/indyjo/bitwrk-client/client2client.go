@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -22,14 +22,15 @@ import (
 	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	. "github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/cafs"
 	"github.com/indyjo/cafs/remotesync"
+	"github.com/indyjo/cafs/remotesync/shuffle"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -84,6 +85,7 @@ func NewWorkReceiver(log bitwrk.Logger,
 		handler:      handler,
 		info:         info,
 		encResultKey: key,
+		permutation:  shuffle.Permutation{0},
 	}
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 		if err := result.handleRequest(w, r); err != nil {
@@ -121,6 +123,7 @@ type endpointReceiver struct {
 	encResultFile    cafs.File
 	info             string
 	encResultHashSig string
+	permutation      shuffle.Permutation
 }
 
 func (r *endpointReceiver) URL() string {
@@ -178,7 +181,7 @@ type todoList struct {
 func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "OPTIONS" {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"Adler32Chunking": true, "GZIPCompression": true, "Streaming": true}`))
+		w.Write([]byte(`{"Adler32Chunking": true, "GZIPCompression": true, "Permutation": true}`))
 		return nil
 	}
 	if r.Method != "POST" {
@@ -250,7 +253,6 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 // Decodes MIME multipart/form-data messages and returns a todoList or an error.
 func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Reader) (*todoList, error) {
 	todo := &todoList{}
-	streamingEnabled := false
 	// iterate through parts of multipart/form-data content
 	for {
 		part, err := mreader.NextPart()
@@ -263,11 +265,14 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 		formName := part.FormName()
 		receiver.log.Printf("Handling part: %v", formName)
 		switch formName {
-		case "streaming":
-			streamingEnabled = true
-			if _, err := io.Copy(ioutil.Discard, part); err != nil {
-				return nil, fmt.Errorf("Error enabling streaming: %v", err)
+		case "permutation":
+			var newPerm shuffle.Permutation
+			// guard against DOS
+			r := io.LimitReader(part, 1<<18)
+			if err := json.NewDecoder(r).Decode(&newPerm); err != nil {
+				return nil, fmt.Errorf("Error decoding permutation: %v", err)
 			}
+			receiver.permutation = newPerm
 		case "buyersecret":
 			// Buyer sends a random value to seller to prevent the seller from hijacking other seller's workers.
 			if receiver.buyerSecret != ZEROHASH {
@@ -303,10 +308,10 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 				return nil, fmt.Errorf("Work already received on 'a32chunks'")
 			}
 			transmissionWindow := MaxNumberOfChunksInWorkFile
-			if streamingEnabled {
+			if len(receiver.permutation) > 1 {
 				transmissionWindow = 32
 			}
-			receiver.builder = remotesync.NewBuilder(receiver.storage, transmissionWindow, receiver.info)
+			receiver.builder = remotesync.NewBuilder(receiver.storage, receiver.permutation, transmissionWindow, receiver.info)
 			todo.mustHandleChunkHashes = true
 
 			// Unfortunately, Go's http implementation doesn't permit us to stream an HTTP response while
