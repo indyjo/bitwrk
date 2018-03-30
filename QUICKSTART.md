@@ -2,8 +2,8 @@ Quick Start Instructions
 ========================
 For the impatient, this will get you running within 5 minutes.
 
-These steps apply to users of the 64 bit versions of BitWrk on Windows and Mac OS X, the
-systems for which binary packages are provided. Linux users can easily compile BitWrk
+These steps apply to users of the 64 bit versions of BitWrk on Windows, Linux and Mac OS X, the
+systems for which binary packages are provided. Users of other operating systems can easily compile BitWrk
 [themselves](COMPILING.md) and possibly resort to other shortcuts, such as installing
 BitWrk or the Go development kit using the system's package manager.
 
@@ -11,7 +11,7 @@ Using BitWrk for rendering
 --------------------------
 [![5 Minute introduction to BitWrk](https://img.youtube.com/vi/KmwcxwhIRr0/0.jpg)](https://www.youtube.com/watch?v=KmwcxwhIRr0)
 
-You need at least Blender 2.76 (Blender 2.78 is recommended).
+You need at least Blender 2.76 (Blender 2.79 is recommended).
 
 Download the BitWrk binary release specific your OS and unpack it somewhere.
 
