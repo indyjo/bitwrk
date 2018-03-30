@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
-	. "github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/cafs"
 	"github.com/indyjo/cafs/remotesync"
 	"io"
@@ -139,6 +138,10 @@ func (receiver *endpointReceiver) doDispose(err error) {
 		if receiver.workFile != nil {
 			receiver.workFile.Dispose()
 			receiver.workFile = nil
+		}
+		if receiver.encResultFile != nil {
+			receiver.encResultFile.Dispose()
+			receiver.encResultFile = nil
 		}
 	}
 }
@@ -384,59 +387,6 @@ func verifyBuyerSecret(workHash, workSecretHash, buyerSecret *bitwrk.Thash) erro
 	return nil
 }
 
-func (a *SellActivity) dispatchWorkAndSaveEncryptedResult(log bitwrk.Logger, workFile cafs.File) error {
-	// Watch transaction state and close connection to worker when transaction expires
-	connChan := make(chan io.Closer)
-	exitChan := make(chan bool)
-	go a.watchdog(log, exitChan, connChan, func() bool { return a.tx.State == bitwrk.StateActive })
-	defer func() {
-		exitChan <- true
-	}()
-
-	st := NewScopedTransport()
-	connChan <- st
-	defer st.Close()
-
-	reader := workFile.Open()
-	defer reader.Close()
-	result, err := a.worker.DoWork(reader, NewClient(&st.Transport))
-	if err != nil {
-		return err
-	}
-	defer result.Close()
-
-	temp := a.manager.storage.Create(fmt.Sprintf("Sell #%v: encrypted result", a.GetKey()))
-	defer temp.Dispose()
-
-	// Use AES-256 to encrypt the result
-	block, err := aes.NewCipher(a.encResultKey[:])
-	if err != nil {
-		return err
-	}
-
-	// Create OFB stream with null initialization vector (ok for one-time key)
-	var iv [aes.BlockSize]byte
-	stream := cipher.NewOFB(block, iv[:])
-
-	writer := &cipher.StreamWriter{S: stream, W: temp}
-	_, err = io.Copy(writer, result)
-	if err != nil {
-		return err
-	}
-
-	if err := temp.Close(); err != nil {
-		return err
-	}
-
-	if err := result.Close(); err != nil {
-		return err
-	}
-
-	a.execSync(func() { a.encResultFile = temp.File() })
-
-	return nil
-}
-
 func (receiver *endpointReceiver) handleReceipt() error {
 	sig := receiver.encResultHashSig
 	hash := receiver.encResultFile.Key().String()
@@ -446,7 +396,8 @@ func (receiver *endpointReceiver) handleReceipt() error {
 	return receiver.handler.HandleReceipt(receiver.log, hash, sig)
 }
 
-func encrypt(temp cafs.Temporary, reader io.Reader, key bitwrk.Tkey) (err error) {
+// Function encrypt reads from `reader` and writes encryped data into `writer`.
+func encrypt(writer io.Writer, reader io.Reader, key bitwrk.Tkey) (err error) {
 	// Use AES-256 to encrypt the result
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
@@ -457,7 +408,7 @@ func encrypt(temp cafs.Temporary, reader io.Reader, key bitwrk.Tkey) (err error)
 	var iv [aes.BlockSize]byte
 	stream := cipher.NewOFB(block, iv[:])
 
-	writer := &cipher.StreamWriter{S: stream, W: temp}
-	_, err = io.Copy(writer, reader)
+	encWriter := &cipher.StreamWriter{S: stream, W: writer}
+	_, err = io.Copy(encWriter, reader)
 	return
 }
