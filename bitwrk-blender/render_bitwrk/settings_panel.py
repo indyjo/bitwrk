@@ -146,9 +146,10 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
         if bitwrkclient.probe_bitwrk_client(settings):
             self.layout.separator()
             
-            row = self.layout.row()
-            row.enabled = not worker.worker_alive()
-            row.prop(settings, "complexity")
+            if settings.expert_mode:
+                row = self.layout.row()
+                row.enabled = not worker.worker_alive()
+                row.prop(settings, "complexity")
             
             row = self.layout.split(0.333)
             row.label("Article id: ", icon="RNDCURVE")
