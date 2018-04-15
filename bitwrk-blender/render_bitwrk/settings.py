@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 
 import bpy
 from bpy.props import BoolProperty, StringProperty, IntProperty, PointerProperty, EnumProperty, FloatProperty
+import cycles.properties
 
 # used by BitWrkSettings PropertyGroup
 def set_complexity(self, value):
@@ -86,6 +87,11 @@ class BitWrkSettings(bpy.types.PropertyGroup):
             name="Allow other computers as workers",
             description="Allow other computers on the network to register as workers",
             default=False)
+        settings.worker_device = EnumProperty(
+            name="Worker Device",
+            description="Device that worker uses for rendering",
+            items=cycles.properties.enum_devices,
+            default='CPU')
         
         bpy.types.Scene.bitwrk_settings = PointerProperty(type=BitWrkSettings, name="BitWrk Settings", description="Settings for using the BitWrk service")
 

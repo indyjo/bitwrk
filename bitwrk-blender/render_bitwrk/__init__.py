@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ bl_info = {
 
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory)
 
-from render_bitwrk import render, settings, settings_panel, bitwrkclient, worker
+from render_bitwrk import render, settings, settings_panel, bitwrkclient, worker, ui
 
 if "bpy" in locals():
     import imp
@@ -38,6 +38,7 @@ if "bpy" in locals():
     imp.reload(settings_panel)
     imp.reload(bitwrkclient)
     imp.reload(worker)
+    imp.reload(ui)
 import bpy
 
 def register():
@@ -49,6 +50,7 @@ def register():
     bpy.utils.register_class(settings_panel.StopBitwrkClientOperator)
     bpy.utils.register_class(settings_panel.StartWorkerOperator)
     bpy.utils.register_class(settings_panel.StopWorkerOperator)
+    ui.register()
     for name in dir(bpy.types):
         klass = getattr(bpy.types, name)
         if 'COMPAT_ENGINES' not in dir(klass):
@@ -64,6 +66,7 @@ def unregister():
         bitwrkclient.stop_bitwrk_client()
     except:
         pass
+    ui.unregister()
     bpy.utils.unregister_class(settings_panel.StopWorkerOperator)
     bpy.utils.unregister_class(settings_panel.StartWorkerOperator)
     bpy.utils.unregister_class(settings_panel.StopBitwrkClientOperator)
