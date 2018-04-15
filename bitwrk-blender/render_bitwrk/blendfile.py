@@ -46,11 +46,6 @@ def _repath():
     This method is called in a special blender session.
     """
     
-    # Switch to object mode for make_local
-    bpy.ops.object.mode_set(mode='OBJECT')
-    # Make linked objects local to current blend file.
-    bpy.ops.object.make_local(type='ALL')
-    
     def repath_obj(obj):
         path = object_uniqpath(obj)
         if path:

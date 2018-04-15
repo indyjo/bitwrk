@@ -21,7 +21,7 @@
 import bpy, os, hashlib
 
 # Collections under bpy.data which contain linkable resources
-RESOURCE_COLLECTIONS = ["images", "sounds", "texts", "movieclips"]
+RESOURCE_COLLECTIONS = ["images", "sounds", "texts", "movieclips", "fonts", "libraries"]
 
 
 def resource_id(path):
@@ -42,7 +42,7 @@ def object_filepath(obj):
         return
     if hasattr(obj, 'packed_file') and obj.packed_file:
         return
-    if not obj.filepath:
+    if not obj.filepath or obj.filepath=='<builtin>':
         return
     path = obj.filepath
     while hasattr(obj, 'library') and obj.library:
