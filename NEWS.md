@@ -1,5 +1,6 @@
 News
 ====
+- **2018-04-22:** BitWrk 0.6.4 fixes bugs and provides UI for local GPU rendering
 - **2017-12-03:** BitWrk 0.6.3 enables support for Blender 2.79
 - **2017-05-23:** BitWrk 0.6.2 fixes a bug that prevented local network rendering from working when the
   worker was started in the Blender UI, removes some usability weaknesses and fixes a bug that caused

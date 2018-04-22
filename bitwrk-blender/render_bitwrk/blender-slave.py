@@ -3,7 +3,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -98,8 +98,9 @@ ymin={ymin}
 xmax={xmax}
 ymax={ymax}
 MAX_COST={maxcost}
+device='{device}'
 
-print("Blender sees:", xmin, ymin, xmax, ymax, MAX_COST)
+print("Blender sees:", xmin, ymin, xmax, ymax, MAX_COST, device)
 
 scene = bpy.context.scene
 render = scene.render
@@ -126,6 +127,7 @@ render.use_persistent_data=False
 scene.cycles.use_cache=False
 scene.cycles.debug_use_spatial_splits=False
 scene.cycles.use_progressive_refine=False
+scene.cycles.device=device
 
 percentage = max(1, min(10000, render.resolution_percentage))
 resx = int(render.resolution_x * percentage / 100)
@@ -300,7 +302,7 @@ class BlenderHandler(http.server.BaseHTTPRequestHandler):
         blendfile = os.path.join(tmpdir, 'input.blend')
         pythonfile = os.path.join(tmpdir, 'setup.py')
         with open(pythonfile, 'w') as f:
-            f.write(PYTHONSCRIPT.format(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax, maxcost=MAX_COST))
+            f.write(PYTHONSCRIPT.format(xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax, maxcost=MAX_COST, device=DEVICE))
         
         with open(blendfile, 'wb') as f:
             f.write(self._read(rfile, length))
@@ -456,6 +458,8 @@ def parse_args():
         help="Network interface on which to listen for jobs [auto]", default="auto")
     parser.add_argument("--own-address", metavar='IP',
         help="Network address of this worker [auto]", default="auto")
+    parser.add_argument('--device', metavar='DEVICE', help="Device to use for rendering [CPU]",
+        choices=["CPU", "GPU"], default="CPU")
     return parser.parse_args()
         
 if __name__ == "__main__":
@@ -481,10 +485,12 @@ if __name__ == "__main__":
         MAX_COST=32*1024*1024*1024
     else:
         raise RuntimeError()
+    DEVICE=args.device
     
     print(" > Detected Blender", BLENDER_VERSION)
     print(" > Maximum number of rays is", MAX_COST)
     print(" > Article ID is", ARTICLE_ID)
+    print(" > Rendering on", DEVICE)
     print()
     
     if not probe_bitwrk_client():

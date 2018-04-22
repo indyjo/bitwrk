@@ -1,3 +1,3 @@
 package main
 
-const ClientVersion = "0.6.3"
+const ClientVersion = "0.6.4"

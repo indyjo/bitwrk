@@ -30,14 +30,10 @@ BitWrk provides a service to both groups by connecting them in an easy-to-use wa
 Status
 ------
 
-As of version 0.6.3:
+As of version 0.6.4:
 - BitWrk concentrates on the use case of providing peer-to-peer rendering for [Blender](http://blender.org),
-  the free rendering software, into which it integrates by use of an add-on. A feature often requested by
-  Blender users is local network rendering, even for single frames. By providing local workers with local
-  jobs without going through the BitWrk service, this version is useful even for non-p2p users.
-  Renderings using Cycles (Blender's modern rendering engine) have been successfully accelerated
-  at a small scale. With support for linked resources and scripted drivers, bitwrk-blender is reaching a
-  state where it can be used for larger projects, too.
+  the free rendering software, into which it integrates by use of an add-on. Local network and swarm rendering
+  can be combined. GPU rendering is supported, too.
 - BitWrk is now integrated with a Bitcoin payment processing system, allowing users to pay for
   compute power, in Bitcoin. For this, the user has to request a deposit address, which will
   be provided after a couple of seconds by the payment processor. Bitcoin transactions need at

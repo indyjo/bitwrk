@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -146,9 +146,10 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
         if bitwrkclient.probe_bitwrk_client(settings):
             self.layout.separator()
             
-            row = self.layout.row()
-            row.enabled = not worker.worker_alive()
-            row.prop(settings, "complexity")
+            if settings.expert_mode:
+                row = self.layout.row()
+                row.enabled = not worker.worker_alive()
+                row.prop(settings, "complexity")
             
             row = self.layout.split(0.333)
             row.label("Article id: ", icon="RNDCURVE")
@@ -178,6 +179,12 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
             row = self.layout.row(align=True)
             row.operator("bitwrk.startworker", icon='PLAY')
             row.operator("bitwrk.stopworker", icon='X')
+            
+            row = self.layout.row()
+            row.active = not worker.worker_alive()
+            row.prop(settings, "worker_device")
+            
+            
             if settings.expert_mode:
                 layout = self.layout.row()
                 layout.enabled=not worker.worker_alive()
