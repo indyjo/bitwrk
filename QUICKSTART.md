@@ -59,6 +59,18 @@ With network rendering, the computers in your network have to cover three roles 
  - Under *"BitWrk client host"*, enter the hostname or IP of the **master**
  - Hit *F12* to render
 
+#### Command-line operation
+The above instructions are the easiest way to get network rendering up and running. If, for some
+reason, you don't want to start interactive Blender sessions on the slave and/or master computers,
+there is always the possibility to start the BitWrk client and the worker process on the command
+line:
+
+    # BitWrk-client accepting worker connections from other computers:
+    bitwrk-client -intiface ""
+    
+    # Blender worker process. You may use the Python 3.x executable bundled with Blender.
+    python blender-slave.py --blender PATH_TO_BLENDER_EXECUTABLE --bitwrk-host MASTERIP --max-cost 512M --device GPU
+
 ### Depositing money on your account
 In the long term, rendering won't always be free. In order to pay for the computing power you
 use, you need to deposit a small amount of Bitcoin on your aacount. Deposits can be as small
