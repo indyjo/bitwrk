@@ -27,7 +27,7 @@ For this to happen, you need to start a *worker* process on your own computer. T
 ### Network rendering
 If you're lucky enough to have a home network with a number of computers running idle, then *network rendering* is an option for you. You may combine network rendering with local rendering and even swarm rendering for optimal performance. Network rendering is also a good option if your project is privacy-sensitive, because it does not involve the BitWrk service at all and no data is transfered to third parties.
 
-Whith network rendering, the computers in your network have to cover three roles (the terminology comes from Blender3D's own network rendering add-on):
+With network rendering, the computers in your network have to cover three roles (the terminology comes from Blender3D's own network rendering add-on):
 
  - There must be *exactly one* **Master** computer. This is where the BitWrk client will be run on, the one that will perform all communication to the BitWrk service, if any.
  - Each computer in the network may fulfill a **Slave** role. These computers do the actual rendering, which is why they must each run a worker process. The more slaves, the faster the rendering.
@@ -80,7 +80,7 @@ To deposit money on your account:
 
 Selling rendering power on BitWrk
 ---------------------------------
-This is a little bit more involved and requires some knowledge abort networking and using
+This is a little bit more involved and requires some knowledge about networking and using
 the command line.
 
 For selling to work, you will need to open a TCP port of your choice. This
