@@ -130,32 +130,47 @@ func (r *endpointReceiver) URL() string {
 	return r.endpoint.URL()
 }
 
+// Function doDispose is an internal function that disposes all held resources
+// and sets the error returned by IsDisposed to `err`. This function does
+// nothing if the receiver has already been disposed.
 func (receiver *endpointReceiver) doDispose(err error) {
+	// First critical section: mark receiver as disposed.
 	receiver.disposedMutex.Lock()
-	defer receiver.disposedMutex.Unlock()
+	// If already disposed, do nothing
+	if receiver.disposed {
+		receiver.disposedMutex.Unlock()
+		return
+	}
+	receiver.disposed = true
+	receiver.disposedError = err
+	receiver.disposedMutex.Unlock()
 
-	if !receiver.disposed {
-		receiver.disposed = true
-		receiver.disposedError = err
-		receiver.endpoint.Dispose()
-		if receiver.builder != nil {
-			receiver.builder.Dispose()
-			receiver.builder = nil
-		}
-		if receiver.workFile != nil {
-			receiver.workFile.Dispose()
-			receiver.workFile = nil
-		}
-		if receiver.encResultFile != nil {
-			receiver.encResultFile.Dispose()
-			receiver.encResultFile = nil
-		}
+	// Second critical section: memorize objects we want to clean up, reset in receiver.
+	receiver.mutex.Lock()
+	endpoint := receiver.endpoint
+	builder := receiver.builder
+	workFile := receiver.workFile
+	encResultFile := receiver.encResultFile
+	receiver.endpoint = nil
+	receiver.builder = nil
+	receiver.workFile = nil
+	receiver.encResultFile = nil
+	receiver.mutex.Unlock()
+
+	// Actual cleanup can be performed asynchronously
+	endpoint.Dispose()
+	if builder != nil {
+		builder.Dispose()
+	}
+	if workFile != nil {
+		workFile.Dispose()
+	}
+	if encResultFile != nil {
+		encResultFile.Dispose()
 	}
 }
 
 func (receiver *endpointReceiver) Dispose() {
-	receiver.mutex.Lock()
-	defer receiver.mutex.Unlock()
 	receiver.doDispose(nil)
 }
 
