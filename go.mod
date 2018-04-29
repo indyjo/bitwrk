@@ -5,6 +5,6 @@ go 1.12
 require (
 	bitbucket.org/ww/goautoneg v0.0.0-20120707110453-75cd24fc2f2c
 	github.com/indyjo/bitwrk-common v0.0.0-20190807174825-b6eccd2e81a2
-	github.com/indyjo/cafs v0.0.0-20180202220640-ffb05fd559af
+	github.com/indyjo/cafs v0.0.0-20180429212620-d12d551fa4bc
 	google.golang.org/appengine v1.6.1
 )
