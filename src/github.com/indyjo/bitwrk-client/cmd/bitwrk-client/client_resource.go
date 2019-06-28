@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -64,8 +64,16 @@ func TestResourceDir(dir, name, version string) error {
 	return nil
 }
 
+// Function AutoFindResourceDir checks a number of candidate directories for whether an info.json file
+// exists in them and whether that file can be parsed (using TestResourceDir) as a resource directory
+// info file. In case of success, it returns the first successful candidate directory. Otherwise, it
+// returns an error.
 func AutoFindResourceDir(name, version string) (string, error) {
-	cmdDir := filepath.Dir(os.Args[0])
+	execPath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	cmdDir := filepath.Dir(execPath)
 	candidates := []string{
 		filepath.Join(cmdDir, "share/", name),
 		filepath.Join(cmdDir, "../share/", name),
@@ -73,18 +81,19 @@ func AutoFindResourceDir(name, version string) (string, error) {
 		filepath.Join(cmdDir, "resources/"),
 		cmdDir,
 	}
-	errors := make([]error, len(candidates))
+	errs := make([]error, len(candidates))
 
 	for i, dir := range candidates {
 		if err := TestResourceDir(dir, name, version); err != nil {
-			errors[i] = err
+			errs[i] = err
 		} else {
 			return dir, nil
 		}
 	}
 
+	// Log a custom reason that explains why each candidate failed the check
 	for i, dir := range candidates {
-		log.Printf("No resource directory at location [%v]: %v", dir, errors[i])
+		log.Printf("No resource directory at location [%v]: %v", dir, errs[i])
 	}
 	return "", ErrNotFoundInSearchPath
 }
