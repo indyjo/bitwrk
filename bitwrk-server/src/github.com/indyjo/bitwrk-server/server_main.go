@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,10 +17,12 @@
 package server
 
 import (
-	"appengine"
-	"appengine/user"
 	"fmt"
 	"github.com/indyjo/bitwrk-server/query"
+	"github.com/indyjo/bitwrk-server/util"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/user"
 	"net/http"
 )
 
@@ -92,5 +94,7 @@ func handleMyIp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	addr := r.RemoteAddr
-	w.Write([]byte(addr))
+	stripped := util.StripPort(addr)
+	log.Infof(r.Context(), "Got MYIP request from '%v', returning '%v'", addr, stripped)
+	w.Write([]byte(stripped))
 }

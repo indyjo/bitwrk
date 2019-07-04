@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,10 +17,11 @@
 package gae
 
 import (
-	"appengine"
-	"appengine/taskqueue"
+	"context"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
+	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/taskqueue"
 	"hash/crc32"
 	"net/url"
 	"strings"
@@ -36,7 +37,7 @@ import (
 // eta:    The desired time of execution for the task, or zero if the task should execute
 //         instantly.
 // values: The data to send to the task handler (via POST).
-func addTaskForArticle(c appengine.Context,
+func addTaskForArticle(c context.Context,
 	article bitwrk.ArticleId,
 	tag string, key string,
 	eta time.Time,
@@ -50,34 +51,34 @@ func addTaskForArticle(c appengine.Context,
 	queue := getQueue(string(article))
 	newTask, err := taskqueue.Add(c, task, queue)
 	if err == nil {
-		c.Infof("[Queue %v] Scheduled: '%v' at %v", queue, newTask.Name, newTask.ETA)
+		log.Infof(c, "[Queue %v] Scheduled: '%v' at %v", queue, newTask.Name, newTask.ETA)
 	} else {
-		c.Errorf("[Queue %v] Error scheduling '%v' at %v: %v", queue, task.Name, task.ETA, err)
+		log.Errorf(c, "[Queue %v] Error scheduling '%v' at %v: %v", queue, task.Name, task.ETA, err)
 	}
 	return
 }
 
-func addApplyChangesTask(c appengine.Context, article bitwrk.ArticleId, matched time.Time, matchedBids []string, placedBids []string) error {
+func addApplyChangesTask(c context.Context, article bitwrk.ArticleId, matched time.Time, matchedBids []string, placedBids []string) error {
 	matchedBidKeysString := strings.Join(matchedBids, " ")
 	placedBidKeysString := strings.Join(placedBids, " ")
-	c.Infof("Scheduling for PLACED: %v", placedBidKeysString)
-	c.Infof("Scheduling for MATCHED: %v", matchedBidKeysString)
+	log.Infof(c, "Scheduling for PLACED: %v", placedBidKeysString)
+	log.Infof(c, "Scheduling for MATCHED: %v", matchedBidKeysString)
 	return addTaskForArticle(c, article, "apply-changes", "", time.Time{}, time.Duration(0),
 		url.Values{"matched": {matchedBidKeysString}, "placed": {placedBidKeysString}, "timestamp": {matched.Format(time.RFC3339Nano)}})
 }
 
-func addRetireTransactionTask(c appengine.Context, txKey string, tx *bitwrk.Transaction) error {
+func addRetireTransactionTask(c context.Context, txKey string, tx *bitwrk.Transaction) error {
 	taskKey := fmt.Sprintf("%v-%v", txKey, tx.Phase)
 	return addTaskForArticle(c, tx.Article, "retire-tx", taskKey, tx.Timeout, time.Duration(0),
 		url.Values{"tx": {txKey}})
 }
 
-func addRetireBidTask(c appengine.Context, bidKey string, bid *bitwrk.Bid) error {
+func addRetireBidTask(c context.Context, bidKey string, bid *bitwrk.Bid) error {
 	return addTaskForArticle(c, bid.Article, "retire-bid", bidKey, bid.Expires, time.Duration(0),
 		url.Values{"bid": {bidKey}})
 }
 
-func addPlaceBidTask(c appengine.Context, bidKey string, bid *bitwrk.Bid) error {
+func addPlaceBidTask(c context.Context, bidKey string, bid *bitwrk.Bid) error {
 	return addTaskForArticle(c, bid.Article, "place-bid", bidKey, time.Time{}, 1*time.Second,
 		url.Values{"bid": {bidKey}})
 }

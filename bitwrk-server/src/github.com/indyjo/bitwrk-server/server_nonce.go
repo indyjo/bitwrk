@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,10 +17,12 @@
 package server
 
 import (
-	"appengine"
-	"appengine/datastore"
+	"context"
 	"crypto/md5"
 	"fmt"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 	"net/http"
 	"time"
 )
@@ -32,11 +34,11 @@ type Nonce struct {
 
 // Nonces are placed in 256 shards for better concurrency, using the first
 // two hexadecimal characters as shard ID.
-func nonceShardKey(c appengine.Context, nonce string) *datastore.Key {
+func nonceShardKey(c context.Context, nonce string) *datastore.Key {
 	return datastore.NewKey(c, "Nonces", nonce[:2], 0, nil)
 }
 
-func NonceKey(c appengine.Context, nonce string) *datastore.Key {
+func NonceKey(c context.Context, nonce string) *datastore.Key {
 	return datastore.NewKey(c, "Nonce", nonce, 0, nonceShardKey(c, nonce))
 }
 
@@ -55,7 +57,7 @@ func handleGetNonce(w http.ResponseWriter, r *http.Request) {
 		r.UserAgent(),
 		r.RemoteAddr}
 
-	err := datastore.RunInTransaction(c, func(c appengine.Context) error {
+	err := datastore.RunInTransaction(c, func(c context.Context) error {
 		_, err := datastore.Put(c, NonceKey(c, nonce), obj)
 		return err
 	}, nil)
@@ -75,13 +77,13 @@ func handleGetNonce(w http.ResponseWriter, r *http.Request) {
 
 	// Delete expired nonces of a different shard
 	if err := deleteExpired(c, now, nonceShardKey(c, nonce[2:])); err != nil {
-		c.Warningf("deleteExpired failed: %v", err)
+		log.Warningf(c, "deleteExpired failed: %v", err)
 	}
 }
 
 var errInvalidNonce = fmt.Errorf("Nonce invalid")
 
-func checkNonce(c appengine.Context, nonce string) error {
+func checkNonce(c context.Context, nonce string) error {
 	now := time.Now()
 
 	if len(nonce) < 24 || len(nonce) > 32 {
@@ -89,7 +91,7 @@ func checkNonce(c appengine.Context, nonce string) error {
 	}
 
 	key := NonceKey(c, nonce)
-	return datastore.RunInTransaction(c, func(c appengine.Context) error {
+	return datastore.RunInTransaction(c, func(c context.Context) error {
 		var dbNonce Nonce
 		if err := datastore.Get(c, key, &dbNonce); err != nil {
 			return errInvalidNonce
@@ -107,7 +109,7 @@ func checkNonce(c appengine.Context, nonce string) error {
 	}, nil)
 }
 
-func deleteExpired(c appengine.Context, now time.Time, parentKey *datastore.Key) error {
+func deleteExpired(c context.Context, now time.Time, parentKey *datastore.Key) error {
 	query := datastore.NewQuery("Nonce").KeysOnly().Limit(1000)
 	query = query.Ancestor(parentKey)
 	query = query.Filter("Expires <=", now)
@@ -120,7 +122,7 @@ func deleteExpired(c appengine.Context, now time.Time, parentKey *datastore.Key)
 		return nil
 	}
 
-	c.Infof("Delete %v expired nonces", len(keys))
+	log.Infof(c, "Delete %v expired nonces", len(keys))
 	datastore.DeleteMulti(c, keys)
 	if err != nil {
 		return err

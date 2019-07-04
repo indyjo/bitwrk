@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,30 +17,31 @@
 package gae
 
 import (
-	"appengine"
-	"appengine/datastore"
-	"appengine/memcache"
-	"appengine/taskqueue"
+	"context"
 	"encoding/json"
 	"fmt"
 	. "github.com/indyjo/bitwrk-common/bitwrk"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/memcache"
+	"google.golang.org/appengine/taskqueue"
 	"time"
 )
 
-func ArticleKey(c appengine.Context, articleId ArticleId) *datastore.Key {
+func ArticleKey(c context.Context, articleId ArticleId) *datastore.Key {
 	return datastore.NewKey(c, "ArticleEntity", "a_"+string(articleId), 0, nil)
 }
 
-//func AccountingKey(c appengine.Context) *datastore.Key {
+//func AccountingKey(c context.Context) *datastore.Key {
 //	return datastore.NewKey(c, "Accounting", "singleton", 0, nil)
 //}
 
-func AccountKey(c appengine.Context, participant string) *datastore.Key {
+func AccountKey(c context.Context, participant string) *datastore.Key {
 	//	return datastore.NewKey(c, "Account", participant, 0, AccountingKey(c))
 	return datastore.NewKey(c, "Account", participant, 0, nil)
 }
 
-func DepositKey(c appengine.Context, uid string) *datastore.Key {
+func DepositKey(c context.Context, uid string) *datastore.Key {
 	return datastore.NewKey(c, "Deposit", uid, 0, nil)
 }
 
@@ -48,7 +49,7 @@ func DepositUid(key *datastore.Key) string {
 	return key.StringID()
 }
 
-func GetBid(c appengine.Context, bidId string) (bid *Bid, err error) {
+func GetBid(c context.Context, bidId string) (bid *Bid, err error) {
 	key, err := datastore.DecodeKey(bidId)
 	if err != nil {
 		return
@@ -64,9 +65,9 @@ var ErrTransactionTooYoung = fmt.Errorf("Transaction is too young to be retired"
 var ErrTransactionAlreadyRetired = fmt.Errorf("Transaction has already been retired")
 
 // Transactional function to enqueue a bid, while keeping accounts in balance
-func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
+func EnqueueBid(c context.Context, bid *Bid) (*datastore.Key, error) {
 	var bidKey *datastore.Key
-	f := func(c appengine.Context) error {
+	f := func(c context.Context) error {
 		dao := NewGaeAccountingDao(c, true)
 
 		if err := bid.CheckBalance(dao); err != nil {
@@ -75,7 +76,8 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 
 		//parentKey := ArticleKey(c, bid.Article)
 		//parentKey := AccountKey(c, bid.Participant)
-		if key, err := datastore.Put(c, datastore.NewIncompleteKey(c, "Bid", nil), bidCodec{bid}); err != nil {
+		if key, err := datastore.Put(c, datastore.NewIncompleteKey(c, "Bid", nil),
+			datastore.PropertyLoadSaver(bidCodec{bid})); err != nil {
 			return err
 		} else {
 			bidKey = key
@@ -111,38 +113,38 @@ func EnqueueBid(c appengine.Context, bid *Bid) (*datastore.Key, error) {
 	return bidKey, nil
 }
 
-func TriggerBatchProcessing(c appengine.Context, article ArticleId) error {
+func TriggerBatchProcessing(c context.Context, article ArticleId) error {
 	// Instead of submitting a task to match incoming bids, resulting in one task per bid,
 	// we collect bids for up to two seconds and batch-process them afterwards.
 	semaphoreKey := "semaphore-" + string(article)
 	if semaphore, err := memcache.Increment(c, semaphoreKey, 1, 0); err != nil {
 		return err
 	} else if semaphore >= 2 {
-		c.Infof("Batch processing already triggered for article %v", article)
+		log.Infof(c, "Batch processing already triggered for article %v", article)
 		memcache.IncrementExisting(c, semaphoreKey, -1)
 		return nil
 	} else {
 		time.Sleep(1 * time.Second)
-		c.Infof("Starting batch processing...")
+		log.Infof(c, "Starting batch processing...")
 		memcache.IncrementExisting(c, semaphoreKey, -1)
 		time_before := time.Now()
 		matchingErr := MatchIncomingBids(c, article)
 		time_after := time.Now()
 		duration := time_after.Sub(time_before)
 		if duration > 1000*time.Millisecond {
-			c.Errorf("Batch processing finished after %v. Limit exceeded!", duration)
+			log.Errorf(c, "Batch processing finished after %v. Limit exceeded!", duration)
 		} else if duration > 500*time.Millisecond {
-			c.Warningf("Batch processing finished after %v. Limit in danger.", duration)
+			log.Warningf(c, "Batch processing finished after %v. Limit in danger.", duration)
 		} else {
-			c.Infof("Batch processing finished after %v.", duration)
+			log.Infof(c, "Batch processing finished after %v.", duration)
 		}
 		return matchingErr
 	}
 }
 
 // This will reimburse the bid's price and fee to the buyer.
-func RetireBid(c appengine.Context, key *datastore.Key) error {
-	f := func(c appengine.Context) error {
+func RetireBid(c context.Context, key *datastore.Key) error {
+	f := func(c context.Context) error {
 		now := time.Now()
 		dao := NewGaeAccountingDao(c, true)
 		var bid Bid
@@ -151,7 +153,7 @@ func RetireBid(c appengine.Context, key *datastore.Key) error {
 		}
 
 		if bid.State == Matched {
-			c.Infof("Not retiring matched bid %v", key)
+			log.Infof(c, "Not retiring matched bid %v", key)
 			return nil
 		}
 
@@ -159,7 +161,7 @@ func RetireBid(c appengine.Context, key *datastore.Key) error {
 			return err
 		}
 
-		if _, err := datastore.Put(c, key, bidCodec{&bid}); err != nil {
+		if _, err := datastore.Put(c, key, datastore.PropertyLoadSaver(bidCodec{&bid})); err != nil {
 			return err
 		}
 
@@ -174,7 +176,7 @@ func RetireBid(c appengine.Context, key *datastore.Key) error {
 }
 
 // Marks a bid as placed. This is purely informational for the user.
-func PlaceBid(c appengine.Context, bidId string) error {
+func PlaceBid(c context.Context, bidId string) error {
 	var key *datastore.Key
 	if k, err := datastore.DecodeKey(bidId); err != nil {
 		return err
@@ -182,20 +184,20 @@ func PlaceBid(c appengine.Context, bidId string) error {
 		key = k
 	}
 
-	f := func(c appengine.Context) error {
+	f := func(c context.Context) error {
 		var bid Bid
-		if err := datastore.Get(c, key, bidCodec{&bid}); err != nil {
+		if err := datastore.Get(c, key, datastore.PropertyLoadSaver(bidCodec{&bid})); err != nil {
 			return err
 		}
 
 		if bid.State != InQueue {
-			c.Infof("Not placing bid %v : State=%v", key, bid.State)
+			log.Infof(c, "Not placing bid %v : State=%v", key, bid.State)
 			return nil
 		}
 
 		bid.State = Placed
 
-		if _, err := datastore.Put(c, key, bidCodec{&bid}); err != nil {
+		if _, err := datastore.Put(c, key, datastore.PropertyLoadSaver(bidCodec{&bid})); err != nil {
 			return err
 		}
 		return nil
@@ -211,8 +213,8 @@ func PlaceBid(c appengine.Context, bidId string) error {
 // time of the call.
 // Returns ErrTransactionAlreadyRetired if the transaction has already been retired at
 // the time of the call.
-func RetireTransaction(c appengine.Context, key *datastore.Key) error {
-	f := func(c appengine.Context) error {
+func RetireTransaction(c context.Context, key *datastore.Key) error {
+	f := func(c context.Context) error {
 		now := time.Now()
 		dao := NewGaeAccountingDao(c, true)
 		var tx Transaction
@@ -228,7 +230,7 @@ func RetireTransaction(c appengine.Context, key *datastore.Key) error {
 			return err
 		}
 
-		if _, err := datastore.Put(c, key, txCodec{&tx}); err != nil {
+		if _, err := datastore.Put(c, key, datastore.PropertyLoadSaver(txCodec{&tx})); err != nil {
 			return err
 		}
 
@@ -238,7 +240,7 @@ func RetireTransaction(c appengine.Context, key *datastore.Key) error {
 	return datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true})
 }
 
-func GetTransaction(c appengine.Context, key *datastore.Key) (*Transaction, error) {
+func GetTransaction(c context.Context, key *datastore.Key) (*Transaction, error) {
 	var tx Transaction
 	if err := datastore.Get(c, key, txCodec{&tx}); err != nil {
 		return nil, err
@@ -247,7 +249,7 @@ func GetTransaction(c appengine.Context, key *datastore.Key) (*Transaction, erro
 	return &tx, nil
 }
 
-func GetTransactionMessages(c appengine.Context, key *datastore.Key) ([]Tmessage, error) {
+func GetTransactionMessages(c context.Context, key *datastore.Key) ([]Tmessage, error) {
 	query := datastore.NewQuery("Tmessage").Ancestor(key).Limit(101).Order("Received")
 	messages := make([]Tmessage, 0, 101)
 	if _, err := query.GetAll(c, &messages); err != nil {
@@ -260,13 +262,13 @@ func GetTransactionMessages(c appengine.Context, key *datastore.Key) ([]Tmessage
 // Sends a message (defined by its argument values) to the transaction and performs
 // the corresponding changes atomically.
 // Returns the updated transaction on success.
-func UpdateTransaction(c appengine.Context, txKey *datastore.Key,
+func UpdateTransaction(c context.Context, txKey *datastore.Key,
 	now time.Time,
 	address string,
 	values map[string]string,
 	document, signature string) error {
 
-	f := func(c appengine.Context) error {
+	f := func(c context.Context) error {
 		tx, err := GetTransaction(c, txKey)
 		if err != nil {
 			return err
@@ -287,7 +289,7 @@ func UpdateTransaction(c appengine.Context, txKey *datastore.Key,
 			return err
 		}
 
-		if _, err := datastore.Put(c, txKey, txCodec{tx}); err != nil {
+		if _, err := datastore.Put(c, txKey, datastore.PropertyLoadSaver(txCodec{tx})); err != nil {
 			return err
 		}
 

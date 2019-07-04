@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,15 +17,17 @@
 package server
 
 import (
-	"appengine"
-	"appengine/datastore"
 	"bitbucket.org/ww/goautoneg"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-server/config"
 	db "github.com/indyjo/bitwrk-server/gae"
 	"github.com/indyjo/bitwrk-server/util"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 	"html/template"
 	"io"
 	"net/http"
@@ -112,7 +114,7 @@ func handleCreateDeposit(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func createDeposit(c appengine.Context, depositType, depositAccount, depositAmount, depositNonce, depositUid, depositRef, depositSig string) (err error) {
+func createDeposit(c context.Context, depositType, depositAccount, depositAmount, depositNonce, depositUid, depositRef, depositSig string) (err error) {
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
 	err = checkNonce(c, depositNonce)
 	if config.CfgRequireValidNonce && err != nil {
@@ -137,7 +139,7 @@ func createDeposit(c appengine.Context, depositType, depositAccount, depositAmou
 		}
 	}
 
-	f := func(c appengine.Context) error {
+	f := func(c context.Context) error {
 		dao := db.NewGaeAccountingDao(c, true)
 		if err := deposit.Place(depositUid, dao); err != nil {
 			return err
@@ -151,7 +153,7 @@ func createDeposit(c appengine.Context, depositType, depositAccount, depositAmou
 	}
 
 	_ = deposit
-	c.Infof("Deposit: %#v", deposit)
+	log.Infof(c, "Deposit: %#v", deposit)
 
 	return
 }
@@ -180,7 +182,7 @@ func handleRenderDeposit(w http.ResponseWriter, r *http.Request) {
 	deposit, err := dao.GetDeposit(uid)
 	if err != nil {
 		http.Error(w, "Deposit not found: "+uid, http.StatusNotFound)
-		c.Warningf("Non-existing deposit queried: '%v'", uid)
+		log.Warningf(c, "Non-existing deposit queried: '%v'", uid)
 		return
 	}
 
@@ -192,7 +194,7 @@ func handleRenderDeposit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		c.Errorf("Error rendering %v as %v: %v", r.URL, contentType, err)
+		log.Errorf(c, "Error rendering %v as %v: %v", r.URL, contentType, err)
 	}
 }
 

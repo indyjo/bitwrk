@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 package util
 
 import (
-	"appengine"
+	"context"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-server/config"
@@ -44,7 +44,7 @@ func CheckBitcoinAddress(address string) error {
 
 var blenderRegexp = regexp.MustCompile(`^(net\.bitwrk/blender/0/2\.(69|7[0-9])/(512M|2G|8G|32G))$`)
 
-func CheckArticle(_ appengine.Context, article string) error {
+func CheckArticle(_ context.Context, article string) error {
 	switch article {
 	case "fnord", "snafu", "foobar",
 		"net.bitwrk/gorays/0":

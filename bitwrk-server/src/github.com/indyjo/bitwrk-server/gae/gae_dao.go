@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,14 +17,14 @@
 package gae
 
 import (
-	"appengine"
-	"appengine/datastore"
+	"context"
 	"fmt"
 	. "github.com/indyjo/bitwrk-common/bitwrk"
+	"google.golang.org/appengine/datastore"
 )
 
 type gaeAccountingDao struct {
-	c         appengine.Context
+	c         context.Context
 	low, high int64
 }
 
@@ -43,7 +43,7 @@ func (dao *gaeAccountingDao) SaveAccount(account *ParticipantAccount) (err error
 		panic(fmt.Errorf("Can't save account: %v", account))
 	}
 	key := AccountKey(dao.c, account.Participant)
-	_, err = datastore.Put(dao.c, key, accountCodec{account})
+	_, err = datastore.Put(dao.c, key, datastore.PropertyLoadSaver(accountCodec{account}))
 	return
 }
 
@@ -52,7 +52,7 @@ func (dao *gaeAccountingDao) GetMovement(key string) (movement AccountMovement, 
 	if err != nil {
 		return
 	}
-	err = datastore.Get(dao.c, k, movementCodec{dao.c, &movement})
+	err = datastore.Get(dao.c, k, datastore.PropertyLoadSaver(movementCodec{dao.c, &movement}))
 	if err == datastore.ErrNoSuchEntity {
 		err = ErrNoSuchObject
 	}
@@ -65,7 +65,7 @@ func (dao *gaeAccountingDao) SaveMovement(movement *AccountMovement) (err error)
 	if err != nil {
 		return
 	}
-	_, err = datastore.Put(dao.c, key, movementCodec{dao.c, movement})
+	_, err = datastore.Put(dao.c, key, datastore.PropertyLoadSaver(movementCodec{dao.c, movement}))
 	return
 }
 
@@ -95,10 +95,10 @@ func (dao *gaeAccountingDao) GetDeposit(uid string) (Deposit, error) {
 
 func (dao *gaeAccountingDao) SaveDeposit(uid string, deposit *Deposit) error {
 	key := DepositKey(dao.c, uid)
-	_, err := datastore.Put(dao.c, key, depositCodec{deposit})
+	_, err := datastore.Put(dao.c, key, datastore.PropertyLoadSaver(depositCodec{deposit}))
 	return err
 }
 
-func NewGaeAccountingDao(c appengine.Context, transactional bool) CachedAccountingDao {
+func NewGaeAccountingDao(c context.Context, transactional bool) CachedAccountingDao {
 	return NewCachedAccountingDao(&gaeAccountingDao{c: c}, transactional)
 }

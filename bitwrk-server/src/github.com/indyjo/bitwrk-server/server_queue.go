@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,9 +17,10 @@
 package server
 
 import (
-	"appengine"
-	"appengine/datastore"
 	db "github.com/indyjo/bitwrk-server/gae"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 	"net/http"
 	"strings"
 	"time"
@@ -43,13 +44,13 @@ func handleRetireTransaction(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 	keyString := r.FormValue("tx")
 	key := mustDecodeKey(keyString)
-	c.Infof("Retiring transaction %v (%v)", keyString, key)
+	log.Infof(c, "Retiring transaction %v (%v)", keyString, key)
 	if err := db.RetireTransaction(c, key); err == db.ErrTransactionTooYoung {
-		c.Infof("Transaction is too young to be retired")
+		log.Infof(c, "Transaction is too young to be retired")
 	} else if err == db.ErrTransactionAlreadyRetired {
-		c.Infof("Transaction has already been retired")
+		log.Infof(c, "Transaction has already been retired")
 	} else if err != nil {
-		c.Warningf("Error retiring transaction: %v", err)
+		log.Warningf(c, "Error retiring transaction: %v", err)
 		http.Error(w, "Error retiring transaction", http.StatusInternalServerError)
 	}
 }
@@ -63,9 +64,9 @@ func handleRetireBid(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 	keyString := r.FormValue("bid")
 	key := mustDecodeKey(keyString)
-	c.Infof("Retiring bid %v (%v)", keyString, key)
+	log.Infof(c, "Retiring bid %v (%v)", keyString, key)
 	if err := db.RetireBid(c, key); err != nil {
-		c.Warningf("Error retiring bid: %v", err)
+		log.Warningf(c, "Error retiring bid: %v", err)
 		http.Error(w, "Error retiring bid", http.StatusInternalServerError)
 	}
 }
@@ -77,36 +78,36 @@ func handleApplyChanges(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c := appengine.NewContext(r)
-	c.Infof("Placing bids: %v", r.FormValue("placed"))
+	log.Infof(c, "Placing bids: %v", r.FormValue("placed"))
 	placedKeys := strings.Split(r.FormValue("placed"), " ")
 	if len(placedKeys) == 1 && placedKeys[0] == "" {
 		placedKeys = []string{}
 	}
-	
+
 	for _, key := range placedKeys {
 		if err := db.PlaceBid(c, key); err != nil {
-			c.Errorf("Couldn't place bid %v: %v", key, err)
+			log.Errorf(c, "Couldn't place bid %v: %v", key, err)
 		}
 	}
-	
-	c.Infof("Creating transactions for: %v", r.FormValue("matched"))
+
+	log.Infof(c, "Creating transactions for: %v", r.FormValue("matched"))
 	bidKeys := strings.Split(r.FormValue("matched"), " ")
 	if len(bidKeys) == 1 && bidKeys[0] == "" {
 		bidKeys = []string{}
 	}
 	var timestamp time.Time
 	if t, err := time.Parse(time.RFC3339Nano, r.FormValue("timestamp")); err != nil {
-		c.Errorf("Couldn't parse time '%v': %v", r.FormValue("timestamp"), err)
+		log.Errorf(c, "Couldn't parse time '%v': %v", r.FormValue("timestamp"), err)
 		return
 	} else {
 		timestamp = t
 	}
-	
+
 	for len(bidKeys) != 0 {
 		newKey, oldKey := bidKeys[0], bidKeys[1]
 		bidKeys = bidKeys[2:]
 		if err := db.MatchBids(c, timestamp, newKey, oldKey); err != nil {
-			c.Errorf("Couldn't match bids %v and %v: %v", newKey, oldKey, err)
+			log.Errorf(c, "Couldn't match bids %v and %v: %v", newKey, oldKey, err)
 		}
 	}
 }

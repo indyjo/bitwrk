@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,13 +17,13 @@
 package gae
 
 import (
-	"appengine"
-	"appengine/datastore"
+	"context"
 	"github.com/indyjo/bitwrk-common/bitwrk"
+	"google.golang.org/appengine/datastore"
 	"time"
 )
 
-func QueryAccountKeys(c appengine.Context, limit int, requestdepositaddress bool, handler func(string)) error {
+func QueryAccountKeys(c context.Context, limit int, requestdepositaddress bool, handler func(string)) error {
 	query := datastore.NewQuery("Account").KeysOnly().Limit(limit)
 
 	if requestdepositaddress {
@@ -48,7 +48,7 @@ func QueryAccountKeys(c appengine.Context, limit int, requestdepositaddress bool
 type TxFunc func(key string, tx bitwrk.Transaction)
 
 // Queries transactions matching the given constraints. Invokes handler func for every transaction found.
-func QueryTransactions(c appengine.Context, limit int, article bitwrk.ArticleId, begin, end time.Time, handler TxFunc) error {
+func QueryTransactions(c context.Context, limit int, article bitwrk.ArticleId, begin, end time.Time, handler TxFunc) error {
 	query := datastore.NewQuery("Tx").Limit(limit)
 	query = query.Filter("Article =", article)
 	query = query.Filter("Matched >=", begin)
@@ -74,7 +74,7 @@ func QueryTransactions(c appengine.Context, limit int, article bitwrk.ArticleId,
 }
 
 // Queries account movements (ledger entries) in ascending timestamp order, beginning at a specific point in time.
-func QueryAccountMovements(c appengine.Context, begin time.Time, limit int) ([]bitwrk.AccountMovement, error) {
+func QueryAccountMovements(c context.Context, begin time.Time, limit int) ([]bitwrk.AccountMovement, error) {
 	result := make([]bitwrk.AccountMovement, 0, limit)
 
 	query := datastore.NewQuery("AccountMovement").Limit(limit)

@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2014-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2014-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,9 +17,10 @@
 package query
 
 import (
-	"appengine"
 	"encoding/json"
 	db "github.com/indyjo/bitwrk-server/gae"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/log"
 	"net/http"
 	"strconv"
 	"time"
@@ -51,7 +52,7 @@ func HandleQueryAccountMovements(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result, err := db.QueryAccountMovements(c, begin, limit); err != nil {
-		c.Errorf("QueryAccountMovements failed: %v", err)
+		log.Errorf(c, "QueryAccountMovements failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	} else {

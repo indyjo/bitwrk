@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2014-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,12 +17,13 @@
 package server
 
 import (
-	"appengine"
 	"bitbucket.org/ww/goautoneg"
 	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	db "github.com/indyjo/bitwrk-server/gae"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/log"
 	"html/template"
 	"net/http"
 )
@@ -89,7 +90,7 @@ func handleAccountMovement(w http.ResponseWriter, r *http.Request) {
 			return
 		} else if err != nil {
 			http.Error(w, "Error retrieving ledger entry", http.StatusInternalServerError)
-			c.Errorf("Error getting account movement %v: %v", movementKey, err)
+			log.Errorf(c, "Error getting account movement %v: %v", movementKey, err)
 			return
 		}
 
@@ -102,7 +103,7 @@ func handleAccountMovement(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			http.Error(w, "Error rendering ledger entry", http.StatusInternalServerError)
-			c.Errorf("Error rendering account movement %v as %v: %v", r.URL, contentType, err)
+			log.Errorf(c, "Error rendering account movement %v as %v: %v", r.URL, contentType, err)
 		}
 	} else {
 		w.WriteHeader(http.StatusMethodNotAllowed)

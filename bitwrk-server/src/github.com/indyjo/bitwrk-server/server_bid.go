@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,15 +17,17 @@
 package server
 
 import (
-	"appengine"
-	"appengine/datastore"
 	"bitbucket.org/ww/goautoneg"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-server/config"
 	db "github.com/indyjo/bitwrk-server/gae"
 	"github.com/indyjo/bitwrk-server/util"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -105,7 +107,7 @@ func handleRenderBid(w http.ResponseWriter, r *http.Request) {
 		bid, err := db.GetBid(c, bidId)
 		if err != nil {
 			http.Error(w, "Bid not found: "+bidId, http.StatusNotFound)
-			c.Warningf("Non-existing bid queried: '%v'", bidId)
+			log.Warningf(c, "Non-existing bid queried: '%v'", bidId)
 			return
 		}
 
@@ -127,7 +129,7 @@ func handleRenderBid(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil {
-			c.Errorf("Error rendering %v as %v: %v", r.URL, contentType, err)
+			log.Errorf(c, "Error rendering %v as %v: %v", r.URL, contentType, err)
 		}
 	} else {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -143,13 +145,13 @@ func handleCreateBid(w http.ResponseWriter, r *http.Request) {
 	} else if r.Method == "POST" {
 		c := appengine.NewContext(r)
 		if err := r.ParseForm(); err != nil {
-			c.Errorf("Couldn't parse form data: %v", err)
+			log.Errorf(c, "Couldn't parse form data: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		c.Infof("Bid: %v", r.PostForm)
+		log.Infof(c, "Bid: %v", r.PostForm)
 		if err := enqueueBid(c, w, r); err != nil {
-			c.Errorf("enqueueBid failed: %v", err)
+			log.Errorf(c, "enqueueBid failed: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -158,7 +160,7 @@ func handleCreateBid(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func enqueueBid(c appengine.Context, w http.ResponseWriter, r *http.Request) (err error) {
+func enqueueBid(c context.Context, w http.ResponseWriter, r *http.Request) (err error) {
 	bidType := r.FormValue("type")
 	bidArticle := r.FormValue("article")
 	bidPrice := r.FormValue("price")
@@ -204,7 +206,7 @@ func enqueueBid(c appengine.Context, w http.ResponseWriter, r *http.Request) (er
 
 	// Trigger batch processing
 	if err := db.TriggerBatchProcessing(c, bid.Article); err != nil {
-		c.Errorf("Batch processing bids failed: %v", err)
+		log.Errorf(c, "Batch processing bids failed: %v", err)
 	}
 
 	return

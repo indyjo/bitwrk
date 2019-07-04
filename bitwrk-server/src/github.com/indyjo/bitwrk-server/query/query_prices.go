@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2014-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2014-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,16 +17,18 @@
 package query
 
 import (
-	"appengine"
-	"appengine/memcache"
-	"appengine/user"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
 	db "github.com/indyjo/bitwrk-server/gae"
 	"github.com/indyjo/bitwrk-server/util"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/memcache"
+	"google.golang.org/appengine/user"
 	"io"
 	"net/http"
 	"strconv"
@@ -268,7 +270,7 @@ func renderPricesForFlot(w io.Writer, slots []timeslot, unit money.Unit) {
 // Returns prices for trades between 'begin' and 'end', in resolution 'res', recursing from tile size 'tile' down to the
 // most appropriate tile size, employing caching on the go.
 // Assumes that 'begin' is aligned with the current tile size.
-func queryPrices(c appengine.Context, article bitwrk.ArticleId, tile, res resolution, begin, end time.Time) ([]timeslot, error) {
+func queryPrices(c context.Context, article bitwrk.ArticleId, tile, res resolution, begin, end time.Time) ([]timeslot, error) {
 	finest := res.finestTileResolution()
 	if tile.finerThan(finest) {
 		panic("Tile size too small")
@@ -287,13 +289,13 @@ func queryPrices(c appengine.Context, article bitwrk.ArticleId, tile, res resolu
 			if r, err := queryPrices(c, article, tile, res, begin, tileEnd); err != nil {
 				return nil, err
 			} else {
-				c.Infof("Fan-out to tile #%v returned %v slots", count, len(r))
+				log.Infof(c, "Fan-out to tile #%v returned %v slots", count, len(r))
 				result = append(result, r...)
 			}
 			begin = tileEnd
 			count++
 		}
-		c.Infof("Fan-out to %v tiles returned %v slots", count, len(result))
+		log.Infof(c, "Fan-out to %v tiles returned %v slots", count, len(result))
 		return result, nil
 	}
 
@@ -303,7 +305,7 @@ func queryPrices(c appengine.Context, article bitwrk.ArticleId, tile, res resolu
 		result := make([]timeslot, 0)
 		if err := json.Unmarshal(item.Value, &result); err != nil {
 			// Shouldn't happen
-			c.Errorf("Couldn't unmarshal memcache entry for: %v : %v", key, err)
+			log.Errorf(c, "Couldn't unmarshal memcache entry for: %v : %v", key, err)
 		} else {
 			return result, nil
 		}
@@ -346,7 +348,7 @@ func queryPrices(c appengine.Context, article bitwrk.ArticleId, tile, res resolu
 			count += currentSlot.Count
 		}
 
-		c.Infof("QueryTransactions from %v to %v: %v slots/%v tx",
+		log.Infof(c, "QueryTransactions from %v to %v: %v slots/%v tx",
 			begin, end, len(result), count)
 	} else if r, err := queryPrices(c, article, tile.nextFiner(), res, begin, end); err != nil {
 		return nil, err
@@ -358,7 +360,7 @@ func queryPrices(c appengine.Context, article bitwrk.ArticleId, tile, res resolu
 	item := memcache.Item{Key: key}
 	if data, err := json.Marshal(result); err != nil {
 		// Shouldn't happen
-		c.Errorf("Error marshalling result: %v", err)
+		log.Errorf(c, "Error marshalling result: %v", err)
 	} else {
 		item.Value = data
 	}
@@ -369,7 +371,7 @@ func queryPrices(c appengine.Context, article bitwrk.ArticleId, tile, res resolu
 	}
 
 	if err := memcache.Add(c, &item); err != nil {
-		c.Errorf("Error caching item for %v: %v", key, err)
+		log.Errorf(c, "Error caching item for %v: %v", key, err)
 	}
 
 	return result, nil
@@ -460,7 +462,7 @@ func HandleQueryTrades(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := db.QueryTransactions(c, limit, article, begin, end, handler); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		c.Errorf("Error querying transactions: %v", err)
+		log.Errorf(c, "Error querying transactions: %v", err)
 		return
 	}
 	fmt.Fprintf(buffer, "], \"price_sum\": %v,  \"fee_sum\": %v}\n",

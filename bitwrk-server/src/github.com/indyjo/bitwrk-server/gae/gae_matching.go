@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,13 +17,14 @@
 package gae
 
 import (
-	"appengine"
-	"appengine/datastore"
-	"appengine/taskqueue"
 	"container/heap"
+	"context"
 	"encoding/json"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/taskqueue"
 	"time"
 )
 
@@ -97,14 +98,14 @@ func (h hotBidsHeap) Get(i int) hotBid { return h[i] }
 // treated as separate queues, but can be treated almost the same.
 type hotBidsQueue struct {
 	bidType    bitwrk.BidType
-	context    appengine.Context
+	context    context.Context
 	query      *datastore.Query
 	iter       *datastore.Iterator
 	storedTip  *storedHotBid
 	cachedHeap *hotBidsHeap
 }
 
-func newHotBidsQueue(c appengine.Context, query *datastore.Query, bidType bitwrk.BidType) *hotBidsQueue {
+func newHotBidsQueue(c context.Context, query *datastore.Query, bidType bitwrk.BidType) *hotBidsQueue {
 	return &hotBidsQueue{
 		bidType:    bidType,
 		context:    c,
@@ -208,7 +209,7 @@ func (q *hotBidsQueue) Persist(parentKey *datastore.Key) error {
 	}
 	for _, hotBid := range *q.cachedHeap {
 		key := datastore.NewIncompleteKey(q.context, "HotBid", parentKey)
-		if _, err := datastore.Put(q.context, key, hotBidCodec{&hotBid}); err != nil {
+		if _, err := datastore.Put(q.context, key, datastore.PropertyLoadSaver(hotBidCodec{&hotBid})); err != nil {
 			return err
 		}
 	}
@@ -224,7 +225,7 @@ func (q *hotBidsQueue) Flush() []string {
 	return result
 }
 
-func MatchIncomingBids(c appengine.Context, articleId bitwrk.ArticleId) error {
+func MatchIncomingBids(c context.Context, articleId bitwrk.ArticleId) error {
 	incomingBids := make([]hotBid, 0, 16)
 
 	if tasks, err := taskqueue.LeaseByTag(c, 200, "hotbids", 20, string(articleId)); err != nil {
@@ -232,20 +233,20 @@ func MatchIncomingBids(c appengine.Context, articleId bitwrk.ArticleId) error {
 	} else {
 		defer func() {
 			if err := taskqueue.DeleteMulti(c, tasks, "hotbids"); err != nil {
-				c.Errorf("Couldn't delete from task queue: %v", err)
+				log.Errorf(c, "Couldn't delete from task queue: %v", err)
 			}
 		}()
 		for index, task := range tasks {
 			var hot hotBid
 			if err := json.Unmarshal(task.Payload, &hot); err != nil {
-				c.Errorf("Couldn't unmarshal task #%v: %v", index, err)
+				log.Errorf(c, "Couldn't unmarshal task #%v: %v", index, err)
 			} else {
 				incomingBids = append(incomingBids, hot)
 			}
 		}
 	}
 
-	f := func(c appengine.Context) error {
+	f := func(c context.Context) error {
 		now := time.Now()
 		if err := matchIncomingBids(c, now, articleId, incomingBids); err != nil {
 			return err
@@ -257,7 +258,7 @@ func MatchIncomingBids(c appengine.Context, articleId bitwrk.ArticleId) error {
 	return datastore.RunInTransaction(c, f, nil)
 }
 
-func deleteExpiredHotBids(c appengine.Context, now time.Time, articleId bitwrk.ArticleId) error {
+func deleteExpiredHotBids(c context.Context, now time.Time, articleId bitwrk.ArticleId) error {
 	parentKey := ArticleKey(c, articleId)
 	hotBids := datastore.NewQuery("HotBid").Ancestor(parentKey)
 
@@ -274,14 +275,14 @@ func deleteExpiredHotBids(c appengine.Context, now time.Time, articleId bitwrk.A
 			expiredCount++
 		}
 	}
-	c.Infof("Deleted %v hot bids expired before %v", expiredCount, now)
+	log.Infof(c, "Deleted %v hot bids expired before %v", expiredCount, now)
 	return nil
 }
 
 // Takes a list of hot bids, all belonging to the same article, and tries to match them against
 // existing bids, in sequence.
-func matchIncomingBids(c appengine.Context, now time.Time, articleId bitwrk.ArticleId, incomingBids []hotBid) error {
-	c.Infof("Matching hot bids [%v]: %v", articleId, incomingBids)
+func matchIncomingBids(c context.Context, now time.Time, articleId bitwrk.ArticleId, incomingBids []hotBid) error {
+	log.Infof(c, "Matching hot bids [%v]: %v", articleId, incomingBids)
 
 	parentKey := ArticleKey(c, articleId)
 	hotBids := datastore.NewQuery("HotBid").Ancestor(parentKey)
@@ -311,13 +312,13 @@ func matchIncomingBids(c appengine.Context, now time.Time, articleId bitwrk.Arti
 				break
 			} else {
 				skipped++
-				c.Infof("Skipping hot bid %v", other)
+				log.Infof(c, "Skipping hot bid %v", other)
 				if err := otherQueue.Pop(); err != nil {
 					return err
 				}
 			}
 		}
-		c.Infof("Skipped %v expired bids", skipped)
+		log.Infof(c, "Skipped %v expired bids", skipped)
 
 		// See if we have a match
 		if other, err := otherQueue.Tip(); err != nil {
@@ -343,7 +344,7 @@ func matchIncomingBids(c appengine.Context, now time.Time, articleId bitwrk.Arti
 	if err := hotSells.Persist(parentKey); err != nil {
 		return err
 	}
-	
+
 	placed := append(hotBuys.Flush(), hotSells.Flush()...)
 
 	if len(matched) == 0 && len(placed) == 0 {
@@ -354,7 +355,7 @@ func matchIncomingBids(c appengine.Context, now time.Time, articleId bitwrk.Arti
 }
 
 // Given IDs of two bids, matches both in a transaction.
-func MatchBids(c appengine.Context, matched time.Time, newBidId, oldBidId string) error {
+func MatchBids(c context.Context, matched time.Time, newBidId, oldBidId string) error {
 	newKey, err := datastore.DecodeKey(newBidId)
 	if err != nil {
 		return err
@@ -364,7 +365,7 @@ func MatchBids(c appengine.Context, matched time.Time, newBidId, oldBidId string
 		return err
 	}
 
-	f := func(c appengine.Context) error {
+	f := func(c context.Context) error {
 		var newBid, oldBid bitwrk.Bid
 		if err := datastore.Get(c, newKey, bidCodec{&newBid}); err != nil {
 			return err
@@ -386,7 +387,8 @@ func MatchBids(c appengine.Context, matched time.Time, newBidId, oldBidId string
 			tx = t
 		}
 
-		if txKey, err := datastore.Put(c, datastore.NewIncompleteKey(c, "Tx", nil), txCodec{tx}); err != nil {
+		if txKey, err := datastore.Put(c, datastore.NewIncompleteKey(c, "Tx", nil),
+			datastore.PropertyLoadSaver(txCodec{tx})); err != nil {
 			// Error writing transaction
 			return err
 		} else {
@@ -395,12 +397,12 @@ func MatchBids(c appengine.Context, matched time.Time, newBidId, oldBidId string
 			// Store both bids and schedule the transaction's retirement
 
 			newBid.Transaction = &txKeyEncoded
-			if _, err := datastore.Put(c, newKey, bidCodec{&newBid}); err != nil {
+			if _, err := datastore.Put(c, newKey, datastore.PropertyLoadSaver(bidCodec{&newBid})); err != nil {
 				return err
 			}
 
 			oldBid.Transaction = &txKeyEncoded
-			if _, err := datastore.Put(c, oldKey, bidCodec{&oldBid}); err != nil {
+			if _, err := datastore.Put(c, oldKey, datastore.PropertyLoadSaver(bidCodec{&oldBid})); err != nil {
 				return err
 			}
 

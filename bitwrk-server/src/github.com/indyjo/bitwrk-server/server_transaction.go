@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,9 +17,8 @@
 package server
 
 import (
-	"appengine"
-	"appengine/datastore"
 	"bitbucket.org/ww/goautoneg"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitcoin"
@@ -27,6 +26,9 @@ import (
 	"github.com/indyjo/bitwrk-server/config"
 	db "github.com/indyjo/bitwrk-server/gae"
 	"github.com/indyjo/bitwrk-server/util"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -190,7 +192,7 @@ func handleTx(w http.ResponseWriter, r *http.Request) {
 
 	txKey, err := datastore.DecodeKey(txId)
 	if err != nil {
-		c.Warningf("Illegal tx id queried: '%v'", txId)
+		log.Warningf(c, "Illegal tx id queried: '%v'", txId)
 		http.Error(w, "Transaction not found: "+txId, http.StatusNotFound)
 		return
 	}
@@ -201,7 +203,7 @@ func handleTx(w http.ResponseWriter, r *http.Request) {
 		err = updateTransaction(c, r, txId, txKey)
 		if err != nil {
 			message := fmt.Sprintf("Couldn't update transaction %#v: %v", txId, err)
-			c.Warningf("%v", message)
+			log.Warningf(c, "%v", message)
 			http.Error(w, message, http.StatusInternalServerError)
 		} else {
 			redirectToTransaction(txId, w, r)
@@ -212,8 +214,8 @@ func handleTx(w http.ResponseWriter, r *http.Request) {
 	// GET only
 	tx, err = db.GetTransaction(c, txKey)
 	if err != nil {
-		c.Warningf("Datastore lookup failed for tx id: '%v'", txId)
-		c.Warningf("Reason: %v", err)
+		log.Warningf(c, "Datastore lookup failed for tx id: '%v'", txId)
+		log.Warningf(c, "Reason: %v", err)
 		http.Error(w, "Transaction not found: "+txId, http.StatusNotFound)
 		return
 	}
@@ -238,7 +240,7 @@ func handleTx(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		c.Errorf("Error rendering %v as %v: %v", r.URL, contentType, err)
+		log.Errorf(c, "Error rendering %v as %v: %v", r.URL, contentType, err)
 	}
 }
 
@@ -281,7 +283,7 @@ func makeDocument(m map[string]string) string {
 	return strings.Join(arguments, "&")
 }
 
-func updateTransaction(c appengine.Context, r *http.Request, txId string, txKey *datastore.Key) error {
+func updateTransaction(c context.Context, r *http.Request, txId string, txKey *datastore.Key) error {
 	now := time.Now()
 
 	r.ParseForm()
@@ -314,7 +316,8 @@ func updateTransaction(c appengine.Context, r *http.Request, txId string, txKey 
 		} else if u, err := url.Parse(rawurl); err != nil {
 			return err
 		} else if util.StripPort(u.Host) != util.StripPort(r.RemoteAddr) {
-			return fmt.Errorf("workerurl host %v and remote host %v do not match.", u.Host, r.RemoteAddr)
+			return fmt.Errorf("workerurl host %v (rawurl=%v) and remote host %v do not match.",
+				u.Host, rawurl, r.RemoteAddr)
 		}
 	}
 

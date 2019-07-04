@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2014-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,15 +17,17 @@
 package server
 
 import (
-	"appengine"
-	"appengine/datastore"
 	"bitbucket.org/ww/goautoneg"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-server/config"
 	db "github.com/indyjo/bitwrk-server/gae"
 	"github.com/indyjo/bitwrk-server/util"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -114,7 +116,7 @@ func handleAccount(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			http.Error(w, "Error retrieving account", http.StatusInternalServerError)
-			c.Errorf("Error getting account %v: %v", accountId, err)
+			log.Errorf(c, "Error getting account %v: %v", accountId, err)
 			return
 		}
 
@@ -128,11 +130,11 @@ func handleAccount(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			http.Error(w, "Error rendering account", http.StatusInternalServerError)
-			c.Errorf("Error rendering %v as %v: %v", r.URL, contentType, err)
+			log.Errorf(c, "Error rendering %v as %v: %v", r.URL, contentType, err)
 		}
 	} else if r.Method == "POST" {
 		c := appengine.NewContext(r)
-		c.Infof("Got POST for account: %v", accountId)
+		log.Infof(c, "Got POST for account: %v", accountId)
 		action := r.FormValue("action")
 		if action == "storedepositinfo" {
 			if err := storeDepositInfo(c, r, accountId); err != nil {
@@ -166,7 +168,7 @@ func renderAccountJson(w http.ResponseWriter, account *bitwrk.ParticipantAccount
 	return json.NewEncoder(w).Encode(*account)
 }
 
-func requestDepositAddress(c appengine.Context, r *http.Request, participant string) (err error) {
+func requestDepositAddress(c context.Context, r *http.Request, participant string) (err error) {
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
 	err = checkNonce(c, r.FormValue("nonce"))
 	if config.CfgRequireValidNonce && err != nil {
@@ -191,7 +193,7 @@ func requestDepositAddress(c appengine.Context, r *http.Request, participant str
 		}
 	}
 
-	f := func(c appengine.Context) error {
+	f := func(c context.Context) error {
 		dao := db.NewGaeAccountingDao(c, true)
 		if account, err := dao.GetAccount(participant); err != nil {
 			return err
@@ -203,7 +205,7 @@ func requestDepositAddress(c appengine.Context, r *http.Request, participant str
 			v := url.Values{}
 			m.ToValues(v)
 			account.DepositAddressRequest = v.Encode()
-			c.Infof("New deposit address request: %v", account.DepositAddressRequest)
+			log.Infof(c, "New deposit address request: %v", account.DepositAddressRequest)
 			if err := dao.SaveAccount(&account); err != nil {
 				return err
 			}
@@ -213,14 +215,14 @@ func requestDepositAddress(c appengine.Context, r *http.Request, participant str
 
 	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
 		// Transaction failed
-		c.Errorf("Transaction failed: %v", err)
+		log.Errorf(c, "Transaction failed: %v", err)
 		return err
 	}
 
 	return
 }
 
-func storeDepositInfo(c appengine.Context, r *http.Request, participant string) (err error) {
+func storeDepositInfo(c context.Context, r *http.Request, participant string) (err error) {
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
 	err = checkNonce(c, r.FormValue("nonce"))
 	if config.CfgRequireValidNonce && err != nil {
@@ -250,20 +252,20 @@ func storeDepositInfo(c appengine.Context, r *http.Request, participant string) 
 		}
 	}
 
-	f := func(c appengine.Context) error {
+	f := func(c context.Context) error {
 		dao := db.NewGaeAccountingDao(c, true)
 		if account, err := dao.GetAccount(participant); err != nil {
 			return err
 		} else {
 			if account.DepositInfo != "" {
-				c.Infof("Replacing old deposit info: %v", account.DepositInfo)
+				log.Infof(c, "Replacing old deposit info: %v", account.DepositInfo)
 			}
 			v := url.Values{}
 			m.ToValues(v)
 			account.DepositInfo = v.Encode()
 			account.LastDepositInfo = time.Now()
 			account.DepositAddressRequest = ""
-			c.Infof("New deposit info: %v", account.DepositInfo)
+			log.Infof(c, "New deposit info: %v", account.DepositInfo)
 			if err := dao.SaveAccount(&account); err != nil {
 				return err
 			}
@@ -273,7 +275,7 @@ func storeDepositInfo(c appengine.Context, r *http.Request, participant string) 
 
 	if err := datastore.RunInTransaction(c, f, &datastore.TransactionOptions{XG: true}); err != nil {
 		// Transaction failed
-		c.Errorf("Transaction failed: %v", err)
+		log.Errorf(c, "Transaction failed: %v", err)
 		return err
 	}
 
