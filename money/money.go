@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -48,23 +48,44 @@ func (c Currency) DefaultUnit() *Unit {
 
 const (
 	BTC Currency = iota
+	EUR
+	USD
+	BRL
+	GBP
 )
 
 func (c Currency) String() string {
 	switch c {
 	case BTC:
 		return "BTC"
+	case EUR:
+		return "EUR"
+	case USD:
+		return "USD"
+	case BRL:
+		return "BRL"
+	case GBP:
+		return "GBP"
 	}
 	return fmt.Sprintf("<unknown currency:%d>", int(c))
 }
 
 func (c *Currency) Parse(s string) error {
-	if s == "BTC" {
+	switch s {
+	case "BTC":
 		*c = BTC
-		return nil
+	case "EUR":
+		*c = EUR
+	case "USD":
+		*c = USD
+	case "BRL":
+		*c = BRL
+	case "GBP":
+		*c = GBP
+	default:
+		return errors.New("Unknown currency: " + s)
 	}
-
-	return errors.New("Unknown currency: " + s)
+	return nil
 }
 
 func (c *Currency) MustParse(s string) {
@@ -104,10 +125,19 @@ func MustParseUnit(symbol string) Unit {
 }
 
 var units = [...]Unit{
-	Unit{"BTC", BTC, 100000000, true},
-	Unit{"mBTC", BTC, 100000, true},
-	Unit{"uBTC", BTC, 100, true},
-	Unit{"satoshi", BTC, 1, false}}
+	{"BTC", BTC, 100000000, true},
+	{"mBTC", BTC, 100000, true},
+	{"uBTC", BTC, 100, true},
+	{"satoshi", BTC, 1, false},
+	{"EUR", EUR, 1000000000, true},
+	{"€", EUR, 1000000000, false},
+	{"USD", USD, 1000000000, true},
+	{"$", USD, 1000000000, false},
+	{"BRL", BRL, 1000000000, true},
+	{"R$", BRL, 1000000000, false},
+	{"GBP", GBP, 1000000000, true},
+	{"£", GBP, 1000000000, false},
+}
 
 var unitsBySymbol = make(map[string]Unit)
 var unitsByCurrency = make(map[Currency][]Unit)
@@ -117,7 +147,7 @@ type Money struct {
 	Currency Currency
 }
 
-var pattern = regexp.MustCompile(`^([A-Za-z]+) ?(-)?([0-9]+)(?:\.([0-9]+))?$`)
+var pattern = regexp.MustCompile(`^([A-Za-z€$£]+) ?(-)?([0-9]+)(?:\.([0-9]+))?$`)
 
 func (m *Money) Parse(s string) error {
 	matches := pattern.FindStringSubmatch(s)

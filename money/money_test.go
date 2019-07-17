@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -24,19 +24,6 @@ import (
 
 func Test_Parse(t *testing.T) {
 	m := new(Money)
-	err := m.Parse("satoshi 0.2")
-	if err != nil {
-		t.Log("Correctly got error: " + err.Error())
-	} else {
-		t.Error("Parse accepted erroneous input: satoshi 0.2")
-	}
-
-	err = m.Parse("BTC99999999999999")
-	if err != nil {
-		t.Log("Correctly got error: " + err.Error())
-	} else {
-		t.Error("Parse accepted erroneous input: BTC99999999999999")
-	}
 
 	type testcase struct {
 		s string
@@ -57,7 +44,7 @@ func Test_Parse(t *testing.T) {
 		{"uBTC0.01", 1},
 		{"BTC -23.2549", -2325490000},
 	} {
-		err = m.Parse(c.s)
+		err := m.Parse(c.s)
 		if err != nil {
 			t.Error("Unexpected parse error: " + err.Error())
 			continue
@@ -68,6 +55,10 @@ func Test_Parse(t *testing.T) {
 			t.Errorf("Wrong parse result: %d instead of %d when parsing %v", m.Amount, c.v, c.s)
 		}
 	}
+}
+
+func Test_ParseNegative(t *testing.T) {
+	m := new(Money)
 
 	for _, s := range []string{
 		"12",
@@ -75,18 +66,22 @@ func Test_Parse(t *testing.T) {
 		"-BTC12",
 		"1 BTC",
 		"BTC0,2",
+		"satoshi 0.2",
+		"BTC99999999999999",
+		"$ 0.0000000002",
+		"€ 0.0000000002",
+		"$ 100000000",
 	} {
-		err = m.Parse(s)
-		if err == nil {
-			t.Error("Incorrect input accepted: " + s)
+		err := m.Parse(s)
+		if err != nil {
+			t.Log("Correctly got error: " + err.Error())
 		} else {
-			t.Log("Expected parse error: " + err.Error())
+			t.Errorf("Parse accepted erroneous input: %v", s)
 		}
 	}
-
 }
 
-func Test_String(t *testing.T) {
+func Test_MoneyString(t *testing.T) {
 	type testcase struct {
 		a, b string
 	}
@@ -121,6 +116,19 @@ func Test_String(t *testing.T) {
 		{"BTC 0.001", "mBTC 1"},
 		{"BTC 0.0001", "uBTC 100"},
 		{"satoshi 0", "BTC 0"},
+		{"€-1", "EUR -1"},
+		{"€ 1", "EUR 1"},
+		{"€0", "EUR 0"},
+		{"€ 0", "EUR 0"},
+		{"€-0", "EUR 0"},
+		{"EUR-1", "EUR -1"},
+		{"EUR 1", "EUR 1"},
+		{"R$1", "BRL 1"},
+		{"BRL1", "BRL 1"},
+		{"$1", "USD 1"},
+		{"USD1", "USD 1"},
+		{"£1", "GBP 1"},
+		{"GBP1", "GBP 1"},
 	} {
 		m := new(Money)
 		if err := m.Parse(c.a); err != nil {
@@ -142,6 +150,10 @@ func Test_JSON(t *testing.T) {
 		[]byte(`"BTC 123.456"`),
 		[]byte(`"mBTC 123.456"`),
 		[]byte(`"uBTC 123.45"`),
+		[]byte(`"EUR 123.45"`),
+		[]byte(`"USD 123.45"`),
+		[]byte(`"BRL 123.45"`),
+		[]byte(`"GBP 123.45"`),
 	} {
 		err := json.Unmarshal(bs, &m)
 		if err != nil {
@@ -182,6 +194,33 @@ func Test_formatAmount(t *testing.T) {
 			t.Logf("formatAmount(%v, %v) correctly returned %#v", c.v, c.f, c.r)
 		} else {
 			t.Errorf("formatAmount(%v, %v) returned %#v instead of %#v.", c.v, c.f, r, c.r)
+		}
+	}
+}
+
+func Test_CurrencyString(t *testing.T) {
+	type testcase struct {
+		c Currency
+		s string
+	}
+
+	for _, c := range []testcase{
+		{BTC, "BTC"},
+		{USD, "USD"},
+		{EUR, "EUR"},
+		{BRL, "BRL"},
+		{GBP, "GBP"},
+	} {
+		if c.c.String() != c.s {
+			t.Errorf("Currency %v returns invalid string %v", c.s, c.c)
+		}
+
+		var c2 Currency
+		if err := c2.Parse(c.s); err != nil {
+			t.Errorf("Parsing %v returned error %v", c.s, err)
+		} else if c2 != c.c {
+			t.Errorf("Parsing %v resulted in currency %v instead of %v",
+				c.s, c2, c.c)
 		}
 	}
 }
