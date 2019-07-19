@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const bidCreateHtml = `
@@ -160,6 +161,18 @@ func handleCreateBid(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// The server's set of defaults for new bids:
+//  - State is InQueue
+//  - Fee is 3 percent
+//  - Created is time.Now()
+//  - Exprires is 120s from now
+var newBidDefaults = bitwrk.NewBidDefaults{
+	InitialState:        bitwrk.InQueue,
+	FeeRatioNumerator:   3,
+	FeeRatioDenominator: 100,
+	Timeout:             120 * time.Second,
+}
+
 func enqueueBid(c context.Context, w http.ResponseWriter, r *http.Request) (err error) {
 	bidType := r.FormValue("type")
 	bidArticle := r.FormValue("article")
@@ -184,7 +197,8 @@ func enqueueBid(c context.Context, w http.ResponseWriter, r *http.Request) (err 
 		return
 	}
 
-	bid, err := bitwrk.ParseBid(bidType, bidArticle, bidPrice, bidAddress, bidNonce, bidSignature)
+	bid, err := bitwrk.ParseBid(bidType, bidArticle, bidPrice, bidAddress, bidNonce, bidSignature,
+		&newBidDefaults)
 	if err != nil {
 		return
 	}
@@ -205,7 +219,7 @@ func enqueueBid(c context.Context, w http.ResponseWriter, r *http.Request) (err 
 	redirectToBid(bidKey, w, r)
 
 	// Trigger batch processing
-	if err := db.TriggerBatchProcessing(c, bid.Article); err != nil {
+	if err := db.TriggerBatchProcessing(c, bid.MatchKey()); err != nil {
 		log.Errorf(c, "Batch processing bids failed: %v", err)
 	}
 

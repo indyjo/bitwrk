@@ -31,7 +31,7 @@ import (
 // While in state "Placed", bid's have a corresponding entry in the
 // so-called "hot" zone, which allows for better transactional locality.
 //
-// Each trade article has exactly one hot zone.
+// Each article/currency combination has exactly one hot zone.
 //
 // Only those informations necessary for matching and expiration are
 // held in a HotBid. When matched or expired, the HotBid is deleted from
@@ -41,6 +41,12 @@ type hotBid struct {
 	Type    bitwrk.BidType
 	Price   money.Money
 	Expires time.Time
+}
+
+// Function hotZoneKey returns a datastore key for a specific hot zone.
+// The key is used as ancestor key for all hotBids whose bids have the given matchKey.
+func hotZoneKey(c context.Context, matchKey string) *datastore.Key {
+	return datastore.NewKey(c, "ArticleEntity", "ac_"+matchKey, 0, nil)
 }
 
 func newHotBid(key *datastore.Key, bid *bitwrk.Bid) *hotBid {
@@ -225,10 +231,10 @@ func (q *hotBidsQueue) Flush() []string {
 	return result
 }
 
-func MatchIncomingBids(c context.Context, articleId bitwrk.ArticleId) error {
+func MatchIncomingBids(c context.Context, matchKey string) error {
 	incomingBids := make([]hotBid, 0, 16)
 
-	if tasks, err := taskqueue.LeaseByTag(c, 200, "hotbids", 20, string(articleId)); err != nil {
+	if tasks, err := taskqueue.LeaseByTag(c, 200, "hotbids", 20, matchKey); err != nil {
 		return err
 	} else {
 		defer func() {
@@ -248,18 +254,18 @@ func MatchIncomingBids(c context.Context, articleId bitwrk.ArticleId) error {
 
 	f := func(c context.Context) error {
 		now := time.Now()
-		if err := matchIncomingBids(c, now, articleId, incomingBids); err != nil {
+		if err := matchIncomingBids(c, now, matchKey, incomingBids); err != nil {
 			return err
 		} else {
-			return deleteExpiredHotBids(c, now, articleId)
+			return deleteExpiredHotBids(c, now, matchKey)
 		}
 	}
 
 	return datastore.RunInTransaction(c, f, nil)
 }
 
-func deleteExpiredHotBids(c context.Context, now time.Time, articleId bitwrk.ArticleId) error {
-	parentKey := ArticleKey(c, articleId)
+func deleteExpiredHotBids(c context.Context, now time.Time, matchKey string) error {
+	parentKey := hotZoneKey(c, matchKey)
 	hotBids := datastore.NewQuery("HotBid").Ancestor(parentKey)
 
 	expiredIter := hotBids.Filter("Expires<=", now).KeysOnly().Run(c)
@@ -279,12 +285,12 @@ func deleteExpiredHotBids(c context.Context, now time.Time, articleId bitwrk.Art
 	return nil
 }
 
-// Takes a list of hot bids, all belonging to the same article, and tries to match them against
+// Takes a list of hot bids, all belonging to the same article/currency, and tries to match them against
 // existing bids, in sequence.
-func matchIncomingBids(c context.Context, now time.Time, articleId bitwrk.ArticleId, incomingBids []hotBid) error {
-	log.Infof(c, "Matching hot bids [%v]: %v", articleId, incomingBids)
+func matchIncomingBids(c context.Context, now time.Time, matchKey string, incomingBids []hotBid) error {
+	log.Infof(c, "Matching hot bids [%v]: %v", matchKey, incomingBids)
 
-	parentKey := ArticleKey(c, articleId)
+	parentKey := hotZoneKey(c, matchKey)
 	hotBids := datastore.NewQuery("HotBid").Ancestor(parentKey)
 
 	hotBuys := newHotBidsQueue(c, hotBids.Filter("Type=", bitwrk.Buy).Order("-Price"), bitwrk.Buy)
@@ -350,7 +356,7 @@ func matchIncomingBids(c context.Context, now time.Time, articleId bitwrk.Articl
 	if len(matched) == 0 && len(placed) == 0 {
 		return nil
 	} else {
-		return addApplyChangesTask(c, articleId, now, matched, placed)
+		return addApplyChangesTask(c, matchKey, now, matched, placed)
 	}
 }
 

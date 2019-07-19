@@ -28,10 +28,6 @@ import (
 	"time"
 )
 
-func ArticleKey(c context.Context, articleId ArticleId) *datastore.Key {
-	return datastore.NewKey(c, "ArticleEntity", "a_"+string(articleId), 0, nil)
-}
-
 //func AccountingKey(c context.Context) *datastore.Key {
 //	return datastore.NewKey(c, "Accounting", "singleton", 0, nil)
 //}
@@ -59,8 +55,6 @@ func GetBid(c context.Context, bidId string) (bid *Bid, err error) {
 	return
 }
 
-var ErrLimitReached = fmt.Errorf("Limit of objects reached")
-var ErrElementsSkipped = fmt.Errorf("Some elements were skipped")
 var ErrTransactionTooYoung = fmt.Errorf("Transaction is too young to be retired")
 var ErrTransactionAlreadyRetired = fmt.Errorf("Transaction has already been retired")
 
@@ -99,8 +93,10 @@ func EnqueueBid(c context.Context, bid *Bid) (*datastore.Key, error) {
 			var task taskqueue.Task
 			task.Method = "PULL"
 			task.Payload = bytes
-			task.Tag = string(bid.Article)
-			taskqueue.Add(c, &task, "hotbids")
+			task.Tag = bid.MatchKey()
+			if _, err := taskqueue.Add(c, &task, "hotbids"); err != nil {
+				return err
+			}
 		}
 
 		return dao.Flush()
@@ -113,22 +109,26 @@ func EnqueueBid(c context.Context, bid *Bid) (*datastore.Key, error) {
 	return bidKey, nil
 }
 
-func TriggerBatchProcessing(c context.Context, article ArticleId) error {
+// Function TriggerBatchProcessing performs the actual matching process specific to a matchKey.
+// A semaphore placed in memcache ensures that only one matching process is active at any time,
+// per matchKey.
+func TriggerBatchProcessing(c context.Context, matchKey string) error {
 	// Instead of submitting a task to match incoming bids, resulting in one task per bid,
 	// we collect bids for up to two seconds and batch-process them afterwards.
-	semaphoreKey := "semaphore-" + string(article)
+	semaphoreKey := "semaphore-" + matchKey
 	if semaphore, err := memcache.Increment(c, semaphoreKey, 1, 0); err != nil {
 		return err
 	} else if semaphore >= 2 {
-		log.Infof(c, "Batch processing already triggered for article %v", article)
+		log.Infof(c, "%v batch processing tasks currently active for %v. Nothing to do.", semaphore, matchKey)
 		memcache.IncrementExisting(c, semaphoreKey, -1)
 		return nil
 	} else {
+		log.Infof(c, "Waiting one second for batch processing")
 		time.Sleep(1 * time.Second)
 		log.Infof(c, "Starting batch processing...")
 		memcache.IncrementExisting(c, semaphoreKey, -1)
 		time_before := time.Now()
-		matchingErr := MatchIncomingBids(c, article)
+		matchingErr := MatchIncomingBids(c, matchKey)
 		time_after := time.Now()
 		duration := time_after.Sub(time_before)
 		if duration > 1000*time.Millisecond {

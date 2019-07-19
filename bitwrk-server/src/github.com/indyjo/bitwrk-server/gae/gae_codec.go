@@ -159,12 +159,8 @@ func (codec hotBidCodec) Save() ([]datastore.Property, error) {
 	props := make([]datastore.Property, 0, 5)
 	props = append(props,
 		datastore.Property{Name: "BidKey", Value: bid.BidKey, NoIndex: true},
-		datastore.Property{Name: "Type", Value: int64(bid.Type)})
-	if bid.Price.Currency != money.BTC {
-		props = append(props,
-			datastore.Property{Name: "Currency", Value: bid.Price.Currency.String()})
-	}
-	props = append(props,
+		datastore.Property{Name: "Type", Value: int64(bid.Type)},
+		datastore.Property{Name: "Currency", Value: bid.Price.Currency.String()},
 		datastore.Property{Name: "Price", Value: bid.Price.Amount},
 		datastore.Property{Name: "Expires", Value: time.Time(bid.Expires)})
 	return props, nil
@@ -306,8 +302,7 @@ var _ datastore.PropertyLoadSaver = accountCodec{nil}
 
 func (codec accountCodec) Load(props []datastore.Property) error {
 	account := codec.account
-	account.Available.Currency = money.BTC
-	account.Blocked.Currency = money.BTC
+	account.Currency = money.BTC // BTC is the default but can be overridden
 	for _, p := range props {
 		switch p.Name {
 		case "Participant":
@@ -316,12 +311,11 @@ func (codec accountCodec) Load(props []datastore.Property) error {
 			s := p.Value.(*datastore.Key).Encode()
 			account.LastMovementKey = &s
 		case "Currency":
-			account.Available.Currency.MustParse(p.Value.(string))
-			account.Blocked.Currency = account.Available.Currency
+			account.Currency.MustParse(p.Value.(string))
 		case "Available":
-			account.Available.Amount = p.Value.(int64)
+			account.AvailableAmount = p.Value.(int64)
 		case "Blocked":
-			account.Blocked.Amount = p.Value.(int64)
+			account.BlockedAmount = p.Value.(int64)
 		case "DepositInfo":
 			account.DepositInfo = p.Value.(string)
 		case "LastDepositInfo":
@@ -344,12 +338,10 @@ func (codec accountCodec) Save() ([]datastore.Property, error) {
 	if account.LastMovementKey != nil {
 		props = append(props, datastore.Property{Name: "LastMovementKey", Value: mustDecodeKey(account.LastMovementKey), NoIndex: true})
 	}
-	if account.Available.Currency != money.BTC {
-		props = append(props, datastore.Property{Name: "Currency", Value: account.Available.Currency.String()})
-	}
 	props = append(props,
-		datastore.Property{Name: "Available", Value: account.Available.Amount, NoIndex: true},
-		datastore.Property{Name: "Blocked", Value: account.Blocked.Amount, NoIndex: true})
+		datastore.Property{Name: "Currency", Value: account.Currency.String()},
+		datastore.Property{Name: "Available", Value: account.AvailableAmount, NoIndex: true},
+		datastore.Property{Name: "Blocked", Value: account.BlockedAmount, NoIndex: true})
 	if account.DepositInfo != "" {
 		props = append(props,
 			datastore.Property{Name: "DepositInfo", Value: account.DepositInfo},

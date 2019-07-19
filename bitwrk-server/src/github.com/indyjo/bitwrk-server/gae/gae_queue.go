@@ -28,8 +28,8 @@ import (
 	"time"
 )
 
-// Adds a task to the queue associated with an article.
-// article: The article id for which to enqueue the task.
+// Adds a task to the queue associated with an article/currency combination.
+// matchKey: The article/currency combination for which to enqueue the task.
 // tag:    The type of task, such as "retire-tx". Will cause the URL to be
 //         "/_ah/queue/retire-tx".
 // key:    The identifying key for the task (must be unique). The tasks's name
@@ -38,7 +38,7 @@ import (
 //         instantly.
 // values: The data to send to the task handler (via POST).
 func addTaskForArticle(c context.Context,
-	article bitwrk.ArticleId,
+	matchKey string,
 	tag string, key string,
 	eta time.Time,
 	delay time.Duration,
@@ -48,7 +48,7 @@ func addTaskForArticle(c context.Context,
 	task.ETA = eta
 	task.Delay = delay
 	//task.Name = fmt.Sprintf("%v-%v", tag, key)
-	queue := getQueue(string(article))
+	queue := getQueue(matchKey)
 	newTask, err := taskqueue.Add(c, task, queue)
 	if err == nil {
 		log.Infof(c, "[Queue %v] Scheduled: '%v' at %v", queue, newTask.Name, newTask.ETA)
@@ -58,33 +58,30 @@ func addTaskForArticle(c context.Context,
 	return
 }
 
-func addApplyChangesTask(c context.Context, article bitwrk.ArticleId, matched time.Time, matchedBids []string, placedBids []string) error {
+func addApplyChangesTask(c context.Context, matchKey string, matched time.Time, matchedBids []string, placedBids []string) error {
 	matchedBidKeysString := strings.Join(matchedBids, " ")
 	placedBidKeysString := strings.Join(placedBids, " ")
 	log.Infof(c, "Scheduling for PLACED: %v", placedBidKeysString)
 	log.Infof(c, "Scheduling for MATCHED: %v", matchedBidKeysString)
-	return addTaskForArticle(c, article, "apply-changes", "", time.Time{}, time.Duration(0),
+	return addTaskForArticle(c, matchKey, "apply-changes", "", time.Time{}, time.Duration(0),
 		url.Values{"matched": {matchedBidKeysString}, "placed": {placedBidKeysString}, "timestamp": {matched.Format(time.RFC3339Nano)}})
 }
 
 func addRetireTransactionTask(c context.Context, txKey string, tx *bitwrk.Transaction) error {
 	taskKey := fmt.Sprintf("%v-%v", txKey, tx.Phase)
-	return addTaskForArticle(c, tx.Article, "retire-tx", taskKey, tx.Timeout, time.Duration(0),
+	return addTaskForArticle(c, tx.MatchKey(), "retire-tx", taskKey, tx.Timeout, time.Duration(0),
 		url.Values{"tx": {txKey}})
 }
 
 func addRetireBidTask(c context.Context, bidKey string, bid *bitwrk.Bid) error {
-	return addTaskForArticle(c, bid.Article, "retire-bid", bidKey, bid.Expires, time.Duration(0),
+	return addTaskForArticle(c, bid.MatchKey(), "retire-bid", bidKey, bid.Expires, time.Duration(0),
 		url.Values{"bid": {bidKey}})
 }
 
-func addPlaceBidTask(c context.Context, bidKey string, bid *bitwrk.Bid) error {
-	return addTaskForArticle(c, bid.Article, "place-bid", bidKey, time.Time{}, 1*time.Second,
-		url.Values{"bid": {bidKey}})
-}
-
-func getQueue(article string) string {
+// Function getQueue returns the name of a work queue for the given matchKey.
+// This helps balancing the load onto up to 8 queues.
+func getQueue(matchKey string) string {
 	h := crc32.NewIEEE()
-	h.Write([]byte(article))
+	h.Write([]byte(matchKey))
 	return fmt.Sprintf("worker-%v", h.Sum32()%8)
 }
