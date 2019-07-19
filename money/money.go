@@ -317,6 +317,7 @@ func (a Money) Sub(b Money) (r Money) {
 	return
 }
 
+// Function Neg returns a monetary value equal to the negative of the receiver.
 func (a Money) Neg() (r Money) {
 	r.Currency = a.Currency
 	r.Amount = -a.Amount

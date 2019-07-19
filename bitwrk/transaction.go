@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -685,4 +685,11 @@ func (tx *Transaction) Retire(dao AccountingDao, txId string, now time.Time) err
 	tx.State = StateRetired
 	tx.Revision++
 	return nil
+}
+
+// Function MatchKey returns a key that identifies bids which may possibly match.
+// Currently includes articke ID and currency.
+func (tx *Transaction) MatchKey() string {
+	// Keep in sync with Bid.MatchKey()!
+	return fmt.Sprintf("%v:%v", tx.Article, tx.Price.Currency)
 }

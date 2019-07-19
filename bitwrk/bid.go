@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -20,12 +20,14 @@ import (
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/money"
+	"math"
 	"net/url"
 	"strings"
 	"time"
 )
 
 var ErrInsufficientFunds = fmt.Errorf("Insufficient funds")
+var ErrWrongCurrency = fmt.Errorf("Wrong currency")
 
 type BidType int8
 
@@ -110,31 +112,55 @@ func (bid *Bid) Verify() error {
 	return nil
 }
 
-var MinimumPrice = money.MustParse("uBTC 0")
+// Type NewBidDefaults defines a policy for initializing fields of new bids that are not
+// customer-controlled.
+type NewBidDefaults struct {
+	InitialState        BidState
+	FeeRatioNumerator   int64
+	FeeRatioDenominator int64
+	Timeout             time.Duration
+}
 
-func NewBid(bidType BidType, article ArticleId, price money.Money, participant, document, signature string) (*Bid, error) {
+// Function NewBid constructs a new Bid object out of the given arguments.
+// It only verifies whether the BidTyoe is valid and whether the p price is non-negative.
+// Non customer-controllable fields are initialized using the given NewBidDefaults.
+func NewBid(
+	bidType BidType,
+	article ArticleId,
+	price money.Money,
+	participant, document, signature string,
+	defaults *NewBidDefaults,
+) (*Bid, error) {
 	if bidType != Buy && bidType != Sell {
 		return nil, fmt.Errorf("Illegal bid type")
 	}
-	if price.Currency != MinimumPrice.Currency || price.Amount < MinimumPrice.Amount {
-		return nil, fmt.Errorf("Invalid price %v, must be >= %v", price, MinimumPrice)
+	if price.Amount < 0 {
+		return nil, fmt.Errorf("Invalid price %v, must be >= 0", price)
 	}
+	if price.Amount >= math.MaxInt64/(defaults.FeeRatioNumerator+1) {
+		return nil, fmt.Errorf("Bid price %v to high to calculate fee", price)
+	}
+
+	// Calculate fee using ratio, rounding up
+	feeAmount := (defaults.FeeRatioNumerator*price.Amount + defaults.FeeRatioDenominator - 1) / defaults.FeeRatioDenominator
 
 	now := time.Now()
 	result := &Bid{Type: bidType,
-		State:       InQueue,
+		State:       defaults.InitialState,
 		Article:     article,
 		Price:       price,
-		Fee:         money.Money{Currency: price.Currency, Amount: (3*price.Amount + 99) / 100},
+		Fee:         money.Money{Currency: price.Currency, Amount: feeAmount},
 		Participant: participant,
 		Document:    document,
 		Signature:   signature,
 		Created:     now,
-		Expires:     now.Add(120 * time.Second)}
+		Expires:     now.Add(defaults.Timeout)}
 	return result, nil
 }
 
-func ParseBid(bidType, article, price, participant, nonce, signature string) (*Bid, error) {
+// Function ParseBid creates a new bid out of string arguments, applying the given defaults.
+func ParseBid(bidType, article, price, participant, nonce, signature string,
+	defaults *NewBidDefaults) (*Bid, error) {
 	var outType BidType
 	if bidType == "BUY" {
 		outType = Buy
@@ -157,26 +183,33 @@ func ParseBid(bidType, article, price, participant, nonce, signature string) (*B
 		normalize(participant),
 		normalize(nonce))
 
-	return NewBid(outType, ArticleId(article), outPrice, participant, document, signature)
+	return NewBid(outType, ArticleId(article), outPrice, participant, document, signature, defaults)
 }
 
 func (bid *Bid) CheckBalance(dao AccountingDao) error {
-	if bid.Type == Sell {
-		return nil
-	}
+	price := bid.Price
 
-	price := bid.Price.Add(bid.Fee)
-	if price.Amount < 0 {
-		return fmt.Errorf("Invalid bid price (including fees) of %v", price)
+	if bid.Type == Buy {
+		// Buyers must pay for fee
+		price = price.Add(bid.Fee)
+		if price.Amount < 0 {
+			// Sanity check
+			return fmt.Errorf("Invalid bid price (including fees) of %v", price)
+		}
+		price = price.Neg()
 	}
 
 	if account, err := dao.GetAccount(bid.Participant); err != nil {
 		return err
-	} else if account.Available.Sub(price).Amount < 0 {
-		return ErrInsufficientFunds
+	} else if !account.GetAvailable().CanApply(price) {
+		if bid.Type == Buy {
+			return ErrInsufficientFunds
+		}
+		// A sell can only be rejected if the account is currently using another currency.
+		return ErrWrongCurrency
 	}
 
-	return nil
+	return nil // Happy case
 }
 
 func (bid *Bid) Book(dao CachedAccountingDao, key string) error {
@@ -221,4 +254,11 @@ func (bid *Bid) Retire(dao AccountingDao, key string, now time.Time) error {
 
 func normalize(s string) string {
 	return url.QueryEscape(strings.Replace(s, " ", "", -1))
+}
+
+// Function MatchKey returns a string that is equal for Bids that might match.
+// Currently, encodes article id and currency.
+func (b *Bid) MatchKey() string {
+	// Keep in sync with Transaction.MatchKey()!
+	return fmt.Sprintf("%v:%v", b.Article, b.Price.Currency)
 }

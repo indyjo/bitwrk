@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -101,9 +101,10 @@ func (c *cachedAccountingDao) GetAccount(participant string) (account Participan
 	if err == ErrNoSuchObject {
 		// If no account exists under the specified name, create one
 		account = ParticipantAccount{
-			Participant: participant,
-			Available:   money.MustParse("BTC 0"),
-			Blocked:     money.MustParse("BTC 0"),
+			Participant:     participant,
+			Currency:        money.BTC,
+			AvailableAmount: 0,
+			BlockedAmount:   0,
 		}
 		// Mark the account as changed so Flush() will save it
 		c.savedAccounts[participant] = true

@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -150,9 +150,11 @@ func (r *DepositAddressRequest) VerifyWith(signer string) error {
 
 // Data stored once for each participant
 type ParticipantAccount struct {
-	Participant        string
-	LastMovementKey    *string
-	Available, Blocked money.Money
+	Participant     string
+	LastMovementKey *string
+	Currency        money.Currency
+	AvailableAmount int64
+	BlockedAmount   int64
 	// Document containing URL-encoded DepositAddressMessage
 	DepositInfo string
 	// Timestamp of last DepositAddressMessage
@@ -162,31 +164,45 @@ type ParticipantAccount struct {
 }
 
 func (a *ParticipantAccount) GetAvailable() Account {
-	return participantAccountPart{a, &a.Available}
+	return participantAccountPart{a, &a.AvailableAmount}
 }
 
 func (a *ParticipantAccount) GetBlocked() Account {
-	return participantAccountPart{a, &a.Blocked}
+	return participantAccountPart{a, &a.BlockedAmount}
+}
+
+// Whether The account's used currency can be currently changed. This is the case when there
+// is no money in either the available and the blocked accounts.
+func (a *ParticipantAccount) isCurrencyMutable() bool {
+	return a.AvailableAmount == 0 && a.BlockedAmount == 0
 }
 
 type participantAccountPart struct {
 	account *ParticipantAccount
-	balance *money.Money
+	balance *int64
 }
 
 func (a participantAccountPart) GetBalance() money.Money {
-	return *a.balance
+	return money.Money{*a.balance, a.account.Currency}
 }
 
+// Function CanApply returns whether a given money delta can currently be applied.
+// Supports the notion that an account's currency can be changed if there is currently no money
+// in either the blcoked or available sub-accounts. Also allows applying zero amounts to any currency.
 func (a participantAccountPart) CanApply(delta money.Money) bool {
-	return a.balance.Currency == delta.Currency && delta.Amount+a.balance.Amount >= 0
+	return (delta.Amount == 0 || a.account.Currency == delta.Currency || a.account.isCurrencyMutable()) &&
+		delta.Amount+*a.balance >= 0
 }
 
 func (a participantAccountPart) Apply(delta money.Money) error {
 	if !a.CanApply(delta) {
 		return fmt.Errorf("Can't apply delta of %v to balance of %v", delta, a.balance)
 	}
-	a.balance.Amount += delta.Amount
+	// Currency of the account might change
+	if delta.Amount != 0 {
+		a.account.Currency = delta.Currency
+		*a.balance += delta.Amount
+	}
 	return nil
 }
 
@@ -196,6 +212,7 @@ func (a participantAccountPart) GetLastMovementKey() *string {
 
 // Every transfer of money in BitWrk is associated with an AccountMovement.
 // A history of account movements is kept for every account.
+// A better name would probably be LedgerEntry.
 type AccountMovement struct {
 	Key       *string
 	Timestamp time.Time
