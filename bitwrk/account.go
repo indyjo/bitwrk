@@ -241,7 +241,8 @@ func (a participantAccountPart) CanApply(delta money.Money) bool {
 
 func (a participantAccountPart) Apply(delta money.Money) error {
 	if !a.CanApply(delta) {
-		return fmt.Errorf("Can't apply delta of %v to balance of %v", delta, a.balance)
+		return fmt.Errorf("Can't apply delta of %v to balance of %v", delta,
+			money.Money{*a.balance, a.account.Currency})
 	}
 	// Currency of the account might change
 	if delta.Amount != 0 {
