@@ -237,19 +237,19 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 
 	accountFilter := func(data []byte) ([]byte, error) {
 		var account bitwrk.ParticipantAccount
-		if err := json.Unmarshal(data, &account); err != nil {
+		if err := json.Unmarshal(data, json.Unmarshaler(&account)); err != nil {
 			return data, nil
 		} else {
 			// Pass data about validation results into the template so it doesn't
 			// have to be done in JavaScript.
 			type result struct {
-				Account             bitwrk.ParticipantAccount
+				Account             *bitwrk.ParticipantAccount
 				Updated             time.Time
 				TrustedAccount      string
 				DepositAddress      string
 				DepositAddressValid bool
 			}
-			r := result{account, time.Now(), TrustedAccount, "", false}
+			r := result{&account, time.Now(), TrustedAccount, "", false}
 			if v, err := url.ParseQuery(account.DepositInfo); err == nil {
 				m := bitwrk.DepositAddressMessage{}
 				m.FromValues(v)

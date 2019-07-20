@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-common/money"
 	"github.com/indyjo/bitwrk-server/config"
 	db "github.com/indyjo/bitwrk-server/gae"
 	"github.com/indyjo/bitwrk-server/util"
@@ -41,8 +42,8 @@ const accountViewHtml = `
 <body>
 <table>
 <tr><th>Participant</th><td>{{.Account.Participant}}</td></tr>
-<tr><th>Available</th><td>{{.Account.Available}}</td></tr>
-<tr><th>Blocked</th><td>{{.Account.Blocked}}</td></tr>
+<tr><th>Available</th><td>{{.Available}}</td></tr>
+<tr><th>Blocked</th><td>{{.Blocked}}</td></tr>
 {{if .Account.LastMovementKey}}
 <tr><th></th><td><a href="/ledger/{{.Account.LastMovementKey}}">Last ledger entry</a></td></tr>
 {{end}}
@@ -161,11 +162,16 @@ func renderAccountHtml(w http.ResponseWriter, account *bitwrk.ParticipantAccount
 		Account        *bitwrk.ParticipantAccount
 		DeveloperMode  bool
 		TrustedAccount string
-	}{account, devmode, config.CfgTrustedAccount})
+		Available      money.Money
+		Blocked        money.Money
+	}{account, devmode, config.CfgTrustedAccount,
+		money.Money{account.AvailableAmount, account.Currency},
+		money.Money{account.AvailableAmount, account.Currency},
+	})
 }
 
 func renderAccountJson(w http.ResponseWriter, account *bitwrk.ParticipantAccount) (err error) {
-	return json.NewEncoder(w).Encode(*account)
+	return json.NewEncoder(w).Encode(json.Marshaler(account))
 }
 
 func requestDepositAddress(c context.Context, r *http.Request, participant string) (err error) {
