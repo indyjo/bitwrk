@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2014-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -63,10 +63,6 @@ func ParseDeposit(depositType, depositAccount, depositAmount, depositNonce, depo
 	// Perform deposit amount value range check unless it is an injection
 	if dtype != DEPOSIT_TYPE_INJECTION && amount.Amount <= 0 {
 		return nil, fmt.Errorf("Non-positive deposit amount not allowed: %s", depositAmount)
-	}
-
-	if amount.Currency != money.BTC {
-		return nil, fmt.Errorf("Currently, only BTC allowed")
 	}
 
 	if len(depositUid) < 8 || len(depositUid) > 64 {

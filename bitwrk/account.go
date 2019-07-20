@@ -17,6 +17,7 @@
 package bitwrk
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/money"
@@ -161,6 +162,50 @@ type ParticipantAccount struct {
 	LastDepositInfo time.Time
 	// Document containing URL-encoded DepositAddressRequest
 	DepositAddressRequest string
+}
+
+// Compatibility layer for maintaining backwards compatibility when serving JSON-encoded account data
+type ParticipantAccountJSON struct {
+	Participant           string
+	LastMovementKey       *string
+	Available             money.Money
+	Blocked               money.Money
+	DepositInfo           string
+	LastDepositInfo       time.Time
+	DepositAddressRequest string
+}
+
+var _ json.Marshaler = &ParticipantAccount{}
+var _ json.Unmarshaler = &ParticipantAccount{}
+
+func (a *ParticipantAccount) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&ParticipantAccountJSON{
+		a.Participant,
+		a.LastMovementKey,
+		money.Money{a.AvailableAmount, a.Currency},
+		money.Money{a.BlockedAmount, a.Currency},
+		a.DepositInfo,
+		a.LastDepositInfo,
+		a.DepositAddressRequest,
+	})
+}
+
+func (a *ParticipantAccount) UnmarshalJSON(data []byte) error {
+	var j ParticipantAccountJSON
+	if err := json.Unmarshal(data, &j); err != nil {
+		return err
+	}
+	if j.Blocked.Currency != j.Available.Currency {
+		return fmt.Errorf("Different currencies for blocked and available")
+	}
+	a.Participant = j.Participant
+	a.Currency = j.Available.Currency
+	a.AvailableAmount = j.Available.Amount
+	a.BlockedAmount = j.Blocked.Amount
+	a.DepositInfo = j.DepositInfo
+	a.LastDepositInfo = j.LastDepositInfo
+	a.DepositAddressRequest = j.DepositAddressRequest
+	return nil
 }
 
 func (a *ParticipantAccount) GetAvailable() Account {
