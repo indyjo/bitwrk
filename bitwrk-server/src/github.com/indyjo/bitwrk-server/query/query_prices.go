@@ -223,7 +223,7 @@ func HandleQueryPrices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if prices, err := queryPrices(c, article, tile, resolution, begin, end); err != nil {
+	if prices, err := queryPrices(c, article, unit.Currency, tile, resolution, begin, end); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	} else if r.FormValue("format") == "flot" {
@@ -270,7 +270,7 @@ func renderPricesForFlot(w io.Writer, slots []timeslot, unit money.Unit) {
 // Returns prices for trades between 'begin' and 'end', in resolution 'res', recursing from tile size 'tile' down to the
 // most appropriate tile size, employing caching on the go.
 // Assumes that 'begin' is aligned with the current tile size.
-func queryPrices(c context.Context, article bitwrk.ArticleId, tile, res resolution, begin, end time.Time) ([]timeslot, error) {
+func queryPrices(c context.Context, article bitwrk.ArticleId, currency money.Currency, tile, res resolution, begin, end time.Time) ([]timeslot, error) {
 	finest := res.finestTileResolution()
 	if tile.finerThan(finest) {
 		panic("Tile size too small")
@@ -286,7 +286,7 @@ func queryPrices(c context.Context, article bitwrk.ArticleId, tile, res resoluti
 				tileEnd = end
 			}
 
-			if r, err := queryPrices(c, article, tile, res, begin, tileEnd); err != nil {
+			if r, err := queryPrices(c, article, currency, tile, res, begin, tileEnd); err != nil {
 				return nil, err
 			} else {
 				log.Infof(c, "Fan-out to tile #%v returned %v slots", count, len(r))
@@ -300,7 +300,7 @@ func queryPrices(c context.Context, article bitwrk.ArticleId, tile, res resoluti
 	}
 
 	// First try to answer from cache
-	key := fmt.Sprintf("prices-tile-%v/%v-%v-%v", tile.name, res.name, begin.Format(time.RFC3339), article)
+	key := fmt.Sprintf("prices-tile-%v/%v-%v-%v-%v", tile.name, res.name, begin.Format(time.RFC3339), article, currency)
 	if item, err := memcache.Get(c, key); err == nil {
 		result := make([]timeslot, 0)
 		if err := json.Unmarshal(item.Value, &result); err != nil {
@@ -338,7 +338,7 @@ func queryPrices(c context.Context, article bitwrk.ArticleId, tile, res resoluti
 		}
 
 		// Query database
-		if err := db.QueryTransactions(c, 10000, article, begin, end, handler); err != nil {
+		if err := db.QueryTransactions(c, 10000, article, currency, begin, end, handler); err != nil {
 			return nil, err
 		}
 
@@ -350,7 +350,7 @@ func queryPrices(c context.Context, article bitwrk.ArticleId, tile, res resoluti
 
 		log.Infof(c, "QueryTransactions from %v to %v: %v slots/%v tx",
 			begin, end, len(result), count)
-	} else if r, err := queryPrices(c, article, tile.nextFiner(), res, begin, end); err != nil {
+	} else if r, err := queryPrices(c, article, currency, tile.nextFiner(), res, begin, end); err != nil {
 		return nil, err
 	} else {
 		result = r
@@ -432,13 +432,22 @@ func HandleQueryTrades(w http.ResponseWriter, r *http.Request) {
 
 	end := begin.Add(period.interval)
 
-	unit := money.MustParseUnit("mBTC")
+	var unit money.Unit
+	if r.FormValue("unit") == "" {
+		unit = money.MustParseUnit("mBTC")
+	} else if u, err := money.ParseUnit(r.FormValue("unit")); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	} else {
+		unit = u
+	}
+
 	buffer := new(bytes.Buffer)
 	fmt.Fprintf(buffer, "{\"begin\": %#v, \"end\": %#v, \"unit\": \"%v\", \"data\": [\n",
 		begin.Format(time.RFC3339), end.Format(time.RFC3339), unit)
 	count := 0
-	priceSum := money.MustParse("BTC 0")
-	feeSum := money.MustParse("BTC 0")
+	priceSum := money.Money{0, unit.Currency}
+	feeSum := priceSum
 
 	firstLine := true
 	handler := func(key string, tx bitwrk.Transaction) {
@@ -460,7 +469,7 @@ func HandleQueryTrades(w http.ResponseWriter, r *http.Request) {
 		feeSum = feeSum.Add(tx.Fee)
 		count++
 	}
-	if err := db.QueryTransactions(c, limit, article, begin, end, handler); err != nil {
+	if err := db.QueryTransactions(c, limit, article, unit.Currency, begin, end, handler); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Errorf(c, "Error querying transactions: %v", err)
 		return

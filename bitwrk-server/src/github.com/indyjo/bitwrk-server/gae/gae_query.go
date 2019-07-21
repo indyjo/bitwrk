@@ -19,6 +19,7 @@ package gae
 import (
 	"context"
 	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-common/money"
 	"google.golang.org/appengine/datastore"
 	"time"
 )
@@ -48,9 +49,11 @@ func QueryAccountKeys(c context.Context, limit int, requestdepositaddress bool, 
 type TxFunc func(key string, tx bitwrk.Transaction)
 
 // Queries transactions matching the given constraints. Invokes handler func for every transaction found.
-func QueryTransactions(c context.Context, limit int, article bitwrk.ArticleId, begin, end time.Time, handler TxFunc) error {
+func QueryTransactions(c context.Context, limit int, article bitwrk.ArticleId, currency money.Currency,
+	begin, end time.Time, handler TxFunc) error {
 	query := datastore.NewQuery("Tx").Limit(limit)
 	query = query.Filter("Article =", article)
+	query = query.Filter("Currency =", currency.String())
 	query = query.Filter("Matched >=", begin)
 	query = query.Filter("Matched <", end)
 	query = query.Order("Matched")

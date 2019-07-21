@@ -41,5 +41,5 @@ indexes:
 - kind: Tx
   properties:
   - name: Article
+  - name: Currency
   - name: Matched
-

@@ -255,13 +255,8 @@ func (codec txCodec) Save() ([]datastore.Property, error) {
 		datastore.Property{Name: "SellerBid", Value: mustDecodeKey(&tx.SellerBid), NoIndex: true},
 		datastore.Property{Name: "Buyer", Value: string(tx.Buyer), NoIndex: true},
 		datastore.Property{Name: "Seller", Value: string(tx.Seller), NoIndex: true},
-		datastore.Property{Name: "Article", Value: string(tx.Article)})
-
-	if tx.Price.Currency != money.BTC {
-		props = append(props,
-			datastore.Property{Name: "Currency", Value: tx.Price.Currency.String(), NoIndex: true})
-	}
-	props = append(props,
+		datastore.Property{Name: "Article", Value: string(tx.Article)},
+		datastore.Property{Name: "Currency", Value: tx.Price.Currency.String()},
 		datastore.Property{Name: "Price", Value: tx.Price.Amount, NoIndex: true},
 		datastore.Property{Name: "Fee", Value: tx.Fee.Amount, NoIndex: true},
 		datastore.Property{Name: "Matched", Value: time.Time(tx.Matched)},
