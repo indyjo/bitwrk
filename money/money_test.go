@@ -219,7 +219,7 @@ func Test_CurrencyString(t *testing.T) {
 		if err := c2.Parse(c.s); err != nil {
 			t.Errorf("Parsing %v returned error %v", c.s, err)
 		} else if c2 != c.c {
-			t.Errorf("Parsing %v resulted in currency %v instead of %v",
+			t.Errorf("Parsing %v resulted in Currency %v instead of %v",
 				c.s, c2, c.c)
 		}
 	}

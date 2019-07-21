@@ -26,13 +26,13 @@ import (
 
 func init() {
 	for _, u := range units {
-		unitsBySymbol[u.symbol] = u
-		list, ok := unitsByCurrency[u.currency]
+		unitsBySymbol[u.Symbol] = u
+		list, ok := unitsByCurrency[u.Currency]
 		if !ok {
 			list = make([]Unit, 0, 4)
 		}
 		list = append(list, u)
-		unitsByCurrency[u.currency] = list
+		unitsByCurrency[u.Currency] = list
 	}
 }
 
@@ -67,7 +67,7 @@ func (c Currency) String() string {
 	case GBP:
 		return "GBP"
 	}
-	return fmt.Sprintf("<unknown currency:%d>", int(c))
+	return fmt.Sprintf("<unknown Currency:%d>", int(c))
 }
 
 func (c *Currency) Parse(s string) error {
@@ -83,7 +83,7 @@ func (c *Currency) Parse(s string) error {
 	case "GBP":
 		*c = GBP
 	default:
-		return errors.New("Unknown currency: " + s)
+		return errors.New("Unknown Currency: " + s)
 	}
 	return nil
 }
@@ -95,17 +95,20 @@ func (c *Currency) MustParse(s string) {
 	}
 }
 
+// Struct Unit describes a monetary unit that is used within a currency.
 type Unit struct {
-	symbol   string
-	currency Currency
-	// The sub-unit's value in multiples of the base unit
-	factor int64
+	// The symbol designating the monetary unit
+	Symbol string
+	// The currency this monetary unit belongs to
+	Currency Currency
+	// The unit's monetary value in multiples of the currency's smallest possible unit
+	Factor int64
 	// Whether this unit will be auto-selected for formatting
-	selectable bool
+	Selectable bool
 }
 
 func (u Unit) String() string {
-	return u.symbol
+	return u.Symbol
 }
 
 func ParseUnit(symbol string) (Unit, error) {
@@ -157,7 +160,7 @@ func (m *Money) Parse(s string) error {
 	symbol := matches[1]
 	unit, ok := unitsBySymbol[symbol]
 	if !ok {
-		return errors.New("Unsupported currency: " + symbol)
+		return errors.New("Unsupported Currency: " + symbol)
 	}
 
 	sign := 1
@@ -168,7 +171,7 @@ func (m *Money) Parse(s string) error {
 	var result int64 = 0
 
 	fractional := matches[4]
-	for base, i := unit.factor, 0; i < len(fractional); i++ {
+	for base, i := unit.Factor, 0; i < len(fractional); i++ {
 		base /= 10
 		if base == 0 {
 			return errors.New("Too many digits in fractional part of " + s)
@@ -177,7 +180,7 @@ func (m *Money) Parse(s string) error {
 	}
 
 	integral := matches[3]
-	for base, i := unit.factor, len(integral)-1; i >= 0; i-- {
+	for base, i := unit.Factor, len(integral)-1; i >= 0; i-- {
 		c := integral[i]
 		result += base * int64(c-'0')
 		base *= 10
@@ -187,7 +190,7 @@ func (m *Money) Parse(s string) error {
 	}
 
 	m.Amount = int64(sign) * result
-	m.Currency = unit.currency
+	m.Currency = unit.Currency
 	return nil
 }
 
@@ -199,7 +202,7 @@ func MustParse(s string) Money {
 	return m
 }
 
-// Formats a valid string representation of the amount, including symbol
+// Formats a valid string representation of the amount, including Symbol
 func (m Money) String() string {
 	return m.Format(m.SelectUnit(), true)
 }
@@ -208,7 +211,7 @@ func (m Money) String() string {
 func (m Money) SelectUnit() Unit {
 	units, ok := unitsByCurrency[m.Currency]
 	if !ok {
-		panic(fmt.Sprintf("No unit found for currency: %v", m.Currency))
+		panic(fmt.Sprintf("No unit found for Currency: %v", m.Currency))
 	}
 
 	v := m.Amount
@@ -217,7 +220,7 @@ func (m Money) SelectUnit() Unit {
 	} else if v == 0 {
 		unit := m.Currency.DefaultUnit()
 		if unit == nil {
-			panic(fmt.Sprintf("No default unit found for currency: %v", m.Currency))
+			panic(fmt.Sprintf("No default unit found for Currency: %v", m.Currency))
 		}
 		return *unit
 	}
@@ -228,11 +231,11 @@ func (m Money) SelectUnit() Unit {
 	var result Unit
 	found := false
 	for _, unit := range units {
-		if unit.selectable {
+		if unit.Selectable {
 			result = unit
 			found = true
 		}
-		if unit.factor <= v && found {
+		if unit.Factor <= v && found {
 			break
 		}
 	}
@@ -246,8 +249,8 @@ func (m Money) SelectUnit() Unit {
 
 // Formats in a specific unit scale
 func (m Money) Format(unit Unit, includeSymbol bool) string {
-	if m.Currency != unit.currency {
-		panic(fmt.Sprintf("Currencies don't match: [%v] [%v -> %v]", m.Currency, unit.symbol, unit.currency))
+	if m.Currency != unit.Currency {
+		panic(fmt.Sprintf("Currencies don't match: [%v] [%v -> %v]", m.Currency, unit.Symbol, unit.Currency))
 	}
 
 	v := m.Amount
@@ -257,9 +260,9 @@ func (m Money) Format(unit Unit, includeSymbol bool) string {
 		sign = "-"
 	}
 	if includeSymbol {
-		return unit.symbol + " " + sign + formatAmount(v, unit.factor)
+		return unit.Symbol + " " + sign + formatAmount(v, unit.Factor)
 	} else {
-		return sign + formatAmount(v, unit.factor)
+		return sign + formatAmount(v, unit.Factor)
 	}
 }
 
