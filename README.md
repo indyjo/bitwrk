@@ -4,7 +4,7 @@ BitWrk - Bitcoin-fueled Distributed Peer-to-Peer Blender Rendering (and more)
 [![5 Minute introduction to BitWrk](https://img.youtube.com/vi/KmwcxwhIRr0/0.jpg)](https://www.youtube.com/watch?v=KmwcxwhIRr0)
 
 Artists use [Blender](http://blender.org), a powerful yet free 3D software, to create impressive
-pictures and movies. This a requires a time-consuming, and costly, production step called _rendering_.
+pictures and movies. This requires a time-consuming, and costly, production step called _rendering_.
 
 BitWrk integrates with Blender and makes rendering much quicker by dispatching it to a swarm of
 computers. 
