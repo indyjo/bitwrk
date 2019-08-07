@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ import (
 	client "github.com/indyjo/bitwrk-client"
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-common/money"
 	"github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/cafs"
 	"html/template"
@@ -72,7 +73,6 @@ func main() {
 		flags.Usage()
 	} else if err != nil {
 		log.Fatalf("Error parsing command line: %v", err)
-		os.Exit(1)
 	}
 
 	if ResourceDir == "auto" {
@@ -121,7 +121,6 @@ func main() {
 	err = <-exit
 	if err != nil {
 		log.Fatalf("Exiting because of: %v", err)
-		os.Exit(1)
 	}
 }
 
@@ -148,7 +147,6 @@ func startReceiveManager() (receiveManager *client.ReceiveManager) {
 	if ExternalAddress == "auto" {
 		if addr, err := protocol.DetermineIpAddress(); err != nil {
 			log.Fatalf("Error auto-determining IP address: %v", err)
-			os.Exit(1)
 		} else {
 			actualExternalAddress = addr
 		}
@@ -375,7 +373,7 @@ func handleFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleBuy(w http.ResponseWriter, r *http.Request) {
-	article := r.URL.Path[5:]
+	article := bitwrk.ArticleId(r.URL.Path[5:])
 
 	log.Printf("Handling buy for %#v from %v", article, r.RemoteAddr)
 
@@ -384,17 +382,17 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var buy *client.BuyActivity
-	if _buy, err := client.GetActivityManager().NewBuy(bitwrk.ArticleId(article)); err != nil {
+	var price *money.Money
+	if priceStr := r.URL.Query().Get("price"); priceStr == "" {
+		// No price given, ok
+	} else if m, err := money.Parse(priceStr); err != nil {
+		// Parsing failed
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Printf("Error creating buy activity: %v", err)
 		return
 	} else {
-		buy = _buy
+		// Good case
+		price = &m
 	}
-	defer buy.Dispose()
-
-	log := bitwrk.Root().Newf("Buy #%v", buy.GetKey())
 
 	var reader io.Reader
 	if multipart, err := r.MultipartReader(); err != nil {
@@ -417,6 +415,18 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	var buy *client.BuyActivity
+	if _buy, err := client.GetActivityManager().NewBuy(article, BitcoinIdentity, price); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Error creating buy activity: %v", err)
+		return
+	} else {
+		buy = _buy
+	}
+	defer buy.Dispose()
+
+	log := bitwrk.Root().Newf("Buy #%v", buy.GetKey())
 
 	workTemp := client.GetActivityManager().GetStorage().Create(fmt.Sprintf("buy #%v: work", buy.GetKey()))
 	defer workTemp.Dispose()
@@ -477,7 +487,7 @@ func handleRegisterWorker(workerManager *client.WorkerManager, w http.ResponseWr
 		registerWorkerTemplate.Execute(w, info)
 	}
 
-	workerManager.RegisterWorker(info)
+	workerManager.RegisterWorker(info, BitcoinIdentity)
 }
 
 func handleUnregisterWorker(workerManager *client.WorkerManager, w http.ResponseWriter, r *http.Request) {

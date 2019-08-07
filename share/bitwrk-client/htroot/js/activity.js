@@ -30,9 +30,7 @@ function setActivities(node, activitiesjson, serverUrl) {
 			needsCreate = false;
 			var info2 = item.Info;
 			if (info.Accepted !== info2.Accepted
-					|| info.Rejected !== info2.Rejected
 					|| info.Alive !== info2.Alive
-					|| info.Rejected !== info2.Rejected
 					|| info.Article !== info2.Article
 					|| info.TxId !== info2.TxId || info.BidId !== info2.BidId
 					|| info.Phase !== info2.Phase) {
@@ -85,7 +83,7 @@ function setActivities(node, activitiesjson, serverUrl) {
 
 		var childIdx = 0;
 		item.childNodes[childIdx++].textContent = '#' + key + ': ' + info.Type;
-		if (info.Accepted || info.Rejected) {
+		if (info.Accepted) {
 			item.childNodes[childIdx++].textContent = info.Amount;
 			item.childNodes[childIdx++].textContent = info.Article;
 			if (info.BidId) {

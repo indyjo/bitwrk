@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@ import (
 	"time"
 )
 
+// Type Trade contains fields common to BuyActivity and SellActivity
 type Trade struct {
 	condition           *sync.Cond
 	manager             *ActivityManager
@@ -40,7 +41,6 @@ type Trade struct {
 
 	localOnly         bool   // Set to true if publishing not possible (only used for sells)
 	alive             bool   // Set to false on end of life
-	clearanceDenied   bool   // Set to true on Forbid
 	published         bool   // Set to true on Publish
 	localMatch        *Trade // Set to a matching trade on local match
 	awaitingClearance bool   // Set to false on local match, Forbid and Publish
@@ -125,8 +125,6 @@ func (t *Trade) awaitClearance(log bitwrk.Logger, interrupt <-chan bool) error {
 
 	if err != nil {
 		return fmt.Errorf("Error awaiting clearance: %v", err)
-	} else if t.clearanceDenied {
-		return ErrNoPermission
 	} else {
 		if t.published {
 			log.Printf("Got trade clearance. Price: %v", t.price)
@@ -406,8 +404,7 @@ func (t *Trade) GetState() *ActivityState {
 		Type:     t.bidType.String(),
 		Article:  t.article,
 		Alive:    t.alive,
-		Accepted: t.localOnly || (!t.awaitingClearance && !t.clearanceDenied),
-		Rejected: t.clearanceDenied,
+		Accepted: t.localOnly || !t.awaitingClearance,
 		Amount:   price,
 		BidId:    t.bidId,
 		TxId:     t.txId,
@@ -425,7 +422,10 @@ func (t *Trade) GetState() *ActivityState {
 	return result
 }
 
-func (t *Trade) Publish(identity *bitcoin.KeyPair, price money.Money) bool {
+// Function Publish sets a price for the trade and clears it for being dispatched to the BitWrk service.
+// It returns true when the call led to the Trade being published.
+// It returns false when the Trade was already cleared for dispatch.
+func (t *Trade) Publish(price money.Money) bool {
 	t.condition.L.Lock()
 	defer t.condition.L.Unlock()
 	if t.localOnly {
@@ -434,21 +434,8 @@ func (t *Trade) Publish(identity *bitcoin.KeyPair, price money.Money) bool {
 	if !t.awaitingClearance {
 		return false
 	}
-	t.identity = identity
 	t.price = price
 	t.published = true
-	t.awaitingClearance = false
-	t.condition.Broadcast()
-	return true
-}
-
-func (t *Trade) Forbid() bool {
-	t.condition.L.Lock()
-	defer t.condition.L.Unlock()
-	if !t.awaitingClearance {
-		return false
-	}
-	t.clearanceDenied = true
 	t.awaitingClearance = false
 	t.condition.Broadcast()
 	return true

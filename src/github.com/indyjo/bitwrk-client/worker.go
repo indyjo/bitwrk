@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@ package client
 
 import (
 	"fmt"
+	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"io"
 	"net/http"
@@ -40,7 +41,8 @@ type WorkerState struct {
 	Info         WorkerInfo
 	Idle         bool // set to false when a job is started, true when worker reports back
 	Unregistered bool
-	Blockers     int // count of currently blocking circumstances
+	Blockers     int              // count of currently blocking circumstances
+	identity     *bitcoin.KeyPair // BitWrk identity this worker is associated with
 }
 
 type WorkerInfo struct {
@@ -79,7 +81,7 @@ func (m *WorkerManager) ListWorkers() (result []WorkerState) {
 	return
 }
 
-func (m *WorkerManager) RegisterWorker(info WorkerInfo) {
+func (m *WorkerManager) RegisterWorker(info WorkerInfo, identity *bitcoin.KeyPair) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	log := bitwrk.Root().Newf("Worker %#v", info.Id)
@@ -89,10 +91,11 @@ func (m *WorkerManager) RegisterWorker(info WorkerInfo) {
 	} else {
 		log.Printf("Registered: %v", info)
 		s = &WorkerState{
-			m:    m,
-			cond: sync.NewCond(new(sync.Mutex)),
-			Info: info,
-			Idle: true,
+			m:        m,
+			cond:     sync.NewCond(new(sync.Mutex)),
+			Info:     info,
+			Idle:     true,
+			identity: identity,
 		}
 		m.workers[info.Id] = s
 		go s.offer(log, m.localOnly)
@@ -126,7 +129,7 @@ func (s *WorkerState) offer(log bitwrk.Logger, localOnly bool) {
 		}
 		if s.Blockers == 0 {
 			s.LastError = ""
-			if sell, err := s.m.activityManager.NewSell(s, localOnly); err != nil {
+			if sell, err := s.m.activityManager.NewSell(s, s.identity, localOnly); err != nil {
 				s.LastError = fmt.Sprintf("Error creating sell: %v", err)
 				log.Println(s.LastError)
 				s.blockFor(20 * time.Second)

@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2014  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -32,37 +32,33 @@ import (
 )
 
 var ErrInterrupted = errors.New("The request was interrupted")
-var ErrNoPermission = errors.New("Permission request rejected")
 var ErrBidExpired = errors.New("Bid expired without match")
 var ErrTxExpired = errors.New("Transaction no longer active")
 var ErrTxUnexpectedState = errors.New("Transaction in unexpected state")
 
 // Activity keys identify activities (trades), as well as mandates within
 // the activity manager. Name spaces may overlap.
+
 type ActivityKey int64
 
 type Activity interface {
 	GetKey() ActivityKey
 	GetState() *ActivityState
 
-	// Publish the activity.
+	// Publish the activity, giving it a price and clearance to be traded on the BitWrk service.
 	// Returns true if the call caused the activity to be published.
-	Publish(identity *bitcoin.KeyPair, price money.Money) bool
-
-	// Forbid the activity.
-	// Returns true if the call caused the activity to be rejected.
-	Forbid() bool
+	Publish(price money.Money) bool
 
 	// If the activity is a trade, returns the trade information
 	GetTrade() *Trade
 }
 
+// Struct ActivityState encapsulates status information on an activity which is displayed to the user.
 type ActivityState struct {
 	Type        string
 	Article     bitwrk.ArticleId
 	Alive       bool // Whether the activity is still alive
 	Accepted    bool // true iff the activity can no longer be published
-	Rejected    bool
 	Amount      money.Money
 	BidId, TxId string
 	Info        string
@@ -100,7 +96,7 @@ func GetActivityManager() *ActivityManager {
 	return &activityManager
 }
 
-func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error) {
+func (m *ActivityManager) NewBuy(article bitwrk.ArticleId, identity *bitcoin.KeyPair, price *money.Money) (*BuyActivity, error) {
 	now := time.Now()
 	result := &BuyActivity{
 		Trade: Trade{
@@ -113,13 +109,20 @@ func (m *ActivityManager) NewBuy(article bitwrk.ArticleId) (*BuyActivity, error)
 			article:           article,
 			alive:             true,
 			awaitingClearance: true,
+			identity:          identity,
 		},
 	}
-	m.register(result.key, result)
+	// This will local-match the buy if possible.
+	// Don't apply any mandates if a price was set by the requester.
+	m.register(result.key, result, price != nil)
+	// ... Instead, publish here.
+	if price != nil {
+		result.Publish(*price)
+	}
 	return result, nil
 }
 
-func (m *ActivityManager) NewSell(worker Worker, localOnly bool) (*SellActivity, error) {
+func (m *ActivityManager) NewSell(worker Worker, identity *bitcoin.KeyPair, localOnly bool) (*SellActivity, error) {
 	now := time.Now()
 
 	result := &SellActivity{
@@ -135,6 +138,7 @@ func (m *ActivityManager) NewSell(worker Worker, localOnly bool) (*SellActivity,
 			alive:             true,
 			awaitingClearance: true,
 			localOnly:         localOnly,
+			identity:          identity,
 		},
 		worker: worker,
 	}
@@ -144,7 +148,7 @@ func (m *ActivityManager) NewSell(worker Worker, localOnly bool) (*SellActivity,
 		return nil, err
 	}
 
-	m.register(result.key, result)
+	m.register(result.key, result, false)
 	return result, nil
 }
 
@@ -223,7 +227,9 @@ func (m *ActivityManager) NewKey() ActivityKey {
 	return result
 }
 
-func (m *ActivityManager) register(key ActivityKey, activity Activity) {
+// Function register adds a new Activity to the ActivityManager and tries to match it with local activities and
+// mandates (unless `skipMandates` is set).
+func (m *ActivityManager) register(key ActivityKey, activity Activity, skipMandates bool) {
 	now := time.Now()
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -260,6 +266,10 @@ func (m *ActivityManager) register(key ActivityKey, activity Activity) {
 		if matched {
 			return // Early exit when a match was found
 		}
+	}
+
+	if skipMandates {
+		return // Early exit if mandate matching is not desired.
 	}
 
 	// Try to apply all known mandates to the new activity, until a matching mandate

@@ -17,7 +17,6 @@
 package client
 
 import (
-	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
 	"sync"
@@ -28,7 +27,6 @@ import (
 type Mandate struct {
 	mutex         sync.Mutex       // Protects every access to the mandate's state
 	expired       bool             // Initially false
-	Identity      *bitcoin.KeyPair // Which identity to pass to the publish operation
 	BidType       bitwrk.BidType   // Buy or Sell
 	Article       bitwrk.ArticleId // Which article to buy or sell
 	Price         money.Money      // Which price to bid/ask for
@@ -111,7 +109,7 @@ func (m *Mandate) Apply(activity Activity, now time.Time) bool {
 		return false
 	}
 
-	result := t.Publish(m.Identity, m.Price)
+	result := t.Publish(m.Price)
 	if result {
 		m.TradesLeft--
 	}
