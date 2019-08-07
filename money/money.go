@@ -194,12 +194,17 @@ func (m *Money) Parse(s string) error {
 	return nil
 }
 
+func Parse(s string) (m Money, err error) {
+	err = m.Parse(s)
+	return
+}
+
 func MustParse(s string) Money {
-	var m Money
-	if err := m.Parse(s); err != nil {
+	if m, err := Parse(s); err != nil {
 		panic(err)
+	} else {
+		return m
 	}
-	return m
 }
 
 // Formats a valid string representation of the amount, including Symbol
