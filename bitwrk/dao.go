@@ -19,6 +19,7 @@ package bitwrk
 import (
 	"errors"
 	"fmt"
+
 	"github.com/indyjo/bitwrk-common/money"
 )
 
@@ -178,21 +179,21 @@ func (c *cachedAccountingDao) Flush() error {
 		return ErrNotTransactional
 	}
 
-	for k, _ := range c.savedAccounts {
+	for k := range c.savedAccounts {
 		account := c.accounts[k]
 		if err := c.delegate.SaveAccount(&account); err != nil {
 			return err
 		}
 		delete(c.savedAccounts, k)
 	}
-	for k, _ := range c.savedDeposits {
+	for k := range c.savedDeposits {
 		deposit := c.deposits[k]
 		if err := c.delegate.SaveDeposit(k, &deposit); err != nil {
 			return err
 		}
 		delete(c.savedDeposits, k)
 	}
-	for k, _ := range c.savedMovements {
+	for k := range c.savedMovements {
 		movement := c.movements[k]
 		if err := c.delegate.SaveMovement(&movement); err != nil {
 			return err
