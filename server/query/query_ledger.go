@@ -17,19 +17,19 @@
 package query
 
 import (
-	"bytes"
-	"fmt"
-	db "github.com/indyjo/bitwrk-server/gae"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/log"
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
+
+	db "github.com/indyjo/bitwrk/server/gae"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/log"
 )
 
-// Handles requests for sets of account IDs.
-func HandleQueryAccounts(w http.ResponseWriter, r *http.Request) {
+// Handles requests for account movements (ledger entries)
+func HandleQueryAccountMovements(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
-
 	limitStr := r.FormValue("limit")
 	var limit int
 	if limitStr == "" {
@@ -41,19 +41,23 @@ func HandleQueryAccounts(w http.ResponseWriter, r *http.Request) {
 		limit = int(n)
 	}
 
-	requestdepositaddress := r.FormValue("requestdepositaddress") != ""
-
-	buffer := new(bytes.Buffer)
-	handler := func(key string) {
-		fmt.Fprintf(buffer, "%v\n", key)
+	beginStr := r.FormValue("begin")
+	var begin time.Time
+	if beginStr != "" {
+		if t, err := time.Parse(time.RFC3339, beginStr); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else {
+			begin = t
+		}
 	}
 
-	if err := db.QueryAccountKeys(c, limit, requestdepositaddress, handler); err != nil {
-		log.Errorf(c, "QueryAccountKeys failed: %v", err)
+	if result, err := db.QueryAccountMovements(c, begin, limit); err != nil {
+		log.Errorf(c, "QueryAccountMovements failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
 	}
-
-	w.Header().Set("Content-Type", "text/plain")
-	buffer.WriteTo(w)
 }

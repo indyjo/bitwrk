@@ -17,15 +17,16 @@
 package server
 
 import (
-	"bitbucket.org/ww/goautoneg"
 	"encoding/json"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	db "github.com/indyjo/bitwrk-server/gae"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/log"
 	"html/template"
 	"net/http"
+
+	"bitbucket.org/ww/goautoneg"
+	"github.com/indyjo/bitwrk-common/bitwrk"
+	db "github.com/indyjo/bitwrk/server/gae"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/log"
 )
 
 const movementViewHtml = `

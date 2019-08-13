@@ -17,22 +17,23 @@
 package server
 
 import (
-	"bitbucket.org/ww/goautoneg"
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-server/config"
-	db "github.com/indyjo/bitwrk-server/gae"
-	"github.com/indyjo/bitwrk-server/util"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/log"
 	"html/template"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"bitbucket.org/ww/goautoneg"
+	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk/server/config"
+	db "github.com/indyjo/bitwrk/server/gae"
+	"github.com/indyjo/bitwrk/server/util"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 )
 
 const bidCreateHtml = `

@@ -20,10 +20,11 @@ package util
 import (
 	"context"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-server/config"
 	"regexp"
 	"strings"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk/server/config"
 )
 
 // Check whether a bitcoin address is from the 'right' network,

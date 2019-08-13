@@ -17,13 +17,14 @@
 package server
 
 import (
-	db "github.com/indyjo/bitwrk-server/gae"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/datastore"
-	"google.golang.org/appengine/log"
 	"net/http"
 	"strings"
 	"time"
+
+	db "github.com/indyjo/bitwrk/server/gae"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 )
 
 func mustDecodeKey(s string) *datastore.Key {

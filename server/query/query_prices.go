@@ -21,18 +21,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/money"
-	db "github.com/indyjo/bitwrk-server/gae"
-	"github.com/indyjo/bitwrk-server/util"
-	"google.golang.org/appengine"
-	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/memcache"
-	"google.golang.org/appengine/user"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-common/money"
+	db "github.com/indyjo/bitwrk/server/gae"
+	"github.com/indyjo/bitwrk/server/util"
+	"google.golang.org/appengine"
+	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/memcache"
+	"google.golang.org/appengine/user"
 )
 
 type timeslot struct {

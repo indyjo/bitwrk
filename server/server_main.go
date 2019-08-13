@@ -18,12 +18,13 @@ package server
 
 import (
 	"fmt"
-	"github.com/indyjo/bitwrk-server/query"
-	"github.com/indyjo/bitwrk-server/util"
+	"net/http"
+
+	"github.com/indyjo/bitwrk/server/query"
+	"github.com/indyjo/bitwrk/server/util"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/user"
-	"net/http"
 )
 
 func init() {
