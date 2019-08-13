@@ -1,13 +1,23 @@
 language: go
 
-go:
- - 1.11
+os:
+  - linux
+  - osx
 
-install:
- - echo "Luckily, there are no dependencies"
+go:
+  - 1.11.x
+  - 1.12.x
+  - tip
+
+matrix:
+  allow_failures:
+    - go: tip
+
+env:
+  global:
+    GO111MODULE=on
 
 script:
- - export GOPATH=$(pwd):$GOPATH
- - go test bitbucket.org/ww/goautoneg github.com/indyjo/bitwrk-client/...
- - go install ./src/github.com/indyjo/bitwrk-client/cmd/bitwrk-client/ && bin/bitwrk-client --help || [ $? -eq 2 ]
-
+  - go test ./...
+  - go build
+  - client/cmd/bitwrk-client/bitwrk-client --help || [ $? -eq 2 ]
