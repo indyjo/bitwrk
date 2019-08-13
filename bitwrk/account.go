@@ -19,12 +19,13 @@ package bitwrk
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/money"
 	"io"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk-common/money"
 )
 
 // A single account of money. Corresponds with either the 'Available' or the 'Blocked'
@@ -474,6 +475,8 @@ func (m *AccountMovement) Validate() (err error) {
 
 	if m.World.Amount != 0 {
 		currency, err = validateCurrency(currency, m.World.Currency)
+		_ = currency // suppresses warning
+
 		if err != nil {
 			return
 		}
