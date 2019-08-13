@@ -19,5 +19,6 @@ env:
 
 script:
   - go test ./...
-  - go build
-  - client/cmd/bitwrk-client/bitwrk-client --help || [ $? -eq 2 ]
+  - go build ./...
+  - go build ./client/cmd/bitwrk-client/
+  - ./bitwrk-client --help || [ $? -eq 2 ]

@@ -18,10 +18,10 @@ Compiling the source package
         cd bitwrk-0.3.0/
 
         # Now compile the BitWrk client software needed for buying and selling
-        go build ./...
+        go build ./client/cmd/bitwrk-client/
 
         # If everything went fine, the BitWrk client can be started now.
-        client/cmd/bitwrk-client/bitwrk-client
+        ./bitwrk-client
 
 Compiling from GIT
 -------------------
