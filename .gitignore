@@ -1,3 +1,5 @@
 .DS_Store
 client/cmd/bitwrk-client/bitwrk-client
-./bitwrk-client
+bitwrk-client
+server/appengine/appengine
+appengine
