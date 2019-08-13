@@ -18,12 +18,13 @@ package bitwrk
 
 import (
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/money"
 	"math"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk-common/money"
 )
 
 var ErrInsufficientFunds = fmt.Errorf("Insufficient funds")

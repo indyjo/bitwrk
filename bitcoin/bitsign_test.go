@@ -18,10 +18,11 @@ package bitcoin
 
 import (
 	"bytes"
-	"github.com/indyjo/bitwrk-common/bitecdsa"
-	"github.com/indyjo/bitwrk-common/bitelliptic"
 	"math/big"
 	"testing"
+
+	"github.com/indyjo/bitwrk-common/bitecdsa"
+	"github.com/indyjo/bitwrk-common/bitelliptic"
 )
 
 var privKey = "5JeWZ1z6sRcLTJXdQEDdB986E6XfLAkj9CgNE4EHzr5GmjrVFpf"

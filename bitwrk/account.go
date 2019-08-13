@@ -19,12 +19,13 @@ package bitwrk
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/money"
 	"io"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk-common/money"
 )
 
 // A single account of money. Corresponds with either the 'Available' or the 'Blocked'

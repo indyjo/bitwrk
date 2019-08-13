@@ -20,11 +20,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"math/big"
+
 	"github.com/indyjo/bitwrk-common/bitecdsa"
 	"github.com/indyjo/bitwrk-common/bitelliptic"
 	"github.com/indyjo/bitwrk-common/ripemd160"
-	"io"
-	"math/big"
 )
 
 func Digest256(message []byte) (res []byte) {

@@ -14,9 +14,10 @@ package bitecdsa
 //     http://www.secg.org/download/aid-780/sec1-v2.pdf
 
 import (
-	"math/big"
-	"github.com/indyjo/bitwrk-common/bitelliptic"
 	"io"
+	"math/big"
+
+	"github.com/indyjo/bitwrk-common/bitelliptic"
 )
 
 // PublicKey represents an ECDSA public key.
@@ -65,14 +66,14 @@ func GenerateKey(c *bitelliptic.BitCurve, rand io.Reader) (priv *PrivateKey, err
 
 //TODO: add to tests, new functionality
 //function to check if a given private key is correct
-func CheckIsOnCurve(c *bitelliptic.BitCurve, k *big.Int) bool{
-	tmp:=big.NewInt(0)
+func CheckIsOnCurve(c *bitelliptic.BitCurve, k *big.Int) bool {
+	tmp := big.NewInt(0)
 	tmp.Sub(k, one)
 	n := new(big.Int).Sub(c.N, one)
 	tmp.Mod(tmp, n)
 	tmp.Add(tmp, one)
-	
-	if tmp.Cmp(k)==0{
+
+	if tmp.Cmp(k) == 0 {
 		return true
 	}
 	return false
@@ -80,8 +81,8 @@ func CheckIsOnCurve(c *bitelliptic.BitCurve, k *big.Int) bool{
 
 //TODO: add to tests, new functionality
 // GenerateKey generates a key pair of public key matching the given private key.
-func GenerateFromPrivateKey(d *big.Int, c *bitelliptic.BitCurve) (priv *PrivateKey, err error) {	
-	if CheckIsOnCurve(c, d) ==false{
+func GenerateFromPrivateKey(d *big.Int, c *bitelliptic.BitCurve) (priv *PrivateKey, err error) {
+	if CheckIsOnCurve(c, d) == false {
 		return nil, nil
 	}
 

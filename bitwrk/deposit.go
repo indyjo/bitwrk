@@ -18,11 +18,12 @@ package bitwrk
 
 import (
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/money"
 	"io"
 	"strconv"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk-common/money"
 )
 
 type DepositType int

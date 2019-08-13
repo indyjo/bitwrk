@@ -19,6 +19,7 @@ package bitwrk
 import (
 	"errors"
 	"fmt"
+
 	"github.com/indyjo/bitwrk-common/money"
 )
 

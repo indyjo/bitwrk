@@ -1,8 +1,9 @@
 package bitcoin
 
 import (
-	"github.com/indyjo/bitwrk-common/bitelliptic"
 	"testing"
+
+	"github.com/indyjo/bitwrk-common/bitelliptic"
 )
 
 func Test_DecodePrivateKeyWif(t *testing.T) {
