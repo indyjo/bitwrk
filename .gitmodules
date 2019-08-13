@@ -1,6 +1,0 @@
-[submodule "src/github.com/indyjo/cafs"]
-	path = src/github.com/indyjo/cafs
-	url = https://github.com/indyjo/cafs.git
-[submodule "src/github.com/indyjo/bitwrk-common"]
-	path = src/github.com/indyjo/bitwrk-common
-	url = https://github.com/indyjo/bitwrk-common.git

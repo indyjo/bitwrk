@@ -18,12 +18,13 @@ package client
 
 import (
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/bitwrk"
 	"io"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk-common/bitwrk"
 )
 
 type WorkerManager struct {

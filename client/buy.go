@@ -24,14 +24,15 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	. "github.com/indyjo/bitwrk-common/protocol"
-	"github.com/indyjo/cafs"
-	"github.com/indyjo/cafs/remotesync"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+
+	"github.com/indyjo/bitwrk-common/bitwrk"
+	. "github.com/indyjo/bitwrk-common/protocol"
+	"github.com/indyjo/cafs"
+	"github.com/indyjo/cafs/remotesync"
 )
 
 type BuyActivity struct {

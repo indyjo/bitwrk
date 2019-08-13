@@ -18,14 +18,15 @@ package client
 
 import (
 	"fmt"
+	"io"
+	"sync"
+	"time"
+
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
 	"github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/cafs"
-	"io"
-	"sync"
-	"time"
 )
 
 // Type Trade contains fields common to BuyActivity and SellActivity

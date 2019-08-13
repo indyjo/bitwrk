@@ -19,16 +19,17 @@ package client
 import (
 	"crypto/rand"
 	"errors"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/money"
-	"github.com/indyjo/cafs"
-	"github.com/indyjo/cafs/ram"
 	"io"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-common/money"
+	"github.com/indyjo/cafs"
+	"github.com/indyjo/cafs/ram"
 )
 
 var ErrInterrupted = errors.New("The request was interrupted")

@@ -18,11 +18,12 @@ package client
 
 import (
 	"fmt"
+	"io"
+
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	. "github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/cafs"
-	"io"
 )
 
 type SellActivity struct {
