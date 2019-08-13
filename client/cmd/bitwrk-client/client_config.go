@@ -19,13 +19,14 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitcoin"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
 	"path/filepath"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
 )
 
 func getMainConfigDir(name string) (string, error) {

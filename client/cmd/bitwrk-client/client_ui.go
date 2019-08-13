@@ -21,9 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	client "github.com/indyjo/bitwrk-client"
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/protocol"
 	"html/template"
 	"log"
 	"net/http"
@@ -32,6 +29,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-common/protocol"
+	client "github.com/indyjo/bitwrk/client"
 )
 
 var _templatesInitialized = sync.Once{}

@@ -20,12 +20,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	client "github.com/indyjo/bitwrk-client"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/money"
-	"github.com/indyjo/bitwrk-common/protocol"
-	"github.com/indyjo/cafs"
 	"html/template"
 	"io"
 	"log"
@@ -37,6 +31,13 @@ import (
 	"runtime/pprof"
 	"strings"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk-common/money"
+	"github.com/indyjo/bitwrk-common/protocol"
+	client "github.com/indyjo/bitwrk/client"
+	"github.com/indyjo/cafs"
 )
 
 var ExternalAddress string
