@@ -1,5 +1,10 @@
 .DS_Store
+
+# binaries
 client/cmd/bitwrk-client/bitwrk-client
 bitwrk-client
 server/appengine/appengine
 appengine
+
+# builds
+dist/
