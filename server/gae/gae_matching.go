@@ -20,12 +20,13 @@ import (
 	"container/heap"
 	"context"
 	"encoding/json"
+	"time"
+
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/taskqueue"
-	"time"
 )
 
 // While in state "Placed", bid's have a corresponding entry in the

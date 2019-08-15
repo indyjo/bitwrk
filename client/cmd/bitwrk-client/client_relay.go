@@ -17,11 +17,12 @@
 package main
 
 import (
-	"github.com/indyjo/bitwrk-common/protocol"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/protocol"
 )
 
 type cacheEntry struct {
