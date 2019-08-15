@@ -112,7 +112,7 @@ func (codec bidCodec) Save() ([]datastore.Property, error) {
 		datastore.Property{Name: "Fee", Value: bid.Fee.Amount, NoIndex: true},
 		datastore.Property{Name: "Participant", Value: string(bid.Participant), NoIndex: true},
 		datastore.Property{Name: "Document", Value: string(bid.Document), NoIndex: true},
-		datastore.Property{Name: "Signature", Value: string(bid.Signature), NoIndex: true},
+		datastore.Property{Name: "Signature", Value: bid.Signature, NoIndex: true},
 		datastore.Property{Name: "Created", Value: time.Time(bid.Created)},
 		datastore.Property{Name: "Expires", Value: time.Time(bid.Expires), NoIndex: true})
 	if bid.Matched != nil {
@@ -253,16 +253,16 @@ func (codec txCodec) Save() ([]datastore.Property, error) {
 		datastore.Property{Name: "Revision", Value: int64(tx.Revision), NoIndex: true},
 		datastore.Property{Name: "BuyerBid", Value: mustDecodeKey(&tx.BuyerBid), NoIndex: true},
 		datastore.Property{Name: "SellerBid", Value: mustDecodeKey(&tx.SellerBid), NoIndex: true},
-		datastore.Property{Name: "Buyer", Value: string(tx.Buyer), NoIndex: true},
-		datastore.Property{Name: "Seller", Value: string(tx.Seller), NoIndex: true},
+		datastore.Property{Name: "Buyer", Value: tx.Buyer, NoIndex: true},
+		datastore.Property{Name: "Seller", Value: tx.Seller, NoIndex: true},
 		datastore.Property{Name: "Article", Value: string(tx.Article)},
 		datastore.Property{Name: "Currency", Value: tx.Price.Currency.String()},
 		datastore.Property{Name: "Price", Value: tx.Price.Amount, NoIndex: true},
 		datastore.Property{Name: "Fee", Value: tx.Fee.Amount, NoIndex: true},
-		datastore.Property{Name: "Matched", Value: time.Time(tx.Matched)},
+		datastore.Property{Name: "Matched", Value: tx.Matched},
 		datastore.Property{Name: "State", Value: int64(tx.State), NoIndex: true},
 		datastore.Property{Name: "Phase", Value: int64(tx.Phase), NoIndex: true},
-		datastore.Property{Name: "Timeout", Value: time.Time(tx.Timeout), NoIndex: true})
+		datastore.Property{Name: "Timeout", Value: tx.Timeout, NoIndex: true})
 	if tx.WorkerURL != nil {
 		props = append(props,
 			datastore.Property{Name: "WorkerURL", Value: *tx.WorkerURL, NoIndex: true})
@@ -477,7 +477,7 @@ var _ datastore.PropertyLoadSaver = depositCodec{nil}
 func (codec depositCodec) Save() ([]datastore.Property, error) {
 	deposit := codec.deposit
 	return []datastore.Property{
-		datastore.Property{Name: "Account", Value: string(deposit.Account)},
+		datastore.Property{Name: "Account", Value: deposit.Account},
 		datastore.Property{Name: "Amount", Value: deposit.Amount.Amount},
 		datastore.Property{Name: "Created", Value: deposit.Created},
 		datastore.Property{Name: "Currency", Value: deposit.Amount.Currency.String()},
