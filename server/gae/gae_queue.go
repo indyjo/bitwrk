@@ -19,13 +19,14 @@ package gae
 import (
 	"context"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"google.golang.org/appengine/log"
-	"google.golang.org/appengine/taskqueue"
 	"hash/crc32"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitwrk"
+	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/taskqueue"
 )
 
 // Adds a task to the queue associated with an article/currency combination.
