@@ -5,12 +5,12 @@
 package base58
 
 import (
-        "crypto/sha256"
+	"crypto/sha256"
 )
 
 func Hash(ba []byte) []byte {
-        sha := sha256.New()
-        sha2 := sha256.New() // hash twice
-        ba = sha.Sum(ba)
-        return sha2.Sum(ba)
+	sha := sha256.New()
+	sha2 := sha256.New() // hash twice
+	ba = sha.Sum(ba)
+	return sha2.Sum(ba)
 }

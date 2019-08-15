@@ -17,9 +17,10 @@
 package bitcoin
 
 import (
-	"github.com/indyjo/bitwrk-common/bitelliptic"
 	"fmt"
 	"math/big"
+
+	"github.com/indyjo/bitwrk-common/bitelliptic"
 )
 
 func legendre(a, p *big.Int) int {

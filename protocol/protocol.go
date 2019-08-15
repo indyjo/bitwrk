@@ -22,8 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/bitwrk"
 	"io"
 	"io/ioutil"
 	"net"
@@ -33,10 +31,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk-common/bitwrk"
 )
 
 var defaultClient = NewClient(&http.Transport{
-	Dial: timedDial,
+	Dial:                  timedDial,
 	ResponseHeaderTimeout: 10 * time.Second,
 })
 

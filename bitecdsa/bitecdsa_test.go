@@ -6,12 +6,13 @@
 package bitecdsa
 
 import (
-	"crypto/sha1"
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/hex"
 	"math/big"
-	"github.com/indyjo/bitwrk-common/bitelliptic"
 	"testing"
+
+	"github.com/indyjo/bitwrk-common/bitelliptic"
 )
 
 func testKeyGeneration(t *testing.T, c *bitelliptic.BitCurve, tag string) {
@@ -209,8 +210,8 @@ func TestVectors(t *testing.T) {
 	for i, test := range testVectors {
 		pub := PublicKey{
 			BitCurve: bitelliptic.S256(),
-			X:     fromHex(test.Qx),
-			Y:     fromHex(test.Qy),
+			X:        fromHex(test.Qx),
+			Y:        fromHex(test.Qy),
 		}
 		msg, _ := hex.DecodeString(test.msg)
 		sha.Reset()

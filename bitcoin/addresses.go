@@ -19,8 +19,9 @@ package bitcoin
 import (
 	"bytes"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/base58"
 	"math/big"
+
+	"github.com/indyjo/bitwrk-common/base58"
 )
 
 const (

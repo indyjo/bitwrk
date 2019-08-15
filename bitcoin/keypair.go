@@ -17,10 +17,11 @@
 package bitcoin
 
 import (
-	"github.com/indyjo/bitwrk-common/bitecdsa"
-	"github.com/indyjo/bitwrk-common/bitelliptic"
 	"io"
 	"math/big"
+
+	"github.com/indyjo/bitwrk-common/bitecdsa"
+	"github.com/indyjo/bitwrk-common/bitelliptic"
 )
 
 // Type KeyPair keeps all Bitcoin identity data in one place

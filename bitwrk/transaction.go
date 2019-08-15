@@ -23,11 +23,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/money"
 	"net/url"
 	"regexp"
 	"time"
+
+	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk-common/money"
 )
 
 type (

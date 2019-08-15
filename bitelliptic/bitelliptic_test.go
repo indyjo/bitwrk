@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestOnCurve(t *testing.T) {	
+func TestOnCurve(t *testing.T) {
 	s160 := S160()
 	if !s160.IsOnCurve(s160.Gx, s160.Gy) {
 		t.Errorf("FAIL S160")
@@ -35,6 +35,7 @@ type baseMultTest struct {
 	k    string
 	x, y string
 }
+
 //TODO: add more test vectors
 var s256BaseMultTests = []baseMultTest{
 	{
@@ -86,7 +87,7 @@ func TestBaseMult(t *testing.T) {
 func BenchmarkBaseMult(b *testing.B) {
 	b.ResetTimer()
 	s256 := S224()
-	e := s256BaseMultTests[0]//TODO: check, used to be 25 instead of 0, but it's probably ok
+	e := s256BaseMultTests[0] //TODO: check, used to be 25 instead of 0, but it's probably ok
 	k, _ := new(big.Int).SetString(e.k, 16)
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
