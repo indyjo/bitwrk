@@ -18,10 +18,11 @@ package bitcoin
 
 import (
 	"bytes"
-	"github.com/indyjo/bitwrk-common/bitecdsa"
-	"github.com/indyjo/bitwrk-common/bitelliptic"
 	"math/big"
 	"testing"
+
+	"github.com/indyjo/bitwrk-common/bitecdsa"
+	"github.com/indyjo/bitwrk-common/bitelliptic"
 )
 
 var privKey = "5JeWZ1z6sRcLTJXdQEDdB986E6XfLAkj9CgNE4EHzr5GmjrVFpf"
@@ -91,6 +92,9 @@ func Test_SignMessage(t *testing.T) {
 		}
 		zeros := bytes.NewReader(make([]byte, 256))
 		signature, err := SignMessage(c.plaintext, privKey, compressed, zeros)
+		if err != nil {
+			t.Errorf("Couldn't sign message: %v", err)
+		}
 		t.Logf("Signature of %#v using private key %#v (compressed=%v): %#v",
 			c.plaintext, c.privKeyEnc, compressed, signature)
 		err = VerifySignatureBase64(c.plaintext, c.address, signature)
