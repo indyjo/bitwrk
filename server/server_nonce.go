@@ -124,10 +124,5 @@ func deleteExpired(c context.Context, now time.Time, parentKey *datastore.Key) e
 	}
 
 	log.Infof(c, "Delete %v expired nonces", len(keys))
-	datastore.DeleteMulti(c, keys)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return datastore.DeleteMulti(c, keys)
 }
