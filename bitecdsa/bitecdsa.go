@@ -73,16 +73,13 @@ func CheckIsOnCurve(c *bitelliptic.BitCurve, k *big.Int) bool {
 	tmp.Mod(tmp, n)
 	tmp.Add(tmp, one)
 
-	if tmp.Cmp(k) == 0 {
-		return true
-	}
-	return false
+	return tmp.Cmp(k) == 0
 }
 
 //TODO: add to tests, new functionality
 // GenerateKey generates a key pair of public key matching the given private key.
 func GenerateFromPrivateKey(d *big.Int, c *bitelliptic.BitCurve) (priv *PrivateKey, err error) {
-	if CheckIsOnCurve(c, d) == false {
+	if !CheckIsOnCurve(c, d) {
 		return nil, nil
 	}
 

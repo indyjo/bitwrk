@@ -414,7 +414,7 @@ func validateCurrency(currency *money.Currency, otherCurrency money.Currency) (*
 // into the op argument (-2: <, -1: <=, 0: =, 1: >=, 2: >). Any other value panicks.
 func checkFlowDirection(msg string, op int, val int64) error {
 	if op < -2 || op > 2 {
-		panic(fmt.Sprintf("op paramter must be -2 <= op <= 2  (was: %v)", op))
+		panic(fmt.Sprintf("op parameter must be -2 <= op <= 2  (was: %v)", op))
 	}
 	rel := []string{"<", "<=", "=", ">=", ">"}[op+2]
 	if op < 0 && val < 0 || op >= -1 && op <= 1 && val == 0 || op > 0 && val > 0 {
@@ -475,6 +475,8 @@ func (m *AccountMovement) Validate() (err error) {
 
 	if m.World.Amount != 0 {
 		currency, err = validateCurrency(currency, m.World.Currency)
+		_ = currency // suppresses warning
+
 		if err != nil {
 			return
 		}
