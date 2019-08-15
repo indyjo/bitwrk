@@ -91,7 +91,7 @@ func main() {
 	BitcoinIdentity = LoadOrCreateIdentity("bitwrk-client", bitcoin.AddrVersionBitcoin)
 
 	if !strings.HasSuffix(BitwrkUrl, "/") {
-		BitwrkUrl = BitwrkUrl + "/"
+		BitwrkUrl += "/"
 	}
 
 	log.Printf("Bitwrk URL: %v", BitwrkUrl)
