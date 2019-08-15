@@ -396,7 +396,7 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 	pipeIn, pipeOut := io.Pipe()
 	defer pipeIn.Close()
 
-	// Setup compression layer with dummy impl in case of uncompressed transmisison
+	// Setup compression layer with dummy impl in case of uncompressed transmission
 	var compressor io.Writer
 	var closeCompressor func() error
 	if compressed {
