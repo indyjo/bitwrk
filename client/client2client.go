@@ -278,7 +278,7 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			}
 			temp := receiver.storage.Create(receiver.info)
 			defer temp.Dispose()
-			const MAXBYTES = 2 << 24 // 16MB
+			const MAXBYTES = 1 << 24 // 16MB
 			// Copy up to MAXBYTES and expect EOF
 			if n, err := io.CopyN(temp, part, MAXBYTES); err != io.EOF {
 				return nil, fmt.Errorf("Work too long or error: %v (%v bytes read)", err, n)
