@@ -17,6 +17,7 @@
 package bitwrk
 
 import (
+	"encoding/json"
 	"net/url"
 	"testing"
 )
@@ -83,4 +84,30 @@ func expect(m DepositAddressMessage, t *testing.T, expectSuccess bool) {
 		}
 	}
 
+}
+
+func Test_AccountMovementType_JSON(t *testing.T) {
+	test := func(amt AccountMovementType, expected string) {
+		data, err := json.Marshal(amt)
+		if err != nil {
+			t.Fatalf("Error marshaling %v: %v", amt, err)
+		}
+		var s string
+		if err := json.Unmarshal(data, &s); err != nil {
+			t.Fatalf("Marshaled data couldn't be parsed as string: %v (err: %v)", data, err)
+		}
+		if s != expected {
+			t.Fatalf("Unexpected encoding: %q (expected: %v)", data, expected)
+		}
+	}
+	test(AccountMovementInvalid, "<Invalid Account Movement Type: 0>")
+	test(127, "<Invalid Account Movement Type: 127>")
+	test(AccountMovementPayIn, "DEPOSIT")
+	test(AccountMovementPayOut, "WITHDRAWAL")
+	test(AccountMovementPayOutReimburse, "WITHDRAWAL_REIMBURSE")
+	test(AccountMovementBid, "BID")
+	test(AccountMovementBidReimburse, "BID_REIMBURSE")
+	test(AccountMovementTransaction, "TRANSACTION")
+	test(AccountMovementTransactionFinish, "TRANSACTION_FINISH")
+	test(AccountMovementTransactionReimburse, "TRANSACTION_REIMBURSE")
 }

@@ -367,6 +367,9 @@ const (
 	AccountMovementTransaction
 	AccountMovementTransactionFinish
 	AccountMovementTransactionReimburse
+
+	accountMovementTypeFirst = AccountMovementInvalid
+	accountMovementTypeLast  = AccountMovementTransactionReimburse
 )
 
 func (t AccountMovementType) String() string {
@@ -389,6 +392,35 @@ func (t AccountMovementType) String() string {
 		return "TRANSACTION_REIMBURSE"
 	}
 	return fmt.Sprintf("<Invalid Account Movement Type: %v>", int8(t))
+}
+
+// Func ParseAccountMovementType takes a string and returns the corresponding
+// AccountMovementType or nil if the string didn't match any of the known
+// constants.
+func ParseAccountMovementType(s string) (AccountMovementType, error) {
+	for t := accountMovementTypeFirst; t <= accountMovementTypeLast; t++ {
+		if s == t.String() {
+			return t, nil
+		}
+	}
+	return AccountMovementInvalid, fmt.Errorf("invalid input: %#v", s)
+}
+
+func (t AccountMovementType) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + t.String() + "\""), nil
+}
+
+func (t *AccountMovementType) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	if t2, err := ParseAccountMovementType(s); err != nil {
+		return err
+	} else {
+		*t = t2
+	}
+	return nil
 }
 
 func (m *AccountMovement) String() string {
