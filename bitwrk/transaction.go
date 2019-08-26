@@ -673,7 +673,7 @@ func (tx *Transaction) Retire(dao AccountingDao, txId string, now time.Time) err
 			nil, &txId, nil, nil)
 	} else {
 		// Reimburse buyer's money
-		err = PlaceAccountMovement(dao, now, AccountMovementTransactionFinish,
+		err = PlaceAccountMovement(dao, now, AccountMovementTransactionReimburse,
 			tx.Buyer, tx.Buyer,
 			tx.Price.Add(tx.Fee), tx.Price.Add(tx.Fee).Neg(),
 			zero, zero,
