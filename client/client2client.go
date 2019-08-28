@@ -17,7 +17,6 @@
 package client
 
 import (
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
@@ -34,10 +33,7 @@ import (
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/cafs"
 	"github.com/indyjo/cafs/remotesync"
-	"github.com/indyjo/cafs/remotesync/shuffle"
 )
-
-var ErrAlreadyDisposed = errors.New("Already disposed")
 
 // Interface WorkHandler is where a WorkReceiver delegates its main lifecycle events to.
 // It is implemented by SellActivity.
@@ -85,13 +81,12 @@ func NewWorkReceiver(log bitwrk.Logger,
 		handler:      handler,
 		info:         info,
 		encResultKey: key,
-		permutation:  shuffle.Permutation{0},
 	}
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
 		if err := result.handleRequest(w, r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			log.Printf("Error in request: %v", err)
-			result.doDispose(fmt.Errorf("Error handling request from %v: %v", r.RemoteAddr, err))
+			result.doDispose(fmt.Errorf("error handling request from %v: %v", r.RemoteAddr, err))
 		}
 	}
 	result.endpoint.SetHandler(withCompression(handlerFunc))
@@ -117,17 +112,15 @@ type endpointReceiver struct {
 	handler          WorkHandler
 	encResultKey     bitwrk.Tkey
 	builder          *remotesync.Builder
-	chunkHashes      *bytes.Buffer
 	buyerSecret      bitwrk.Thash
 	workFile         cafs.File
 	encResultFile    cafs.File
 	info             string
 	encResultHashSig string
-	permutation      shuffle.Permutation
 }
 
-func (r *endpointReceiver) URL() string {
-	return r.endpoint.URL()
+func (receiver *endpointReceiver) URL() string {
+	return receiver.endpoint.URL()
 }
 
 // Function doDispose is an internal function that disposes all held resources
@@ -183,9 +176,9 @@ func (receiver *endpointReceiver) IsDisposed() (bool, error) {
 var ZEROHASH bitwrk.Thash
 
 type todoList struct {
-	mustHandleChunkHashes bool
-	mustHandleWork        bool
-	mustHandleReceipt     bool
+	mustWriteWishList bool
+	mustHandleWork    bool
+	mustHandleReceipt bool
 }
 
 // This function handles all (http) requests from buyer to seller.
@@ -200,8 +193,8 @@ type todoList struct {
 func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "OPTIONS" {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"Adler32Chunking": true, "GZIPCompression": true, "Permutation": true}`))
-		return nil
+		_, err := w.Write([]byte(`{"Adler32Chunking": true, "GZIPCompression": true, "SyncInfo": true}`))
+		return err
 	}
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -217,41 +210,40 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 	var todo *todoList
 	if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
 		if err := r.ParseForm(); err != nil {
-			return fmt.Errorf("Failed to parse form data: %v", err)
+			return fmt.Errorf("failed to parse form data: %v", err)
 		}
 
 		t, err := receiver.handleUrlEncodedMessage(r.Form)
 		if err != nil {
-			return fmt.Errorf("Error handling url-encoded message: %v", err)
+			return fmt.Errorf("error handling url-encoded message: %v", err)
 		}
 		todo = t
 	} else if mreader, err := r.MultipartReader(); err == nil {
 		todo, err = receiver.handleMultipartMessage(mreader)
 		if err != nil {
-			return fmt.Errorf("Error handling multipart message: %v", err)
+			return fmt.Errorf("error handling multipart message: %v", err)
 		}
 	} else {
-		return fmt.Errorf("Don't know how to handle message (Content-Type: %v)", r.Header.Get("Content-Type"))
+		return fmt.Errorf("don't know how to handle message (Content-Type: %v)", r.Header.Get("Content-Type"))
 	}
 
 	if (receiver.workFile == nil && receiver.builder == nil) || receiver.buyerSecret == ZEROHASH {
-		return fmt.Errorf("Incomplete work message. Got work file: %v. Got chunk hashes: %v. Got buyer secret: %v", receiver.workFile != nil, receiver.builder != nil, receiver.buyerSecret != ZEROHASH)
+		return fmt.Errorf("incomplete work message (work file: %v, chunk hashes: %v. buyer secret: %v)", receiver.workFile != nil, receiver.builder != nil, receiver.buyerSecret != ZEROHASH)
 	}
 
 	if todo.mustHandleReceipt {
 		return receiver.handleReceipt()
-	} else if todo.mustHandleChunkHashes {
+	} else if todo.mustWriteWishList {
 		w.Header().Set("Content-Type", "application/x-wishlist")
-		buf := receiver.chunkHashes
 		// Leave lock temporarily to enable streaming
 		receiver.mutex.Unlock()
 		defer receiver.mutex.Lock()
-		return receiver.builder.WriteWishList(buf, w.(remotesync.FlushWriter))
+		return receiver.builder.WriteWishList(w.(remotesync.FlushWriter))
 	} else if todo.mustHandleWork {
 		if r, err := receiver.handleWorkAndReturnEncryptedResult(); err != nil {
 			return err
 		} else if receiver.encResultFile != nil {
-			return fmt.Errorf("Encrypted result file exists already")
+			return fmt.Errorf("encrypted result file exists already")
 		} else {
 			receiver.log.Printf("Encrypted result file: %v", r)
 			receiver.encResultFile = r
@@ -259,11 +251,11 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 
 		w.Header().Set("Content-Type", "application/octet-stream")
 		reader := receiver.encResultFile.Open()
-		defer reader.Close()
 		if _, err := io.Copy(w, reader); err != nil {
-			return fmt.Errorf("Error sending work result back to buyer: %v", err)
+			receiver.close(reader, "encResultFile")
+			return fmt.Errorf("error sending work result back to buyer: %v", err)
 		}
-		return nil
+		return reader.Close()
 	} else {
 		panic("Shouldn't get here")
 	}
@@ -279,75 +271,81 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			receiver.log.Printf("End of stream reached")
 			break
 		} else if err != nil {
-			return nil, fmt.Errorf("Error reading part: %v", err)
+			return nil, fmt.Errorf("error reading part: %v", err)
 		}
 		formName := part.FormName()
 		receiver.log.Printf("Handling part: %v", formName)
 		switch formName {
-		case "permutation":
-			var newPerm shuffle.Permutation
-			// guard against DOS
-			r := io.LimitReader(part, 1<<18)
-			if err := json.NewDecoder(r).Decode(&newPerm); err != nil {
-				return nil, fmt.Errorf("Error decoding permutation: %v", err)
-			}
-			receiver.permutation = newPerm
 		case "buyersecret":
 			// Buyer sends a random value to seller to prevent the seller from hijacking other seller's workers.
 			if receiver.buyerSecret != ZEROHASH {
-				return nil, fmt.Errorf("Buyer's secret already received")
+				return nil, fmt.Errorf("buyer's secret already received")
 			}
 			b := make([]byte, 64)
 			if n, err := io.ReadFull(part, b); err != nil {
-				return nil, fmt.Errorf("Error reading buyersecret: %v (%v bytes read)", err, n)
+				return nil, fmt.Errorf("error reading buyersecret: %v (%v bytes read)", err, n)
 			}
 			if n, err := hex.Decode(receiver.buyerSecret[:], b); err != nil || n != len(receiver.buyerSecret) {
-				return nil, fmt.Errorf("Error decoding buyersecret: %v (%v bytes written)", err, n)
+				return nil, fmt.Errorf("error decoding buyersecret: %v (%v bytes written)", err, n)
 			}
 		case "work":
 			// Direct work data transmission without chunking. Up to 16MB.
 			if receiver.builder != nil || receiver.workFile != nil {
-				return nil, fmt.Errorf("Work already received")
+				return nil, fmt.Errorf("work already received")
 			}
 			temp := receiver.storage.Create(receiver.info)
-			defer temp.Dispose()
-			const MAXBYTES = 2 << 24 // 16MB
-			// Copy up to MAXBYTES and expect EOF
-			if n, err := io.CopyN(temp, part, MAXBYTES); err != io.EOF {
-				return nil, fmt.Errorf("Work too long or error: %v (%v bytes read)", err, n)
+			// Copy up to 16MB and expect EOF
+			if n, err := io.CopyN(temp, part, 1<<24); err != io.EOF {
+				temp.Dispose()
+				return nil, fmt.Errorf("work too long or error: %v (%v bytes read)", err, n)
 			}
 			if err := temp.Close(); err != nil {
-				return nil, fmt.Errorf("Error creating file from temporary data: %v", err)
+				temp.Dispose()
+				return nil, fmt.Errorf("error creating file from temporary data: %v", err)
 			}
 			receiver.workFile = temp.File()
+			temp.Dispose()
 			todo.mustHandleWork = true
-		case "a32chunks":
-			// Transmission of hashes of chunked work data.
+		case "syncinfojson":
+			// Transmission of information about work data.
+			// Information such as chunk hashes, chunk lengths, transmission order
+			// permutation.
 			if receiver.builder != nil || receiver.workFile != nil {
-				return nil, fmt.Errorf("Work already received on 'a32chunks'")
+				return nil, fmt.Errorf("work already received on 'a32chunks'")
 			}
-			transmissionWindow := MaxNumberOfChunksInWorkFile
-			if len(receiver.permutation) > 1 {
-				transmissionWindow = 32
+			todo.mustWriteWishList = true
+			var syncinfo remotesync.SyncInfo
+			// guard against DOS, sync info may not be longer than a rough estimate
+			// based on max chunks allowed
+			r := io.LimitReader(part, 100*MaxNumberOfChunksInWorkFile+1<<16)
+			if err := json.NewDecoder(r).Decode(&syncinfo); err != nil {
+				return nil, fmt.Errorf("error decoding sync info: %v", err)
 			}
-			receiver.builder = remotesync.NewBuilder(receiver.storage, receiver.permutation, transmissionWindow, receiver.info)
-			todo.mustHandleChunkHashes = true
+			receiver.builder = remotesync.NewBuilder(receiver.storage, &syncinfo, 32, receiver.info)
+		case "a32chunks":
+			// Backwards-compatible transmission of hashes of chunked work data.
+			// TODO: remove backwards-compatibility
+			if receiver.builder != nil || receiver.workFile != nil {
+				return nil, fmt.Errorf("work already received on 'a32chunks'")
+			}
+			todo.mustWriteWishList = true
 
-			// Unfortunately, Go's http implementation doesn't permit us to stream an HTTP response while
-			// the request body hasn't been read completely. That's why we buffer it up to the maximum
-			// allowed size.
-			var buf bytes.Buffer
-			if _, err := io.CopyN(&buf, part, 35*MaxNumberOfChunksInWorkFile+1); err != io.EOF {
-				return nil, fmt.Errorf("Error reading chunk hashes: %v", err)
+			// guard against DOS, max length of hashes stream depends on max number of
+			// chunks in work file
+			r := io.LimitReader(part, 1<<18)
+			var syncinfo remotesync.SyncInfo
+			if err := syncinfo.ReadFromLegacyStream(r); err != nil {
+				return nil, fmt.Errorf("error reading chunk hashes from legacy stream: %v", err)
 			}
-			receiver.chunkHashes = &buf
+
+			receiver.builder = remotesync.NewBuilder(receiver.storage, &syncinfo, len(syncinfo.Chunks), receiver.info)
 		case "chunkdata":
 			// Subset of the actual chunk data requested in response to hashes.
 			if receiver.builder == nil {
-				return nil, fmt.Errorf("Didn't receive chunk hashes")
+				return nil, fmt.Errorf("didn't receive chunk hashes")
 			}
 			if receiver.workFile != nil {
-				return nil, fmt.Errorf("Work already received")
+				return nil, fmt.Errorf("work already received")
 			}
 
 			reconstruct := func() (cafs.File, error) {
@@ -359,13 +357,13 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			}
 
 			if f, err := reconstruct(); err != nil {
-				return nil, fmt.Errorf("Error reconstructing work from sent chunks: %v", err)
+				return nil, fmt.Errorf("error reconstructing work from sent chunks: %v", err)
 			} else {
 				receiver.workFile = f
 			}
 			todo.mustHandleWork = true
 		default:
-			return nil, fmt.Errorf("Don't know what to do with part %#v", formName)
+			return nil, fmt.Errorf("don't know what to do with part %#v", formName)
 		}
 	}
 	return todo, nil
@@ -376,16 +374,16 @@ func (receiver *endpointReceiver) handleUrlEncodedMessage(form url.Values) (*tod
 	todo := &todoList{}
 	if form.Get("encresulthash") != "" {
 		if receiver.encResultFile == nil {
-			return nil, fmt.Errorf("Result not available yet")
+			return nil, fmt.Errorf("result not available yet")
 		}
 		if form.Get("encresulthash") != receiver.encResultFile.Key().String() {
-			return nil, fmt.Errorf("Hash sum of encrypted result is wrong")
+			return nil, fmt.Errorf("hash sum of encrypted result is wrong")
 		}
 		// Information is redundant, so no need to do anything here
 	}
 	if form.Get("encresulthashsig") != "" {
 		if receiver.encResultFile == nil {
-			return nil, fmt.Errorf("Result not available yet")
+			return nil, fmt.Errorf("result not available yet")
 		}
 		if receiver.encResultHashSig != "" {
 			return nil, fmt.Errorf("encresulthashsig already received")
@@ -406,7 +404,7 @@ func (receiver *endpointReceiver) handleWorkAndReturnEncryptedResult() (cafs.Fil
 		receiver.workFile,
 		receiver.buyerSecret)
 	if result != nil {
-		defer result.Close()
+		defer receiver.close(result, "result data")
 	}
 	if err != nil {
 		return nil, err
@@ -422,7 +420,7 @@ func (receiver *endpointReceiver) handleWorkAndReturnEncryptedResult() (cafs.Fil
 		return nil, err
 	}
 	if err := temp.Close(); err != nil {
-		return nil, fmt.Errorf("Error closing encrypted result temporary: %v", err)
+		return nil, fmt.Errorf("error closing encrypted result temporary: %v", err)
 	}
 	return temp.File(), nil
 }
@@ -434,7 +432,7 @@ func verifyBuyerSecret(workHash, workSecretHash, buyerSecret *bitwrk.Thash) erro
 	var result bitwrk.Thash
 	sha.Sum(result[:0])
 	if result != *workSecretHash {
-		return errors.New("Buyer's secret does not match work hash and work secret hash")
+		return errors.New("buyer's secret does not match work hash and work secret hash")
 	}
 	return nil
 }
@@ -463,4 +461,11 @@ func encrypt(writer io.Writer, reader io.Reader, key bitwrk.Tkey) (err error) {
 	encWriter := &cipher.StreamWriter{S: stream, W: writer}
 	_, err = io.Copy(encWriter, reader)
 	return
+}
+
+// Utility function to safely close any closable. Logs and ignores any errors.
+func (receiver *endpointReceiver) close(c io.Closer, info string) {
+	if err := c.Close(); err != nil {
+		receiver.log.Printf("Ignoring error closing %v: %v", info, err)
+	}
 }
