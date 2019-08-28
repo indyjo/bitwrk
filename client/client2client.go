@@ -334,6 +334,7 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			// chunks in work file
 			r := io.LimitReader(part, 1<<18)
 			var syncinfo remotesync.SyncInfo
+			syncinfo.SetTrivialPermutation()
 			if err := syncinfo.ReadFromLegacyStream(r); err != nil {
 				return nil, fmt.Errorf("error reading chunk hashes from legacy stream: %v", err)
 			}
