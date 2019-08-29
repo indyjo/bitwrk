@@ -459,22 +459,37 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 	// Write work chunks into pipe for HTTP request
 	go func() {
 		log.Printf("Transmitting chunk data (compressed: %v, permutation size: %v)", compressed, len(syncinfo.Perm))
-		defer pipeOut.Close()
-		if part, err := mwriter.CreateFormFile("chunkdata", "chunkdata.bin"); err != nil {
+		f := func() error {
+			var part io.Writer
+			if w, err := mwriter.CreateFormFile("chunkdata", "chunkdata.bin"); err != nil {
+				return err
+			} else {
+				part = w
+			}
+
+			chunks := remotesync.ChunksOfFile(a.workFile)
+			err := remotesync.WriteChunkData(chunks, a.workFile.Size(), wishList, syncinfo.Perm, part, progressCallback)
+			chunks.Dispose()
+			if err != nil {
+				return err
+			}
+
+			// WriteChunkData finished without successfully. Make sure all streams are closed.
+
+			if err := mwriter.Close(); err != nil {
+				return err
+			}
+			if err := closeCompressor(); err != nil {
+				return err
+			}
+			return nil
+		}
+		if err := f(); err != nil {
 			_ = pipeOut.CloseWithError(err)
-			return
-		} else if err := remotesync.WriteChunkData(a.manager.GetStorage(), a.workFile, wishList, syncinfo.Perm, part, progressCallback); err != nil {
-			_ = pipeOut.CloseWithError(err)
+			log.Printf("Chunk data transmission resulted in error: %v", err)
 			return
 		}
-		if err := mwriter.Close(); err != nil {
-			_ = pipeOut.CloseWithError(err)
-			return
-		}
-		if err := closeCompressor(); err != nil {
-			_ = pipeOut.CloseWithError(err)
-			return
-		}
+		_ = pipeOut.Close()
 		log.Printf("Missing chunk data transmitted successfully.")
 	}()
 
