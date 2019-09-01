@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,6 +17,8 @@
 package client
 
 import (
+	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
@@ -24,10 +26,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/indyjo/bitwrk/client/assist"
+	"github.com/indyjo/bitwrk/client/gziputil"
+	"github.com/indyjo/bitwrk/client/receiveman"
+	"github.com/indyjo/cafs/remotesync/httpsync"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sync"
 
 	"github.com/indyjo/bitwrk-common/bitwrk"
@@ -70,26 +78,23 @@ type WorkReceiver interface {
 // `handler` delegate for performing actual work.
 func NewWorkReceiver(log bitwrk.Logger,
 	info string,
-	receiveManager *ReceiveManager,
+	receiveManager *receiveman.ReceiveManager,
 	storage cafs.FileStorage,
 	key bitwrk.Tkey,
 	handler WorkHandler) WorkReceiver {
+	ctx, cancel := context.WithCancel(context.Background())
 	result := &endpointReceiver{
-		endpoint:     receiveManager.NewEndpoint(info),
-		storage:      storage,
-		log:          log,
-		handler:      handler,
-		info:         info,
-		encResultKey: key,
+		ctx:            ctx,
+		cancel:         cancel,
+		endpoint:       receiveManager.NewEndpoint(info),
+		storage:        storage,
+		log:            log,
+		handler:        handler,
+		encResultKey:   key,
+		info:           info,
+		unspentTickets: make(map[string]bool),
 	}
-	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
-		if err := result.handleRequest(w, r); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Printf("Error in request: %v", err)
-			result.doDispose(fmt.Errorf("error handling request from %v: %v", r.RemoteAddr, err))
-		}
-	}
-	result.endpoint.SetHandler(withCompression(handlerFunc))
+	result.endpoint.SetHandler(gziputil.WithCompression(result.serveHTTP))
 	return result
 }
 
@@ -106,7 +111,9 @@ type endpointReceiver struct {
 	disposedMutex    sync.Mutex
 	disposed         bool
 	disposedError    error
-	endpoint         *Endpoint
+	ctx              context.Context // A Context representing the lifetime of the receiver
+	cancel           context.CancelFunc
+	endpoint         *receiveman.Endpoint
 	storage          cafs.FileStorage
 	log              bitwrk.Logger
 	handler          WorkHandler
@@ -117,10 +124,49 @@ type endpointReceiver struct {
 	encResultFile    cafs.File
 	info             string
 	encResultHashSig string
+
+	// Stores which assistive download tickets haven't been consumed.
+	unspentTickets map[string]bool
+
+	// Handler that enables other clients to perform assistive downloads.
+	assistiveHandler *httpsync.FileHandler
 }
 
 func (receiver *endpointReceiver) URL() string {
 	return receiver.endpoint.URL()
+}
+
+// Pattern recognizing the URL path format for assistive downloads.
+// The group captures the ticket id, which is a hexadecimal number with an even count of digits.
+var assistPattern = regexp.MustCompile(`.*/assist/((?:[a-f0-9][a-f0-9])+)`)
+
+// Function serveHTTP handles all incoming HTTP requests. It's job is to decide whether to
+// handle the incoming request using the assistive download handler, or using the
+// handleRequest function.
+func (receiver *endpointReceiver) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	assistMatches := assistPattern.FindStringSubmatch(r.URL.Path)
+	if assistMatches != nil {
+		// URL matches the pattern for assistive downloads.
+		ticket := assistMatches[1]
+
+		// Verify the ticket and consume it in case of a POST request.
+		receiver.mutex.Lock()
+		b := receiver.unspentTickets[ticket]
+		if b && r.Method == http.MethodPost {
+			receiver.unspentTickets[ticket] = false
+		}
+		receiver.mutex.Unlock()
+		if b {
+			receiver.assistiveHandler.ServeHTTP(w, r)
+		} else {
+			log.Printf("assistive download ticket was not found: ", ticket)
+			http.NotFound(w, r)
+		}
+	} else if err := receiver.handleRequest(w, r); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Error in request: %v", err)
+		receiver.doDispose(fmt.Errorf("error handling request from %v: %v", r.RemoteAddr, err))
+	}
 }
 
 // Function doDispose is an internal function that disposes all held resources
@@ -138,16 +184,21 @@ func (receiver *endpointReceiver) doDispose(err error) {
 	receiver.disposedError = err
 	receiver.disposedMutex.Unlock()
 
+	// Cancel the receiver's Context and all active assistive work transmissions
+	receiver.cancel()
+
 	// Second critical section: memorize objects we want to clean up, reset in receiver.
 	receiver.mutex.Lock()
 	endpoint := receiver.endpoint
 	builder := receiver.builder
 	workFile := receiver.workFile
 	encResultFile := receiver.encResultFile
+	assistHandler := receiver.assistiveHandler
 	receiver.endpoint = nil
 	receiver.builder = nil
 	receiver.workFile = nil
 	receiver.encResultFile = nil
+	receiver.assistiveHandler = nil
 	receiver.mutex.Unlock()
 
 	// Actual cleanup can be performed asynchronously
@@ -160,6 +211,9 @@ func (receiver *endpointReceiver) doDispose(err error) {
 	}
 	if encResultFile != nil {
 		encResultFile.Dispose()
+	}
+	if assistHandler != nil {
+		assistHandler.Dispose()
 	}
 }
 
@@ -235,6 +289,7 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 		return receiver.handleReceipt()
 	} else if todo.mustWriteWishList {
 		w.Header().Set("Content-Type", "application/x-wishlist")
+		receiver.sendAssistiveDownloadTickets(w)
 		// Leave lock temporarily to enable streaming
 		receiver.mutex.Unlock()
 		defer receiver.mutex.Lock()
@@ -258,6 +313,26 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 		return reader.Close()
 	} else {
 		panic("Shouldn't get here")
+	}
+}
+
+// Function sendAssistiveDownloadTickets communicates tickets back to the buyer by
+// putting them into a special HTTP response header.
+func (receiver *endpointReceiver) sendAssistiveDownloadTickets(w http.ResponseWriter) {
+	tickets := make([]string, 0, 2)
+	for ticket, unspent := range receiver.unspentTickets {
+		if !unspent {
+			continue
+		}
+		tickets = append(tickets, ticket)
+	}
+	if len(tickets) == 0 {
+		return
+	}
+	if js, err := json.Marshal(tickets); err != nil {
+		panic(err)
+	} else {
+		w.Header().Set(assist.HeaderName, string(js))
 	}
 }
 
@@ -306,12 +381,29 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			receiver.workFile = temp.File()
 			temp.Dispose()
 			todo.mustHandleWork = true
+		case "assisturl":
+			// We received a ticket for an assistive download endpoint
+			buf := new(bytes.Buffer)
+			if _, err := io.CopyN(buf, part, 1024); err != io.EOF {
+				return nil, fmt.Errorf("error reading assistive download ticket: %v", err)
+			} else if url, err := verifyAssistTicket(buf.String()); err != nil {
+				return nil, fmt.Errorf("error verifying assistive download ticket: %v", err)
+			} else {
+				receiver.log.Printf("Starting assistive download from: %v", url)
+				go func() {
+					f, err := httpsync.SyncFrom(receiver.ctx, receiver.storage, http.DefaultClient, url.String(), url.String())
+					receiver.log.Printf("Assistive download returned: %v", err)
+					if f != nil {
+						f.Dispose()
+					}
+				}()
+			}
 		case "syncinfojson":
 			// Transmission of information about work data.
 			// Information such as chunk hashes, chunk lengths, transmission order
 			// permutation.
 			if receiver.builder != nil || receiver.workFile != nil {
-				return nil, fmt.Errorf("work already received on 'a32chunks'")
+				return nil, fmt.Errorf("work already received on 'syncinfojson'")
 			}
 			todo.mustWriteWishList = true
 			var syncinfo remotesync.SyncInfo
@@ -322,6 +414,11 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 				return nil, fmt.Errorf("error decoding sync info: %v", err)
 			}
 			receiver.builder = remotesync.NewBuilder(receiver.storage, &syncinfo, 32, receiver.info)
+			// TODO: Generate unpredictable assistive download tickets
+			receiver.unspentTickets["00000000"] = true
+			receiver.unspentTickets["00000001"] = true
+			receiver.assistiveHandler = httpsync.NewFileHandlerFromSyncInfo(
+				syncinfo.Shuffle(), receiver.storage).WithPrinter(receiver.log)
 		case "a32chunks":
 			// Backwards-compatible transmission of hashes of chunked work data.
 			// TODO: remove backwards-compatibility
@@ -368,6 +465,16 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 		}
 	}
 	return todo, nil
+}
+
+func verifyAssistTicket(s string) (*url.URL, error) {
+	if url, err := url.Parse(s); err != nil {
+		return nil, err
+	} else if !assistPattern.MatchString(url.Path) {
+		return nil, fmt.Errorf("assist ticket didn't match name convention")
+	} else {
+		return url, nil
+	}
 }
 
 // Decodes URL encoded messages and returns a todoList or an error.

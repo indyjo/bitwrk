@@ -18,6 +18,7 @@ package client
 
 import (
 	"fmt"
+	"github.com/indyjo/bitwrk/client/receiveman"
 	"io"
 
 	"github.com/indyjo/bitwrk-common/bitcoin"
@@ -33,7 +34,7 @@ type SellActivity struct {
 }
 
 // Manages the complete lifecycle of a sell
-func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveManager, interrupt <-chan bool) error {
+func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *receiveman.ReceiveManager, interrupt <-chan bool) error {
 	log.Printf("Sell started")
 	defer log.Println("Sell finished")
 	err := a.doPerformSell(log, receiveManager, interrupt)
@@ -45,7 +46,7 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *ReceiveMan
 }
 
 // Waits for clearance and then performs either a local or a remote sell, depending on the decision taken.
-func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *ReceiveManager, interrupt <-chan bool) error {
+func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *receiveman.ReceiveManager, interrupt <-chan bool) error {
 	if err := a.awaitClearance(log, interrupt); err != nil {
 		return err
 	}
@@ -112,7 +113,7 @@ func (a *SellActivity) doLocalSell(log bitwrk.Logger, interrupt <-chan bool) err
 }
 
 // Performs a remote sell once it has been cleared.
-func (a *SellActivity) doRemoteSell(log bitwrk.Logger, receiveManager *ReceiveManager, interrupt <-chan bool) error {
+func (a *SellActivity) doRemoteSell(log bitwrk.Logger, receiveManager *receiveman.ReceiveManager, interrupt <-chan bool) error {
 	if err := a.beginRemoteTrade(log, interrupt); err != nil {
 		return err
 	}

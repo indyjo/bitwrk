@@ -18,6 +18,7 @@ package client
 
 import (
 	"fmt"
+	"github.com/indyjo/bitwrk/client/receiveman"
 	"io"
 	"net/http"
 	"sync"
@@ -31,7 +32,7 @@ type WorkerManager struct {
 	mutex           sync.Mutex
 	workers         map[string]*WorkerState
 	activityManager *ActivityManager
-	receiveManager  *ReceiveManager
+	receiveManager  *receiveman.ReceiveManager
 	localOnly       bool // Whether workers are restricted to local jobs
 }
 
@@ -63,7 +64,7 @@ type Worker interface {
 	DoWork(workReader io.Reader, client *http.Client) (io.ReadCloser, error)
 }
 
-func NewWorkerManager(a *ActivityManager, r *ReceiveManager, localOnly bool) *WorkerManager {
+func NewWorkerManager(a *ActivityManager, r *receiveman.ReceiveManager, localOnly bool) *WorkerManager {
 	m := new(WorkerManager)
 	m.workers = make(map[string]*WorkerState)
 	m.activityManager = a

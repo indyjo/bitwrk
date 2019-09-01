@@ -25,6 +25,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/indyjo/bitwrk/client/assist"
 	"io"
 	pseudorand "math/rand"
 	"mime/multipart"
@@ -241,7 +242,7 @@ func (a *BuyActivity) testSellerForCapabilities(log bitwrk.Logger, client *http.
 // the result data encrypted with a key that the seller will hand out after we have signed
 // a receipt for the encrypted result.
 func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
-	// Use a watchdog to make sure that all connnections created in the call time of this
+	// Use a watchdog to make sure that all connections created in the call time of this
 	// function are closed when the transaction leaves the active state or the allowed
 	// phases.
 	// Transaction polling is guaranteed by the calling function.
@@ -352,7 +353,11 @@ func (a *BuyActivity) transmitWorkLinear(log bitwrk.Logger, client *http.Client)
 		log.Printf("Work transmitted successfully.")
 	}()
 
-	return a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client)
+	if resp, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client); err != nil {
+		return nil, err
+	} else {
+		return resp.Body, nil
+	}
 }
 
 func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client, compressed bool, legacy bool) (io.ReadCloser, error) {
@@ -400,10 +405,29 @@ func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Clien
 		log.Printf("Work sync info transmitted successfully.")
 	}()
 
-	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client); err != nil {
+	if resp, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client); err != nil {
 		return nil, fmt.Errorf("Error sending work sync data to seller: %v", err)
 	} else {
-		return r, nil
+		receiveAssistiveDownloadTickets(log, syncinfo, resp)
+		return resp.Body, nil
+	}
+}
+
+func receiveAssistiveDownloadTickets(log bitwrk.Logger, syncInfo *remotesync.SyncInfo, response *http.Response) {
+	js := response.Header.Get(assist.HeaderName)
+	if js == "" {
+		log.Printf("No assistive download tickets received")
+		return
+	}
+	tickets := make([]string, 0, 2)
+	if err := json.Unmarshal([]byte(js), &tickets); err != nil {
+		log.Printf("Error decoding assistive download tickets info: %v", err)
+		log.Printf("  content was: %v", js)
+	}
+	for i, ticket := range tickets {
+		log.Printf("  Ticket #%v: %v", i, ticket)
+		// TODO: we need to put peer-identifying info into the user data
+		assist.Tickets.AddTicket(ticket, assist.HandprintFromSyncInfo(syncInfo), nil)
 	}
 }
 
@@ -493,10 +517,10 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 		log.Printf("Missing chunk data transmitted successfully.")
 	}()
 
-	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), compressed, client); err != nil {
+	if resp, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), compressed, client); err != nil {
 		return nil, fmt.Errorf("Error sending work chunk data to seller: %v", err)
 	} else {
-		return r, nil
+		return resp.Body, nil
 	}
 }
 
@@ -510,6 +534,8 @@ func (a *BuyActivity) encodeSyncInfoAndInitiateWishlistTransmission(log bitwrk.L
 				return err
 			}
 		}
+	} else if e := a.sendAssistiveDownloadTicket(syncinfo, log, mwriter); e != nil {
+		return e
 	} else if part, err := mwriter.CreateFormFile("syncinfojson", "syncinfo.json"); err != nil {
 		return err
 	} else {
@@ -517,7 +543,9 @@ func (a *BuyActivity) encodeSyncInfoAndInitiateWishlistTransmission(log bitwrk.L
 		if err := json.NewEncoder(part).Encode(syncinfo); err != nil {
 			return err
 		}
+
 	}
+
 	log.Printf("Sending buyer's secret to seller.")
 	if err := mwriter.WriteField("buyersecret", a.buyerSecret.String()); err != nil {
 		return err
@@ -526,11 +554,26 @@ func (a *BuyActivity) encodeSyncInfoAndInitiateWishlistTransmission(log bitwrk.L
 	return nil
 }
 
+func (a *BuyActivity) sendAssistiveDownloadTicket(syncinfo *remotesync.SyncInfo, log bitwrk.Logger, mwriter *multipart.Writer) error {
+	handprint := assist.HandprintFromSyncInfo(syncinfo)
+	ticket := assist.Tickets.TakeTicket(handprint, nil)
+	if ticket == nil {
+		log.Printf("No assistive download tickets for transmission")
+	}
+	log.Printf("Sending assistive download ticket: %v", *ticket)
+	if part, err := mwriter.CreateFormField("assisturl"); err != nil {
+		return err
+	} else if _, err := part.Write([]byte(*ticket)); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Post data to the seller's WorkerURL.
 //   postData    is the data to send in the request stream
 //   contentType is the type of content in the request stream
 //   compressed  signals whether the request stream has been gzip-compressed
-func (a *BuyActivity) postToSeller(postData io.Reader, contentType string, compressed bool, client *http.Client) (io.ReadCloser, error) {
+func (a *BuyActivity) postToSeller(postData io.Reader, contentType string, compressed bool, client *http.Client) (*http.Response, error) {
 	if req, err := NewRequest("POST", *a.tx.WorkerURL, postData); err != nil {
 		return nil, fmt.Errorf("Error creating transmit request: %v", err)
 	} else {
@@ -548,7 +591,8 @@ func (a *BuyActivity) postToSeller(postData io.Reader, contentType string, compr
 			resp.Body.Close()
 			return nil, fmt.Errorf("Seller returned bad status '%v' [response: %#v]", resp.Status, string(buf))
 		} else {
-			return resp.Body, nil
+
+			return resp, nil
 		}
 	}
 }

@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -14,10 +14,10 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package client
+// Package receiveman hosts the ReceiveManager.
+package receiveman
 
 import (
-	"compress/gzip"
 	"crypto/rand"
 	"encoding/hex"
 	"io"
@@ -26,6 +26,8 @@ import (
 	"strings"
 	"sync"
 )
+
+const keyBytes = 4
 
 type ReceiveManager struct {
 	mutex     *sync.Mutex
@@ -62,13 +64,13 @@ func (m *ReceiveManager) SetUrlPrefix(newPrefix string) {
 
 func (m *ReceiveManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Got HTTP %v on %v.", r.Method, r.URL)
-	var key string
-	if idx := strings.LastIndex(r.URL.Path, "/"); idx == -1 {
+	if !strings.HasPrefix(r.URL.Path, "/") ||
+		len(r.URL.Path) < 2*keyBytes+1 ||
+		len(r.URL.Path) > 2*keyBytes+1 && r.URL.Path[2*keyBytes+1] != '/' {
 		http.NotFound(w, r)
 		return
-	} else {
-		key = r.URL.Path[idx+1:]
 	}
+	key := r.URL.Path[1 : 2*keyBytes+1]
 
 	m.mutex.Lock()
 	endpoint, ok := m.endpoints[key]
@@ -84,7 +86,7 @@ func (m *ReceiveManager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *ReceiveManager) NewEndpoint(info string) *Endpoint {
-	r := make([]byte, 4)
+	r := make([]byte, keyBytes)
 	if _, err := io.ReadFull(rand.Reader, r); err != nil {
 		panic(err)
 	}
@@ -108,54 +110,6 @@ func (e *Endpoint) SetHandler(handle func(http.ResponseWriter, *http.Request)) {
 	e.m.mutex.Lock()
 	defer e.m.mutex.Unlock()
 	e.handle = handle
-}
-
-type gzipBody struct {
-	compressed, uncompressed io.ReadCloser
-}
-
-func newGZIPBody(compressed io.ReadCloser) (*gzipBody, error) {
-	if gz, err := gzip.NewReader(compressed); err != nil {
-		return nil, err
-	} else {
-		return &gzipBody{compressed, gz}, nil
-	}
-}
-
-func (gz *gzipBody) Read(data []byte) (int, error) {
-	return gz.uncompressed.Read(data)
-}
-
-func (gz *gzipBody) Close() error {
-	if err := gz.uncompressed.Close(); err != nil {
-		gz.compressed.Close()
-		return err
-	} else if err := gz.compressed.Close(); err != nil {
-		return err
-	} else {
-		return nil
-	}
-}
-
-// Given a handler, returns a handler with transparent support for receiving gzip-compressed POST data
-func withCompression(handle func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" && r.Header.Get("Content-Encoding") == "gzip" {
-			log.Printf("Handling GZIP-compressed POST.\n")
-			if gz, err := newGZIPBody(r.Body); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			} else {
-				// copy request data, substitute body
-				r2 := *r
-				r2.Body = gz
-				// Call original handler
-				handle(w, &r2)
-			}
-		} else {
-			handle(w, r)
-		}
-	}
 }
 
 func (e *Endpoint) URL() string {

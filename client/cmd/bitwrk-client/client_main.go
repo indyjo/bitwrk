@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/indyjo/bitwrk/client/receiveman"
 	"html/template"
 	"io"
 	"log"
@@ -36,7 +37,7 @@ import (
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
 	"github.com/indyjo/bitwrk-common/protocol"
-	client "github.com/indyjo/bitwrk/client"
+	"github.com/indyjo/bitwrk/client"
 	"github.com/indyjo/cafs"
 )
 
@@ -135,8 +136,8 @@ func getReceiveManagerPrefix(addr string) (prefix string) {
 
 // Depending on whether an external port has been configured, starts listening for
 // incoming connections on it.
-func startReceiveManager() (receiveManager *client.ReceiveManager) {
-	receiveManager = client.NewReceiveManager("")
+func startReceiveManager() (receiveManager *receiveman.ReceiveManager) {
+	receiveManager = receiveman.NewReceiveManager("")
 	if ExternalPort <= 0 {
 		log.Printf("External port is %v.", ExternalPort)
 		log.Println("  -> No connections will be accepted from other hosts.")
@@ -324,7 +325,7 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 	exit <- s.ListenAndServe()
 }
 
-func serveExternal(receiveManager *client.ReceiveManager, exit chan<- error) {
+func serveExternal(receiveManager *receiveman.ReceiveManager, exit chan<- error) {
 	mux := http.NewServeMux()
 	s := &http.Server{
 		Addr:         fmt.Sprintf(":%v", ExternalPort),
