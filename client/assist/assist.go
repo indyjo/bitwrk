@@ -28,6 +28,13 @@ import (
 // Tickets is a global instance of TicketStore
 var Tickets = NewTicketStore()
 
+type nodeid = string
+type setOfNodeIds map[nodeid]bool
+type ticket = string
+type key string
+type setOfTickets map[ticket]bool
+type index map[key]setOfTickets
+
 // Suggested name of HTTP header containing a ticket
 const HeaderName = "X-AssistiveDownloadTicket"
 
@@ -35,15 +42,18 @@ type FilterFunc = func(interface{}) bool
 
 // Interface TicketStore handles tickets necessary for managing an assistive transfer network.
 type TicketStore interface {
+	// Function ResetSource tells the TicketStore that a source node is now ready to offer new tickets.
+	ResetSource(source nodeid)
+
 	// Function AddTicket associates an assistive download ticket with a handprint.
 	// When an upload connection to a peer has been established, and that peer has indicated
 	// a ticket for other peers to establish an assistive download, this function stores the
 	// ticket.
-	AddTicket(ticket string, handprint *Handprint, userdata interface{})
+	AddTicket(ticket ticket, handprint *Handprint, source nodeid, userdata interface{})
 
 	// Function GetTicket retrieves a ticket to assist a transfer matching `handprint`.
 	// The ticket is consumed. This function is used when esdtablishing a new upload connection.
-	TakeTicket(handprint *Handprint, filter FilterFunc) *string
+	TakeTicket(handprint *Handprint, target nodeid, filter FilterFunc) *ticket
 }
 
 const numFingers = 4
@@ -51,26 +61,41 @@ const numIndexes = numFingers + 1
 
 func NewTicketStore() TicketStore {
 	result := ticketMan{
-		entries: make(map[string]entry),
+		entries:  make(map[ticket]entry),
+		bySource: make(map[nodeid]setOfTickets),
 	}
 	for i := range result.indexes {
-		result.indexes[i] = make(map[string]string)
+		result.indexes[i] = make(index)
 	}
 	return &result
 }
 
 type ticketMan struct {
-	m       sync.Mutex
-	entries map[string]entry
-	indexes [numIndexes]map[string]string
+	m        sync.Mutex
+	entries  map[ticket]entry
+	indexes  [numIndexes]index
+	bySource map[nodeid]setOfTickets
+	edges    map[nodeid]setOfNodeIds
 }
 
 type entry struct {
+	ticket    ticket
 	userdata  interface{}
 	handprint *Handprint
+	source    nodeid
 }
 
-func (t *ticketMan) AddTicket(ticket string, handprint *Handprint, userdata interface{}) {
+func (t *ticketMan) ResetSource(source nodeid) {
+	t.m.Lock()
+	defer t.m.Unlock()
+	for ticket := range t.bySource[source] {
+		t.remove(ticket)
+	}
+	delete(t.bySource, source)
+	delete(t.edges, source)
+}
+
+func (t *ticketMan) AddTicket(ticket ticket, handprint *Handprint, source nodeid, userdata interface{}) {
 	keys := handprint.keys()
 	t.m.Lock()
 	defer t.m.Unlock()
@@ -78,41 +103,86 @@ func (t *ticketMan) AddTicket(ticket string, handprint *Handprint, userdata inte
 		return // Ticket already stored? NOP
 	}
 	t.entries[ticket] = entry{
+		ticket:    ticket,
 		userdata:  userdata,
 		handprint: handprint,
+		source:    source,
 	}
 	for i, k := range keys {
-		t.indexes[i][k] = ticket
+		tickets := t.indexes[i][k]
+		if tickets == nil {
+			tickets = make(setOfTickets)
+			t.indexes[i][k] = tickets
+		}
+		tickets[ticket] = true
 	}
+	tickets, ok := t.bySource[source]
+	if !ok {
+		tickets = make(setOfTickets)
+		t.bySource[source] = tickets
+	}
+	tickets[ticket] = true
 }
 
-func (t *ticketMan) TakeTicket(handprint *Handprint, filter FilterFunc) *string {
+func (t *ticketMan) TakeTicket(handprint *Handprint, target nodeid, filter FilterFunc) *ticket {
 	keys := handprint.keys()
 	t.m.Lock()
 	defer t.m.Unlock()
 	for i, k := range keys {
-		if ticket, ok := t.indexes[i][k]; !ok {
+		tickets := t.indexes[i][k]
+		if tickets == nil {
 			continue
-		} else if entry, ok := t.entries[ticket]; !ok {
-			panic("inconsistent entries map")
-		} else if filter != nil && !filter(entry.userdata) {
-			continue
-		} else {
-			t.remove(ticket, keys)
+		}
+		// Take the first ticket matching our criteria out of the set
+		for ticket := range tickets {
+			var entry entry
+			if e, ok := t.entries[ticket]; !ok {
+				panic("inconsistent entries structure")
+			} else {
+				entry = e
+			}
+
+			if filter != nil && !filter(entry.userdata) {
+				continue
+			} else if entry.source == target {
+				continue
+			} else if t.edges[entry.source][target] {
+				// there is already an edge between source and target
+				continue
+			}
+			t.remove(ticket)
+			t.addEdge(entry.source, target)
 			return &ticket
 		}
 	}
+
 	return nil
 }
 
-func (t *ticketMan) remove(ticket string, keys []string) {
+func (t *ticketMan) remove(ticket ticket) {
 	// assumption: already locked
+	entry := t.entries[ticket]
+	keys := entry.handprint.keys()
 	// Remove from each index
 	for i, index := range t.indexes {
-		delete(index, keys[i])
+		key := keys[i]
+		tickets := index[key]
+		delete(tickets, ticket)
+		if len(ticket) == 0 {
+			delete(index, key)
+		}
 	}
 	// Remove from entries map
 	delete(t.entries, ticket)
+}
+
+func (t *ticketMan) addEdge(source nodeid, target nodeid) {
+	targets, ok := t.edges[source]
+	if !ok {
+		targets = make(setOfNodeIds)
+		t.edges[source] = targets
+	}
+	targets[target] = true
 }
 
 // Struct Handprint contains a set of fingerprints indicating a file.
@@ -120,19 +190,19 @@ type Handprint struct {
 	fingers [numFingers]cafs.SKey
 }
 
-func (hand *Handprint) keys() []string {
-	var result [numIndexes]string
+func (h *Handprint) keys() []key {
+	var result [numIndexes]key
 	keys := result[:0]
 	buf := new(bytes.Buffer)
 	for skip := -1; skip < numIndexes; skip++ {
 		buf.Reset()
-		for i, finger := range hand.fingers {
+		for i, finger := range h.fingers {
 			if i == skip {
 				continue
 			}
 			buf.WriteString(finger.String())
 		}
-		keys = append(keys, buf.String())
+		keys = append(keys, key(buf.String()))
 	}
 	return result[:]
 }
@@ -150,6 +220,7 @@ func HandprintFromSyncInfo(syncinfo *remotesync.SyncInfo) *Handprint {
 	return &result
 }
 
+// Inserts a new fingerprint into the Handprint, keeping its ascending order, eliding the highest-valued fingerprint.
 func (h *Handprint) insert(finger cafs.SKey) {
 	for i, other := range h.fingers {
 		cmd := bytes.Compare(other[:], finger[:])

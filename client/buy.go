@@ -408,12 +408,12 @@ func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Clien
 	if resp, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client); err != nil {
 		return nil, fmt.Errorf("Error sending work sync data to seller: %v", err)
 	} else {
-		receiveAssistiveDownloadTickets(log, syncinfo, resp)
+		a.receiveAssistiveDownloadTickets(log, syncinfo, resp)
 		return resp.Body, nil
 	}
 }
 
-func receiveAssistiveDownloadTickets(log bitwrk.Logger, syncInfo *remotesync.SyncInfo, response *http.Response) {
+func (a *BuyActivity) receiveAssistiveDownloadTickets(log bitwrk.Logger, syncInfo *remotesync.SyncInfo, response *http.Response) {
 	js := response.Header.Get(assist.HeaderName)
 	if js == "" {
 		log.Printf("No assistive download tickets received")
@@ -424,10 +424,10 @@ func receiveAssistiveDownloadTickets(log bitwrk.Logger, syncInfo *remotesync.Syn
 		log.Printf("Error decoding assistive download tickets info: %v", err)
 		log.Printf("  content was: %v", js)
 	}
+	assist.Tickets.ResetSource(a.tx.Seller)
 	for i, ticket := range tickets {
 		log.Printf("  Ticket #%v: %v", i, ticket)
-		// TODO: we need to put peer-identifying info into the user data
-		assist.Tickets.AddTicket(ticket, assist.HandprintFromSyncInfo(syncInfo), nil)
+		assist.Tickets.AddTicket(ticket, assist.HandprintFromSyncInfo(syncInfo), a.tx.Seller, nil)
 	}
 }
 
@@ -534,7 +534,7 @@ func (a *BuyActivity) encodeSyncInfoAndInitiateWishlistTransmission(log bitwrk.L
 				return err
 			}
 		}
-	} else if e := a.sendAssistiveDownloadTicket(syncinfo, log, mwriter); e != nil {
+	} else if e := a.sendAssistiveDownloadURL(syncinfo, log, mwriter); e != nil {
 		return e
 	} else if part, err := mwriter.CreateFormFile("syncinfojson", "syncinfo.json"); err != nil {
 		return err
@@ -554,11 +554,12 @@ func (a *BuyActivity) encodeSyncInfoAndInitiateWishlistTransmission(log bitwrk.L
 	return nil
 }
 
-func (a *BuyActivity) sendAssistiveDownloadTicket(syncinfo *remotesync.SyncInfo, log bitwrk.Logger, mwriter *multipart.Writer) error {
+func (a *BuyActivity) sendAssistiveDownloadURL(syncinfo *remotesync.SyncInfo, log bitwrk.Logger, mwriter *multipart.Writer) error {
 	handprint := assist.HandprintFromSyncInfo(syncinfo)
-	ticket := assist.Tickets.TakeTicket(handprint, nil)
+	ticket := assist.Tickets.TakeTicket(handprint, a.tx.Seller, nil)
 	if ticket == nil {
 		log.Printf("No assistive download tickets for transmission")
+		return nil
 	}
 	log.Printf("Sending assistive download ticket: %v", *ticket)
 	if part, err := mwriter.CreateFormField("assisturl"); err != nil {

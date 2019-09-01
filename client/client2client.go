@@ -289,7 +289,7 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 		return receiver.handleReceipt()
 	} else if todo.mustWriteWishList {
 		w.Header().Set("Content-Type", "application/x-wishlist")
-		receiver.sendAssistiveDownloadTickets(w)
+		receiver.sendCreatedAssistiveDownloadURLs(w)
 		// Leave lock temporarily to enable streaming
 		receiver.mutex.Unlock()
 		defer receiver.mutex.Lock()
@@ -316,20 +316,20 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 	}
 }
 
-// Function sendAssistiveDownloadTickets communicates tickets back to the buyer by
+// Function sendCreatedAssistiveDownloadURLs communicates tickets back to the buyer by
 // putting them into a special HTTP response header.
-func (receiver *endpointReceiver) sendAssistiveDownloadTickets(w http.ResponseWriter) {
-	tickets := make([]string, 0, 2)
+func (receiver *endpointReceiver) sendCreatedAssistiveDownloadURLs(w http.ResponseWriter) {
+	urls := make([]string, 0, 2)
 	for ticket, unspent := range receiver.unspentTickets {
 		if !unspent {
 			continue
 		}
-		tickets = append(tickets, ticket)
+		urls = append(urls, receiver.URL()+"/assist/"+ticket)
 	}
-	if len(tickets) == 0 {
+	if len(urls) == 0 {
 		return
 	}
-	if js, err := json.Marshal(tickets); err != nil {
+	if js, err := json.Marshal(urls); err != nil {
 		panic(err)
 	} else {
 		w.Header().Set(assist.HeaderName, string(js))
@@ -471,7 +471,7 @@ func verifyAssistTicket(s string) (*url.URL, error) {
 	if url, err := url.Parse(s); err != nil {
 		return nil, err
 	} else if !assistPattern.MatchString(url.Path) {
-		return nil, fmt.Errorf("assist ticket didn't match name convention")
+		return nil, fmt.Errorf("assist ticket didn't match name convention: %v", url)
 	} else {
 		return url, nil
 	}
