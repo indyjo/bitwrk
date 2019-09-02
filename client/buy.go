@@ -426,7 +426,7 @@ func (a *BuyActivity) receiveAssistiveDownloadTickets(log bitwrk.Logger, syncInf
 	}
 	assist.Tickets.ResetSource(a.tx.Seller)
 	for i, ticket := range tickets {
-		log.Printf("  Ticket #%v: %v", i, ticket)
+		log.Printf("Received assistive download ticket #%v: %v", i, ticket)
 		assist.Tickets.AddTicket(ticket, assist.HandprintFromSyncInfo(syncInfo), a.tx.Seller, nil)
 	}
 }
@@ -556,16 +556,22 @@ func (a *BuyActivity) encodeSyncInfoAndInitiateWishlistTransmission(log bitwrk.L
 
 func (a *BuyActivity) sendAssistiveDownloadURL(syncinfo *remotesync.SyncInfo, log bitwrk.Logger, mwriter *multipart.Writer) error {
 	handprint := assist.HandprintFromSyncInfo(syncinfo)
-	ticket := assist.Tickets.TakeTicket(handprint, a.tx.Seller, nil)
-	if ticket == nil {
-		log.Printf("No assistive download tickets for transmission")
-		return nil
+	nTickets := 0
+	for {
+		ticket := assist.Tickets.TakeTicket(handprint, a.tx.Seller, nil)
+		if ticket == nil {
+			break
+		}
+		nTickets++
+		log.Printf("Sending assistive download ticket: %v", *ticket)
+		if part, err := mwriter.CreateFormField("assisturl"); err != nil {
+			return err
+		} else if _, err := part.Write([]byte(*ticket)); err != nil {
+			return err
+		}
 	}
-	log.Printf("Sending assistive download ticket: %v", *ticket)
-	if part, err := mwriter.CreateFormField("assisturl"); err != nil {
-		return err
-	} else if _, err := part.Write([]byte(*ticket)); err != nil {
-		return err
+	if nTickets == 0 {
+		log.Printf("No assistive download tickets available for this transmission.")
 	}
 	return nil
 }

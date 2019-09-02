@@ -63,6 +63,7 @@ func NewTicketStore() TicketStore {
 	result := ticketMan{
 		entries:  make(map[ticket]entry),
 		bySource: make(map[nodeid]setOfTickets),
+		edges:    make(map[nodeid]setOfNodeIds),
 	}
 	for i := range result.indexes {
 		result.indexes[i] = make(index)
@@ -161,7 +162,10 @@ func (t *ticketMan) TakeTicket(handprint *Handprint, target nodeid, filter Filte
 
 func (t *ticketMan) remove(ticket ticket) {
 	// assumption: already locked
-	entry := t.entries[ticket]
+	entry, ok := t.entries[ticket]
+	if !ok {
+		return
+	}
 	keys := entry.handprint.keys()
 	// Remove from each index
 	for i, index := range t.indexes {

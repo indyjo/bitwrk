@@ -43,6 +43,9 @@ import (
 	"github.com/indyjo/cafs/remotesync"
 )
 
+// TODO: Make this configurable
+var DebugAssistiveDownloads = true
+
 // Interface WorkHandler is where a WorkReceiver delegates its main lifecycle events to.
 // It is implemented by SellActivity.
 type WorkHandler interface {
@@ -417,8 +420,10 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			// TODO: Generate unpredictable assistive download tickets
 			receiver.unspentTickets["00000000"] = true
 			receiver.unspentTickets["00000001"] = true
-			receiver.assistiveHandler = httpsync.NewFileHandlerFromSyncInfo(
-				syncinfo.Shuffle(), receiver.storage).WithPrinter(receiver.log)
+			receiver.assistiveHandler = httpsync.NewFileHandlerFromSyncInfo(syncinfo.Shuffle(), receiver.storage)
+			if DebugAssistiveDownloads {
+				receiver.assistiveHandler = receiver.assistiveHandler.WithPrinter(receiver.log)
+			}
 		case "a32chunks":
 			// Backwards-compatible transmission of hashes of chunked work data.
 			// TODO: remove backwards-compatibility
