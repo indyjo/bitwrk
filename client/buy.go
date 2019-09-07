@@ -492,8 +492,8 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 			}
 
 			chunks := remotesync.ChunksOfFile(a.workFile)
-			partFlusher := remotesync.SimpleFlushWriter{part, compressor.(http.Flusher)}
-			err := remotesync.WriteChunkData(chunks, a.workFile.Size(), wishList, syncinfo.Perm, partFlusher, progressCallback)
+			err := remotesync.WriteChunkData(chunks, a.workFile.Size(), wishList, syncinfo.Perm,
+				remotesync.NopFlushWriter{part}, progressCallback)
 			chunks.Dispose()
 			if err != nil {
 				return err
