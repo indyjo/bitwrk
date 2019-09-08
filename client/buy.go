@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	. "github.com/indyjo/bitwrk-common/protocol"
@@ -424,11 +425,12 @@ func (a *BuyActivity) receiveAssistiveDownloadTickets(log bitwrk.Logger, syncInf
 		log.Printf("Error decoding assistive download tickets info: %v", err)
 		log.Printf("  content was: %v", js)
 	}
-	assist.Tickets.ResetSource(a.tx.Seller)
+	sellerId := a.mustGetSellerId()
 	for i, ticket := range tickets {
 		log.Printf("Received assistive download ticket #%v: %v", i, ticket)
-		assist.Tickets.AddTicket(ticket, assist.HandprintFromSyncInfo(syncInfo), a.tx.Seller, nil)
+		assist.Tickets.AddTicket(ticket, assist.HandprintFromSyncInfo(syncInfo), sellerId, nil)
 	}
+
 }
 
 // When streaming chunk data in compressed mode, we must make sure that the gzip stream is
@@ -558,8 +560,10 @@ func (a *BuyActivity) encodeSyncInfoAndInitiateWishlistTransmission(log bitwrk.L
 func (a *BuyActivity) sendAssistiveDownloadURL(syncinfo *remotesync.SyncInfo, log bitwrk.Logger, mwriter *multipart.Writer) error {
 	handprint := assist.HandprintFromSyncInfo(syncinfo)
 	nTickets := 0
+	sellerId := a.mustGetSellerId()
+	assist.Tickets.ResetNode(sellerId)
 	for {
-		ticket := assist.Tickets.TakeTicket(handprint, a.tx.Seller, nil)
+		ticket := assist.Tickets.TakeTicket(handprint, sellerId, nil)
 		if ticket == nil {
 			break
 		}
@@ -572,7 +576,8 @@ func (a *BuyActivity) sendAssistiveDownloadURL(syncinfo *remotesync.SyncInfo, lo
 		}
 	}
 	if nTickets == 0 {
-		log.Printf("No assistive download tickets available for this transmission.")
+		log.Printf("No assistive download tickets available for this transmission (%v, %v)",
+			a.tx.Seller, handprint)
 	}
 	return nil
 }
@@ -662,4 +667,21 @@ func (a *BuyActivity) decryptResult() error {
 	})
 
 	return nil
+}
+
+// Function mustGetSellerId returns a string used to identify the seller when handling assistive download tickets.
+func (a *BuyActivity) mustGetSellerId() string {
+	ru := a.tx.WorkerURL
+	if ru == nil {
+		panic("no WorkerURL")
+	}
+	u, err := url.Parse(*ru)
+	if err != nil {
+		panic(err)
+	}
+	result := u.Host
+	result = strings.ReplaceAll(result, ".", "_")
+	result = strings.ReplaceAll(result, ":", "_")
+	result = a.tx.Seller + "_" + result
+	return result
 }

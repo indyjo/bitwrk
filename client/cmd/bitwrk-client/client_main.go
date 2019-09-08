@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/indyjo/bitwrk/client/assist"
 	"github.com/indyjo/bitwrk/client/receiveman"
 	"html/template"
 	"io"
@@ -320,6 +321,11 @@ func serveInternal(workerManager *client.WorkerManager, exit chan<- error) {
 		err := profile.WriteTo(w, 1)
 		if err != nil {
 			log.Printf("Error in profile.WriteTo: %v\n", err)
+		}
+	})
+	protectedFunc("/tickets", func(w http.ResponseWriter, r *http.Request) {
+		if err := assist.Tickets.Dump(w); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
 	exit <- s.ListenAndServe()
