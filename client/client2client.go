@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,16 +17,25 @@
 package client
 
 import (
+	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/indyjo/bitwrk/client/assist"
+	"github.com/indyjo/bitwrk/client/gziputil"
+	"github.com/indyjo/bitwrk/client/receiveman"
+	"github.com/indyjo/cafs/remotesync/httpsync"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sync"
 
 	"github.com/indyjo/bitwrk-common/bitwrk"
@@ -34,7 +43,8 @@ import (
 	"github.com/indyjo/cafs/remotesync"
 )
 
-var ErrAlreadyDisposed = errors.New("Already disposed")
+// TODO: Make this configurable
+var DebugAssistiveDownloads = true
 
 // Interface WorkHandler is where a WorkReceiver delegates its main lifecycle events to.
 // It is implemented by SellActivity.
@@ -71,26 +81,23 @@ type WorkReceiver interface {
 // `handler` delegate for performing actual work.
 func NewWorkReceiver(log bitwrk.Logger,
 	info string,
-	receiveManager *ReceiveManager,
+	receiveManager *receiveman.ReceiveManager,
 	storage cafs.FileStorage,
 	key bitwrk.Tkey,
 	handler WorkHandler) WorkReceiver {
+	ctx, cancel := context.WithCancel(context.Background())
 	result := &endpointReceiver{
-		endpoint:     receiveManager.NewEndpoint(info),
-		storage:      storage,
-		log:          log,
-		handler:      handler,
-		info:         info,
-		encResultKey: key,
+		ctx:            ctx,
+		cancel:         cancel,
+		endpoint:       receiveManager.NewEndpoint(info),
+		storage:        storage,
+		log:            log,
+		handler:        handler,
+		encResultKey:   key,
+		info:           info,
+		unspentTickets: make(map[string]bool),
 	}
-	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
-		if err := result.handleRequest(w, r); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Printf("Error in request: %v", err)
-			result.doDispose(fmt.Errorf("Error handling request from %v: %v", r.RemoteAddr, err))
-		}
-	}
-	result.endpoint.SetHandler(withCompression(handlerFunc))
+	result.endpoint.SetHandler(gziputil.WithCompression(result.serveHTTP))
 	return result
 }
 
@@ -107,7 +114,9 @@ type endpointReceiver struct {
 	disposedMutex    sync.Mutex
 	disposed         bool
 	disposedError    error
-	endpoint         *Endpoint
+	ctx              context.Context // A Context representing the lifetime of the receiver
+	cancel           context.CancelFunc
+	endpoint         *receiveman.Endpoint
 	storage          cafs.FileStorage
 	log              bitwrk.Logger
 	handler          WorkHandler
@@ -118,38 +127,100 @@ type endpointReceiver struct {
 	encResultFile    cafs.File
 	info             string
 	encResultHashSig string
+
+	// Stores which assistive download tickets haven't been consumed.
+	unspentTickets map[string]bool
+
+	// Handler that enables other clients to perform assistive downloads.
+	assistiveHandler *httpsync.FileHandler
 }
 
-func (r *endpointReceiver) URL() string {
-	return r.endpoint.URL()
+func (receiver *endpointReceiver) URL() string {
+	return receiver.endpoint.URL()
 }
 
+// Pattern recognizing the URL path format for assistive downloads.
+// The group captures the ticket id, which is a hexadecimal number with an even count of digits.
+var assistPattern = regexp.MustCompile(`.*/assist/((?:[a-f0-9][a-f0-9])+)`)
+
+// Function serveHTTP handles all incoming HTTP requests. It's job is to decide whether to
+// handle the incoming request using the assistive download handler, or using the
+// handleRequest function.
+func (receiver *endpointReceiver) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	assistMatches := assistPattern.FindStringSubmatch(r.URL.Path)
+	if assistMatches != nil {
+		// URL matches the pattern for assistive downloads.
+		ticket := assistMatches[1]
+
+		// Verify the ticket and consume it in case of a POST request.
+		receiver.mutex.Lock()
+		b := receiver.unspentTickets[ticket]
+		if b && r.Method == http.MethodPost {
+			receiver.unspentTickets[ticket] = false
+		}
+		receiver.mutex.Unlock()
+		if b {
+			receiver.assistiveHandler.ServeHTTP(w, r)
+		} else {
+			log.Printf("assistive download ticket was not found: ", ticket)
+			http.NotFound(w, r)
+		}
+	} else if err := receiver.handleRequest(w, r); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Error in request: %v", err)
+		receiver.doDispose(fmt.Errorf("error handling request from %v: %v", r.RemoteAddr, err))
+	}
+}
+
+// Function doDispose is an internal function that disposes all held resources
+// and sets the error returned by IsDisposed to `err`. This function does
+// nothing if the receiver has already been disposed.
 func (receiver *endpointReceiver) doDispose(err error) {
+	// First critical section: mark receiver as disposed.
 	receiver.disposedMutex.Lock()
-	defer receiver.disposedMutex.Unlock()
+	// If already disposed, do nothing
+	if receiver.disposed {
+		receiver.disposedMutex.Unlock()
+		return
+	}
+	receiver.disposed = true
+	receiver.disposedError = err
+	receiver.disposedMutex.Unlock()
 
-	if !receiver.disposed {
-		receiver.disposed = true
-		receiver.disposedError = err
-		receiver.endpoint.Dispose()
-		if receiver.builder != nil {
-			receiver.builder.Dispose()
-			receiver.builder = nil
-		}
-		if receiver.workFile != nil {
-			receiver.workFile.Dispose()
-			receiver.workFile = nil
-		}
-		if receiver.encResultFile != nil {
-			receiver.encResultFile.Dispose()
-			receiver.encResultFile = nil
-		}
+	// Cancel the receiver's Context and all active assistive work transmissions
+	receiver.cancel()
+
+	// Second critical section: memorize objects we want to clean up, reset in receiver.
+	receiver.mutex.Lock()
+	endpoint := receiver.endpoint
+	builder := receiver.builder
+	workFile := receiver.workFile
+	encResultFile := receiver.encResultFile
+	assistHandler := receiver.assistiveHandler
+	receiver.endpoint = nil
+	receiver.builder = nil
+	receiver.workFile = nil
+	receiver.encResultFile = nil
+	receiver.assistiveHandler = nil
+	receiver.mutex.Unlock()
+
+	// Actual cleanup can be performed asynchronously
+	endpoint.Dispose()
+	if builder != nil {
+		builder.Dispose()
+	}
+	if workFile != nil {
+		workFile.Dispose()
+	}
+	if encResultFile != nil {
+		encResultFile.Dispose()
+	}
+	if assistHandler != nil {
+		assistHandler.Dispose()
 	}
 }
 
 func (receiver *endpointReceiver) Dispose() {
-	receiver.mutex.Lock()
-	defer receiver.mutex.Unlock()
 	receiver.doDispose(nil)
 }
 
@@ -162,9 +233,9 @@ func (receiver *endpointReceiver) IsDisposed() (bool, error) {
 var ZEROHASH bitwrk.Thash
 
 type todoList struct {
-	mustHandleChunkHashes bool
-	mustHandleWork        bool
-	mustHandleReceipt     bool
+	mustWriteWishList bool
+	mustHandleWork    bool
+	mustHandleReceipt bool
 }
 
 // This function handles all (http) requests from buyer to seller.
@@ -179,8 +250,8 @@ type todoList struct {
 func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "OPTIONS" {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"Adler32Chunking": true, "GZIPCompression": true}`))
-		return nil
+		_, err := w.Write([]byte(`{"Adler32Chunking": true, "GZIPCompression": true, "SyncInfo": true}`))
+		return err
 	}
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -196,37 +267,41 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 	var todo *todoList
 	if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
 		if err := r.ParseForm(); err != nil {
-			return fmt.Errorf("Failed to parse form data: %v", err)
+			return fmt.Errorf("failed to parse form data: %v", err)
 		}
 
 		t, err := receiver.handleUrlEncodedMessage(r.Form)
 		if err != nil {
-			return fmt.Errorf("Error handling url-encoded message: %v", err)
+			return fmt.Errorf("error handling url-encoded message: %v", err)
 		}
 		todo = t
 	} else if mreader, err := r.MultipartReader(); err == nil {
 		todo, err = receiver.handleMultipartMessage(mreader)
 		if err != nil {
-			return fmt.Errorf("Error handling multipart message: %v", err)
+			return fmt.Errorf("error handling multipart message: %v", err)
 		}
 	} else {
-		return fmt.Errorf("Don't know how to handle message (Content-Type: %v)", r.Header.Get("Content-Type"))
+		return fmt.Errorf("don't know how to handle message (Content-Type: %v)", r.Header.Get("Content-Type"))
 	}
 
 	if (receiver.workFile == nil && receiver.builder == nil) || receiver.buyerSecret == ZEROHASH {
-		return fmt.Errorf("Incomplete work message. Got work file: %v. Got chunk hashes: %v. Got buyer secret: %v", receiver.workFile != nil, receiver.builder != nil, receiver.buyerSecret != ZEROHASH)
+		return fmt.Errorf("incomplete work message (work file: %v, chunk hashes: %v. buyer secret: %v)", receiver.workFile != nil, receiver.builder != nil, receiver.buyerSecret != ZEROHASH)
 	}
 
 	if todo.mustHandleReceipt {
 		return receiver.handleReceipt()
-	} else if todo.mustHandleChunkHashes {
+	} else if todo.mustWriteWishList {
 		w.Header().Set("Content-Type", "application/x-wishlist")
-		return receiver.builder.WriteWishList(w)
+		receiver.sendCreatedAssistiveDownloadURLs(w)
+		// Leave lock temporarily to enable streaming
+		receiver.mutex.Unlock()
+		defer receiver.mutex.Lock()
+		return receiver.builder.WriteWishList(w.(remotesync.FlushWriter))
 	} else if todo.mustHandleWork {
 		if r, err := receiver.handleWorkAndReturnEncryptedResult(); err != nil {
 			return err
 		} else if receiver.encResultFile != nil {
-			return fmt.Errorf("Encrypted result file exists already")
+			return fmt.Errorf("encrypted result file exists already")
 		} else {
 			receiver.log.Printf("Encrypted result file: %v", r)
 			receiver.encResultFile = r
@@ -234,13 +309,33 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 
 		w.Header().Set("Content-Type", "application/octet-stream")
 		reader := receiver.encResultFile.Open()
-		defer reader.Close()
 		if _, err := io.Copy(w, reader); err != nil {
-			return fmt.Errorf("Error sending work result back to buyer: %v", err)
+			receiver.close(reader, "encResultFile")
+			return fmt.Errorf("error sending work result back to buyer: %v", err)
 		}
-		return nil
+		return reader.Close()
 	} else {
 		panic("Shouldn't get here")
+	}
+}
+
+// Function sendCreatedAssistiveDownloadURLs communicates tickets back to the buyer by
+// putting them into a special HTTP response header.
+func (receiver *endpointReceiver) sendCreatedAssistiveDownloadURLs(w http.ResponseWriter) {
+	urls := make([]string, 0, 2)
+	for ticket, unspent := range receiver.unspentTickets {
+		if !unspent {
+			continue
+		}
+		urls = append(urls, receiver.URL()+"/assist/"+ticket)
+	}
+	if len(urls) == 0 {
+		return
+	}
+	if js, err := json.Marshal(urls); err != nil {
+		panic(err)
+	} else {
+		w.Header().Set(assist.HeaderName, string(js))
 	}
 }
 
@@ -254,7 +349,7 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			receiver.log.Printf("End of stream reached")
 			break
 		} else if err != nil {
-			return nil, fmt.Errorf("Error reading part: %v", err)
+			return nil, fmt.Errorf("error reading part: %v", err)
 		}
 		formName := part.FormName()
 		receiver.log.Printf("Handling part: %v", formName)
@@ -262,62 +357,129 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 		case "buyersecret":
 			// Buyer sends a random value to seller to prevent the seller from hijacking other seller's workers.
 			if receiver.buyerSecret != ZEROHASH {
-				return nil, fmt.Errorf("Buyer's secret already received")
+				return nil, fmt.Errorf("buyer's secret already received")
 			}
 			b := make([]byte, 64)
 			if n, err := io.ReadFull(part, b); err != nil {
-				return nil, fmt.Errorf("Error reading buyersecret: %v (%v bytes read)", err, n)
+				return nil, fmt.Errorf("error reading buyersecret: %v (%v bytes read)", err, n)
 			}
 			if n, err := hex.Decode(receiver.buyerSecret[:], b); err != nil || n != len(receiver.buyerSecret) {
-				return nil, fmt.Errorf("Error decoding buyersecret: %v (%v bytes written)", err, n)
+				return nil, fmt.Errorf("error decoding buyersecret: %v (%v bytes written)", err, n)
 			}
 		case "work":
 			// Direct work data transmission without chunking. Up to 16MB.
 			if receiver.builder != nil || receiver.workFile != nil {
-				return nil, fmt.Errorf("Work already received")
+				return nil, fmt.Errorf("work already received")
 			}
 			temp := receiver.storage.Create(receiver.info)
-			defer temp.Dispose()
-			const MAXBYTES = 1 << 24 // 16MB
-			// Copy up to MAXBYTES and expect EOF
-			if n, err := io.CopyN(temp, part, MAXBYTES); err != io.EOF {
-				return nil, fmt.Errorf("Work too long or error: %v (%v bytes read)", err, n)
+			// Copy up to 16MB and expect EOF
+			if n, err := io.CopyN(temp, part, 1<<24); err != io.EOF {
+				temp.Dispose()
+				return nil, fmt.Errorf("work too long or error: %v (%v bytes read)", err, n)
 			}
 			if err := temp.Close(); err != nil {
-				return nil, fmt.Errorf("Error creating file from temporary data: %v", err)
+				temp.Dispose()
+				return nil, fmt.Errorf("error creating file from temporary data: %v", err)
 			}
 			receiver.workFile = temp.File()
+			temp.Dispose()
 			todo.mustHandleWork = true
-		case "a32chunks":
-			// Transmission of hashes of chunked work data.
-			if receiver.builder != nil || receiver.workFile != nil {
-				return nil, fmt.Errorf("Work already received on 'a32chunks'")
-			}
-			if b, err := remotesync.NewBuilder(receiver.storage, part, receiver.info); err != nil {
-				return nil, fmt.Errorf("Error receiving chunk hashes: %v", err)
+		case "assisturl":
+			// We received a ticket for an assistive download endpoint
+			buf := new(bytes.Buffer)
+			if _, err := io.CopyN(buf, part, 1024); err != io.EOF {
+				return nil, fmt.Errorf("error reading assistive download ticket: %v", err)
+			} else if url, err := verifyAssistTicket(buf.String()); err != nil {
+				return nil, fmt.Errorf("error verifying assistive download ticket: %v", err)
 			} else {
-				receiver.builder = b
-				todo.mustHandleChunkHashes = true
+				receiver.log.Printf("Starting assistive download from: %v", url)
+				go func() {
+					f, err := httpsync.SyncFrom(receiver.ctx, receiver.storage, http.DefaultClient, url.String(), url.String())
+					receiver.log.Printf("Assistive download returned: %v", err)
+					if f != nil {
+						f.Dispose()
+					}
+				}()
 			}
+		case "syncinfojson":
+			// Transmission of information about work data.
+			// Information such as chunk hashes, chunk lengths, transmission order
+			// permutation.
+			if receiver.builder != nil || receiver.workFile != nil {
+				return nil, fmt.Errorf("work already received on 'syncinfojson'")
+			}
+			todo.mustWriteWishList = true
+			var syncinfo remotesync.SyncInfo
+			// guard against DOS, sync info may not be longer than a rough estimate
+			// based on max chunks allowed
+			r := io.LimitReader(part, 100*MaxNumberOfChunksInWorkFile+1<<16)
+			if err := json.NewDecoder(r).Decode(&syncinfo); err != nil {
+				return nil, fmt.Errorf("error decoding sync info: %v", err)
+			}
+			receiver.builder = remotesync.NewBuilder(receiver.storage, &syncinfo, 32, receiver.info)
+			// TODO: Generate unpredictable assistive download tickets
+			receiver.unspentTickets["00000000"] = true
+			receiver.unspentTickets["00000001"] = true
+			receiver.assistiveHandler = httpsync.NewFileHandlerFromSyncInfo(syncinfo.Shuffle(), receiver.storage)
+			if DebugAssistiveDownloads {
+				receiver.assistiveHandler = receiver.assistiveHandler.WithPrinter(receiver.log)
+			}
+		case "a32chunks":
+			// Backwards-compatible transmission of hashes of chunked work data.
+			// TODO: remove backwards-compatibility
+			if receiver.builder != nil || receiver.workFile != nil {
+				return nil, fmt.Errorf("work already received on 'a32chunks'")
+			}
+			todo.mustWriteWishList = true
+
+			// guard against DOS, max length of hashes stream depends on max number of
+			// chunks in work file
+			r := io.LimitReader(part, 1<<18)
+			var syncinfo remotesync.SyncInfo
+			syncinfo.SetTrivialPermutation()
+			if err := syncinfo.ReadFromLegacyStream(r); err != nil {
+				return nil, fmt.Errorf("error reading chunk hashes from legacy stream: %v", err)
+			}
+
+			receiver.builder = remotesync.NewBuilder(receiver.storage, &syncinfo, len(syncinfo.Chunks), receiver.info)
 		case "chunkdata":
 			// Subset of the actual chunk data requested in response to hashes.
 			if receiver.builder == nil {
-				return nil, fmt.Errorf("Didn't receive chunk hashes")
+				return nil, fmt.Errorf("didn't receive chunk hashes")
 			}
 			if receiver.workFile != nil {
-				return nil, fmt.Errorf("Work already received")
+				return nil, fmt.Errorf("work already received")
 			}
-			if f, err := receiver.builder.ReconstructFileFromRequestedChunks(part); err != nil {
-				return nil, fmt.Errorf("Error reconstructing work from sent chunks: %v", err)
+
+			reconstruct := func() (cafs.File, error) {
+				// Reconstruct file but drop mutex to enable concurrent download of wishlist
+				b := receiver.builder
+				receiver.mutex.Unlock()
+				defer receiver.mutex.Lock()
+				return b.ReconstructFileFromRequestedChunks(part)
+			}
+
+			if f, err := reconstruct(); err != nil {
+				return nil, fmt.Errorf("error reconstructing work from sent chunks: %v", err)
 			} else {
 				receiver.workFile = f
 			}
 			todo.mustHandleWork = true
 		default:
-			return nil, fmt.Errorf("Don't know what to do with part %#v", formName)
+			return nil, fmt.Errorf("don't know what to do with part %#v", formName)
 		}
 	}
 	return todo, nil
+}
+
+func verifyAssistTicket(s string) (*url.URL, error) {
+	if url, err := url.Parse(s); err != nil {
+		return nil, err
+	} else if !assistPattern.MatchString(url.Path) {
+		return nil, fmt.Errorf("assist ticket didn't match name convention: %v", url)
+	} else {
+		return url, nil
+	}
 }
 
 // Decodes URL encoded messages and returns a todoList or an error.
@@ -325,16 +487,16 @@ func (receiver *endpointReceiver) handleUrlEncodedMessage(form url.Values) (*tod
 	todo := &todoList{}
 	if form.Get("encresulthash") != "" {
 		if receiver.encResultFile == nil {
-			return nil, fmt.Errorf("Result not available yet")
+			return nil, fmt.Errorf("result not available yet")
 		}
 		if form.Get("encresulthash") != receiver.encResultFile.Key().String() {
-			return nil, fmt.Errorf("Hash sum of encrypted result is wrong")
+			return nil, fmt.Errorf("hash sum of encrypted result is wrong")
 		}
 		// Information is redundant, so no need to do anything here
 	}
 	if form.Get("encresulthashsig") != "" {
 		if receiver.encResultFile == nil {
-			return nil, fmt.Errorf("Result not available yet")
+			return nil, fmt.Errorf("result not available yet")
 		}
 		if receiver.encResultHashSig != "" {
 			return nil, fmt.Errorf("encresulthashsig already received")
@@ -355,7 +517,7 @@ func (receiver *endpointReceiver) handleWorkAndReturnEncryptedResult() (cafs.Fil
 		receiver.workFile,
 		receiver.buyerSecret)
 	if result != nil {
-		defer result.Close()
+		defer receiver.close(result, "result data")
 	}
 	if err != nil {
 		return nil, err
@@ -371,7 +533,7 @@ func (receiver *endpointReceiver) handleWorkAndReturnEncryptedResult() (cafs.Fil
 		return nil, err
 	}
 	if err := temp.Close(); err != nil {
-		return nil, fmt.Errorf("Error closing encrypted result temporary: %v", err)
+		return nil, fmt.Errorf("error closing encrypted result temporary: %v", err)
 	}
 	return temp.File(), nil
 }
@@ -383,7 +545,7 @@ func verifyBuyerSecret(workHash, workSecretHash, buyerSecret *bitwrk.Thash) erro
 	var result bitwrk.Thash
 	sha.Sum(result[:0])
 	if result != *workSecretHash {
-		return errors.New("Buyer's secret does not match work hash and work secret hash")
+		return errors.New("buyer's secret does not match work hash and work secret hash")
 	}
 	return nil
 }
@@ -412,4 +574,11 @@ func encrypt(writer io.Writer, reader io.Reader, key bitwrk.Tkey) (err error) {
 	encWriter := &cipher.StreamWriter{S: stream, W: writer}
 	_, err = io.Copy(encWriter, reader)
 	return
+}
+
+// Utility function to safely close any closable. Logs and ignores any errors.
+func (receiver *endpointReceiver) close(c io.Closer, info string) {
+	if err := c.Close(); err != nil {
+		receiver.log.Printf("Ignoring error closing %v: %v", info, err)
+	}
 }

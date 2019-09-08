@@ -61,8 +61,8 @@ type Trade struct {
 	buyerSecret *bitwrk.Thash
 	workFile    cafs.File
 
-	bytesToTransfer  uint64
-	bytesTransferred uint64
+	bytesToTransfer  int64
+	bytesTransferred int64
 
 	encResultFile    cafs.File
 	encResultKey     *bitwrk.Tkey
@@ -417,7 +417,7 @@ func (t *Trade) GetState() *ActivityState {
 	}
 
 	if t.workFile != nil {
-		result.BytesTotal = uint64(t.workFile.Size())
+		result.BytesTotal = t.workFile.Size()
 	}
 
 	return result

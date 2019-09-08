@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2013-2015  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
 package client
 
 import (
+	"bufio"
 	"compress/gzip"
 	"crypto/aes"
 	"crypto/cipher"
@@ -24,10 +25,13 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/indyjo/bitwrk/client/assist"
 	"io"
+	pseudorand "math/rand"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	. "github.com/indyjo/bitwrk-common/protocol"
@@ -197,7 +201,7 @@ func (a *BuyActivity) finishBuy(log bitwrk.Logger) error {
 }
 
 // Performs an OPTIONS request to the seller's WorkerURL and finds out the sellers' capabilities.
-func (a *BuyActivity) testSellerForCapabilities(log bitwrk.Logger, client *http.Client) (supportsChunked, supportsCompressed bool, err error) {
+func (a *BuyActivity) testSellerForCapabilities(log bitwrk.Logger, client *http.Client) (supportsChunked, supportsCompressed, supportsSyncInfo bool, err error) {
 	req, err := NewRequest("OPTIONS", *a.tx.WorkerURL, nil)
 	if err != nil {
 		return
@@ -215,6 +219,7 @@ func (a *BuyActivity) testSellerForCapabilities(log bitwrk.Logger, client *http.
 	var caps struct {
 		Adler32Chunking bool
 		GZIPCompression bool
+		SyncInfo        bool
 	}
 	err = decoder.Decode(&caps)
 	if err != nil {
@@ -223,19 +228,22 @@ func (a *BuyActivity) testSellerForCapabilities(log bitwrk.Logger, client *http.
 
 	supportsChunked = caps.Adler32Chunking
 	supportsCompressed = caps.GZIPCompression
+	supportsSyncInfo = caps.SyncInfo
 
 	return
 }
 
-// Performs all buyer to seller conact.
+// Performs a complete buyer to seller contact.
 // First queries the seller via HTTP OPTIONS whether chunked transmission is supported.
 // If yes, a chunk list is transmitted, followed by data of missing work data chunks.
+// The chunks are either transmitted in natural or permuted order, depending on whether
+// the seller signalled to support SyncInfo or not.
 // Otherwise, work data is transferred linearly.
 // The result is either an error or nil. In the latter case, a.encResultFile contains
 // the result data encrypted with a key that the seller will hand out after we have signed
 // a receipt for the encrypted result.
 func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
-	// Use a watchdog to make sure that all connnections created in the call time of this
+	// Use a watchdog to make sure that all connections created in the call time of this
 	// function are closed when the transaction leaves the active state or the allowed
 	// phases.
 	// Transaction polling is guaranteed by the calling function.
@@ -258,20 +266,22 @@ func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
 
 	chunked := false
 	compressed := false
+	legacy := true
 	if a.workFile.IsChunked() {
-		if chunkedSupported, compressedSupported, err := a.testSellerForCapabilities(log, scopedClient); err != nil {
+		if chunkedSupported, compressedSupported, syncInfoSupported, err := a.testSellerForCapabilities(log, scopedClient); err != nil {
 			log.Printf("Failed to probe seller for capabilities: %v", err)
 		} else {
 			chunked = chunkedSupported
 			compressed = compressedSupported
-			log.Printf("Chunked/compressed work transmission supported by seller: %v/%v", chunked, compressed)
+			legacy = !syncInfoSupported
+			log.Printf("Chunked/compressed/legacy work transmission supported by seller: %v/%v/%v", chunked, compressed, legacy)
 		}
 	}
 
 	var response io.ReadCloser
 	var transmissionError error
 	if chunked {
-		response, transmissionError = a.transmitWorkChunked(log, scopedClient, compressed)
+		response, transmissionError = a.transmitWorkChunked(log, scopedClient, compressed, legacy)
 	} else {
 		response, transmissionError = a.transmitWorkLinear(log, scopedClient)
 	}
@@ -314,7 +324,7 @@ func (a *BuyActivity) transmitWorkLinear(log bitwrk.Logger, client *http.Client)
 	go func() {
 		part, err := mwriter.CreateFormFile("work", "workfile.bin")
 		if err != nil {
-			pipeOut.CloseWithError(err)
+			_ = pipeOut.CloseWithError(err)
 			return
 		}
 		work := a.workFile.Open()
@@ -322,13 +332,13 @@ func (a *BuyActivity) transmitWorkLinear(log bitwrk.Logger, client *http.Client)
 		_, err = io.Copy(part, work)
 		work.Close()
 		if err != nil {
-			pipeOut.CloseWithError(err)
+			_ = pipeOut.CloseWithError(err)
 			return
 		}
 		log.Printf("Sending buyer's secret to seller.")
 		err = mwriter.WriteField("buyersecret", a.buyerSecret.String())
 		if err != nil {
-			pipeOut.CloseWithError(err)
+			_ = pipeOut.CloseWithError(err)
 			return
 		}
 		err = mwriter.Close()
@@ -344,27 +354,38 @@ func (a *BuyActivity) transmitWorkLinear(log bitwrk.Logger, client *http.Client)
 		log.Printf("Work transmitted successfully.")
 	}()
 
-	return a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client)
-}
-
-func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client, compressed bool) (io.ReadCloser, error) {
-	if r, err := a.requestMissingChunks(log.New("request missing chunks"), client); err != nil {
-		return nil, fmt.Errorf("Transmitting work (chunked) failed: %v", err)
+	if resp, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client); err != nil {
+		return nil, err
 	} else {
-		defer r.Close()
-		numChunks := a.workFile.NumChunks()
-		if numChunks > MaxNumberOfChunksInWorkFile {
-			return nil, fmt.Errorf("Work file too big: %d chunks (only %d allowed).", numChunks, MaxNumberOfChunksInWorkFile)
-		}
-		wishList := make([]byte, int(numChunks+7)/8)
-		if _, err := io.ReadFull(r, wishList); err != nil {
-			return nil, fmt.Errorf("Error decoding list of missing chunks: %v", err)
-		}
-		return a.sendMissingChunksAndReturnResult(log.New("send work chunk data"), client, wishList, compressed)
+		return resp.Body, nil
 	}
 }
 
-func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Client) (io.ReadCloser, error) {
+func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client, compressed bool, legacy bool) (io.ReadCloser, error) {
+	numChunks := a.workFile.NumChunks()
+	if numChunks > MaxNumberOfChunksInWorkFile {
+		return nil, fmt.Errorf("Work file too big: %d chunks (only %d allowed).", numChunks, MaxNumberOfChunksInWorkFile)
+	}
+
+	// A SyncInfo stucture is created regardless of whether the seller actually supports it or not.
+	// In legacy mode,
+	var syncinfo remotesync.SyncInfo
+	syncinfo.SetChunksFromFile(a.workFile)
+	if legacy {
+		syncinfo.SetTrivialPermutation()
+	} else {
+		syncinfo.SetPermutation(pseudorand.Perm(256))
+	}
+
+	if r, err := a.requestMissingChunks(log.New("request missing chunks"), client, &syncinfo, legacy); err != nil {
+		return nil, fmt.Errorf("Transmitting work (chunked) failed: %v", err)
+	} else {
+		defer r.Close()
+		return a.sendMissingChunksAndReturnResult(log.New("send work chunk data"), client, bufio.NewReader(r), compressed, &syncinfo)
+	}
+}
+
+func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Client, syncinfo *remotesync.SyncInfo, legacy bool) (io.ReadCloser, error) {
 	// Send chunk list of work to client
 	pipeIn, pipeOut := io.Pipe()
 	defer pipeIn.Close()
@@ -373,25 +394,67 @@ func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Clien
 	// Write chunk hashes into pipe for HTTP request
 	go func() {
 		defer pipeOut.Close()
-		if err := a.encodeChunkedFirstTransmission(log, mwriter); err != nil {
-			pipeOut.CloseWithError(err)
+
+		if err := a.encodeSyncInfoAndInitiateWishlistTransmission(log, mwriter, syncinfo, legacy); err != nil {
+			_ = pipeOut.CloseWithError(err)
 			return
 		}
 		if err := mwriter.Close(); err != nil {
-			pipeOut.CloseWithError(err)
+			_ = pipeOut.CloseWithError(err)
 			return
 		}
-		log.Printf("Work chunk hashes transmitted successfully.")
+		log.Printf("Work sync info transmitted successfully.")
 	}()
 
-	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client); err != nil {
-		return nil, fmt.Errorf("Error sending work chunk hashes to seller: %v", err)
+	if resp, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client); err != nil {
+		return nil, fmt.Errorf("Error sending work sync data to seller: %v", err)
 	} else {
-		return r, nil
+		a.receiveAssistiveDownloadTickets(log, syncinfo, resp)
+		return resp.Body, nil
 	}
 }
 
-func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client *http.Client, wishList []byte, compressed bool) (io.ReadCloser, error) {
+func (a *BuyActivity) receiveAssistiveDownloadTickets(log bitwrk.Logger, syncInfo *remotesync.SyncInfo, response *http.Response) {
+	js := response.Header.Get(assist.HeaderName)
+	if js == "" {
+		log.Printf("No assistive download tickets received")
+		return
+	}
+	tickets := make([]string, 0, 2)
+	if err := json.Unmarshal([]byte(js), &tickets); err != nil {
+		log.Printf("Error decoding assistive download tickets info: %v", err)
+		log.Printf("  content was: %v", js)
+	}
+	sellerId := a.mustGetSellerId()
+	for i, ticket := range tickets {
+		log.Printf("Received assistive download ticket #%v: %v", i, ticket)
+		assist.Tickets.AddTicket(ticket, assist.HandprintFromSyncInfo(syncInfo), sellerId, nil)
+	}
+
+}
+
+// When streaming chunk data in compressed mode, we must make sure that the gzip stream is
+// flushed every couple of writes in order to avoid deadlocking.
+type flushingCompressor struct {
+	w   *gzip.Writer
+	n   int
+	err error
+}
+
+// Flush after every write. This wastes some compression but prevents deadlocks.
+func (c *flushingCompressor) Write(buf []byte) (int, error) {
+	if c.err != nil {
+		return 0, c.err
+	} else if written, err := c.w.Write(buf); err != nil {
+		c.err = err
+		return written, err
+	} else {
+		c.err = c.w.Flush()
+		return written, nil
+	}
+}
+
+func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client *http.Client, wishList io.ByteReader, compressed bool, syncinfo *remotesync.SyncInfo) (io.ReadCloser, error) {
 	// Send data of missing chunks to seller
 	pipeIn, pipeOut := io.Pipe()
 	defer pipeIn.Close()
@@ -401,7 +464,8 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 	var closeCompressor func() error
 	if compressed {
 		c := gzip.NewWriter(pipeOut)
-		compressor = c
+		fc := &flushingCompressor{w: c}
+		compressor = fc
 		closeCompressor = c.Close
 	} else {
 		compressor = pipeOut
@@ -410,8 +474,8 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 
 	mwriter := multipart.NewWriter(compressor)
 
-	// Communicate status back
-	progressCallback := func(bytesToTransfer, bytesTransferred uint64) {
+	// Communicate status back.
+	progressCallback := func(bytesToTransfer, bytesTransferred int64) {
 		a.execSync(func() {
 			a.bytesToTransfer = bytesToTransfer
 			a.bytesTransferred = bytesTransferred
@@ -420,55 +484,109 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 
 	// Write work chunks into pipe for HTTP request
 	go func() {
-		defer pipeOut.Close()
-		if part, err := mwriter.CreateFormFile("chunkdata", "chunkdata.bin"); err != nil {
-			pipeOut.CloseWithError(err)
-			return
-		} else if err := remotesync.WriteRequestedChunks(a.workFile, wishList, part, progressCallback); err != nil {
-			pipeOut.CloseWithError(err)
+		log.Printf("Transmitting chunk data (compressed: %v, permutation size: %v)", compressed, len(syncinfo.Perm))
+		f := func() error {
+			var part io.Writer
+			if w, err := mwriter.CreateFormFile("chunkdata", "chunkdata.bin"); err != nil {
+				return err
+			} else {
+				part = w
+			}
+
+			chunks := remotesync.ChunksOfFile(a.workFile)
+			err := remotesync.WriteChunkData(chunks, a.workFile.Size(), wishList, syncinfo.Perm,
+				remotesync.NopFlushWriter{part}, progressCallback)
+			chunks.Dispose()
+			if err != nil {
+				return err
+			}
+
+			// WriteChunkData finished without successfully. Make sure all streams are closed.
+
+			if err := mwriter.Close(); err != nil {
+				return err
+			}
+			if err := closeCompressor(); err != nil {
+				return err
+			}
+			return nil
+		}
+		if err := f(); err != nil {
+			_ = pipeOut.CloseWithError(err)
+			log.Printf("Chunk data transmission resulted in error: %v", err)
 			return
 		}
-		if err := mwriter.Close(); err != nil {
-			pipeOut.CloseWithError(err)
-			return
-		}
-		if err := closeCompressor(); err != nil {
-			pipeOut.CloseWithError(err)
-			return
-		}
+		_ = pipeOut.Close()
 		log.Printf("Missing chunk data transmitted successfully.")
 	}()
 
-	if r, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), compressed, client); err != nil {
+	if resp, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), compressed, client); err != nil {
 		return nil, fmt.Errorf("Error sending work chunk data to seller: %v", err)
 	} else {
-		return r, nil
+		return resp.Body, nil
 	}
 }
 
-func (a *BuyActivity) encodeChunkedFirstTransmission(log bitwrk.Logger, mwriter *multipart.Writer) (err error) {
-	part, err := mwriter.CreateFormFile("a32chunks", "a32chunks.bin")
-	if err != nil {
-		return
+func (a *BuyActivity) encodeSyncInfoAndInitiateWishlistTransmission(log bitwrk.Logger, mwriter *multipart.Writer, syncinfo *remotesync.SyncInfo, legacy bool) error {
+	if legacy {
+		if part, err := mwriter.CreateFormFile("a32chunks", "a32chunks.bin"); err != nil {
+			return err
+		} else {
+			log.Printf("Sending work chunk hashes to seller [%v].", *a.tx.WorkerURL)
+			if err := syncinfo.WriteToLegacyStream(part); err != nil {
+				return err
+			}
+		}
+	} else if e := a.sendAssistiveDownloadURL(syncinfo, log, mwriter); e != nil {
+		return e
+	} else if part, err := mwriter.CreateFormFile("syncinfojson", "syncinfo.json"); err != nil {
+		return err
+	} else {
+		log.Printf("Sending work sync info to seller [%v].", *a.tx.WorkerURL)
+		if err := json.NewEncoder(part).Encode(syncinfo); err != nil {
+			return err
+		}
+
 	}
-	log.Printf("Sending work chunk hashes to seller [%v].", *a.tx.WorkerURL)
-	err = remotesync.WriteChunkHashes(a.workFile, part)
-	if err != nil {
-		return
-	}
+
 	log.Printf("Sending buyer's secret to seller.")
-	err = mwriter.WriteField("buyersecret", a.buyerSecret.String())
-	if err != nil {
-		return
+	if err := mwriter.WriteField("buyersecret", a.buyerSecret.String()); err != nil {
+		return err
 	}
-	return mwriter.Close()
+
+	return nil
+}
+
+func (a *BuyActivity) sendAssistiveDownloadURL(syncinfo *remotesync.SyncInfo, log bitwrk.Logger, mwriter *multipart.Writer) error {
+	handprint := assist.HandprintFromSyncInfo(syncinfo)
+	nTickets := 0
+	sellerId := a.mustGetSellerId()
+	assist.Tickets.ResetNode(sellerId)
+	for {
+		ticket := assist.Tickets.TakeTicket(handprint, sellerId, nil)
+		if ticket == nil {
+			break
+		}
+		nTickets++
+		log.Printf("Sending assistive download ticket: %v", *ticket)
+		if part, err := mwriter.CreateFormField("assisturl"); err != nil {
+			return err
+		} else if _, err := part.Write([]byte(*ticket)); err != nil {
+			return err
+		}
+	}
+	if nTickets == 0 {
+		log.Printf("No assistive download tickets available for this transmission (%v, %v)",
+			a.tx.Seller, handprint)
+	}
+	return nil
 }
 
 // Post data to the seller's WorkerURL.
 //   postData    is the data to send in the request stream
 //   contentType is the type of content in the request stream
 //   compressed  signals whether the request stream has been gzip-compressed
-func (a *BuyActivity) postToSeller(postData io.Reader, contentType string, compressed bool, client *http.Client) (io.ReadCloser, error) {
+func (a *BuyActivity) postToSeller(postData io.Reader, contentType string, compressed bool, client *http.Client) (*http.Response, error) {
 	if req, err := NewRequest("POST", *a.tx.WorkerURL, postData); err != nil {
 		return nil, fmt.Errorf("Error creating transmit request: %v", err)
 	} else {
@@ -486,7 +604,8 @@ func (a *BuyActivity) postToSeller(postData io.Reader, contentType string, compr
 			resp.Body.Close()
 			return nil, fmt.Errorf("Seller returned bad status '%v' [response: %#v]", resp.Status, string(buf))
 		} else {
-			return resp.Body, nil
+
+			return resp, nil
 		}
 	}
 }
@@ -548,4 +667,21 @@ func (a *BuyActivity) decryptResult() error {
 	})
 
 	return nil
+}
+
+// Function mustGetSellerId returns a string used to identify the seller when handling assistive download tickets.
+func (a *BuyActivity) mustGetSellerId() string {
+	ru := a.tx.WorkerURL
+	if ru == nil {
+		panic("no WorkerURL")
+	}
+	u, err := url.Parse(*ru)
+	if err != nil {
+		panic(err)
+	}
+	result := u.Host
+	result = strings.ReplaceAll(result, ".", "_")
+	result = strings.ReplaceAll(result, ":", "_")
+	result = a.tx.Seller + "_" + result
+	return result
 }

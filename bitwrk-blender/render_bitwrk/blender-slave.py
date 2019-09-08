@@ -434,7 +434,7 @@ def get_blender_version():
         return "2.76"
     elif b"Blender 2.77 (sub 0)" in output:
         return "2.77"
-    elif b"Blender 2.78 (sub 0)" in output:
+    elif b"Blender 2.78 (sub" in output:
         return "2.78"
     elif b"Blender 2.79 (sub" in output:
         return "2.79"
