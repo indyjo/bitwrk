@@ -235,12 +235,12 @@ func (t *ticketMan) Dump(w io.Writer) (err error) {
 		}
 	}
 	_, err = fmt.Fprintf(w, "}\n")
-	_, err = fmt.Fprintf(w, "\nPast Connections\ndigraph pastedges{\n")
+	_, err = fmt.Fprintf(w, "\nPast Connections\ndigraph past_edges{\n")
 	if err != nil {
 		return
 	}
 	for edge, n := range t.pastEdges {
-		_, err = fmt.Fprintf(w, "  _%v -> _%v [label=\"%v\"];\n", edge.from, edge.to, n)
+		_, err = fmt.Fprintf(w, "  \"%v\" -> \"%v\" [label=\"%v\"];\n", edge.from, edge.to, n)
 		if err != nil {
 			return
 		}

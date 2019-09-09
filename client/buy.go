@@ -25,18 +25,16 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/indyjo/bitwrk-common/bitwrk"
+	. "github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/bitwrk/client/assist"
+	"github.com/indyjo/cafs"
+	"github.com/indyjo/cafs/remotesync"
 	"io"
 	pseudorand "math/rand"
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"strings"
-
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	. "github.com/indyjo/bitwrk-common/protocol"
-	"github.com/indyjo/cafs"
-	"github.com/indyjo/cafs/remotesync"
 )
 
 type BuyActivity struct {
@@ -679,9 +677,5 @@ func (a *BuyActivity) mustGetSellerId() string {
 	if err != nil {
 		panic(err)
 	}
-	result := u.Host
-	result = strings.ReplaceAll(result, ".", "_")
-	result = strings.ReplaceAll(result, ":", "_")
-	result = a.tx.Seller + "_" + result
-	return result
+	return a.tx.Seller + "_" + u.Host
 }
