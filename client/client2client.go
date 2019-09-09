@@ -162,7 +162,7 @@ func (receiver *endpointReceiver) serveHTTP(w http.ResponseWriter, r *http.Reque
 		if b {
 			receiver.assistiveHandler.ServeHTTP(w, r)
 		} else {
-			log.Printf("assistive download ticket was not found: ", ticket)
+			log.Printf("assistive download ticket was not found: %v", ticket)
 			http.NotFound(w, r)
 		}
 	} else if err := receiver.handleRequest(w, r); err != nil {
