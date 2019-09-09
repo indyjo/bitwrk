@@ -89,7 +89,7 @@ var activityManager = ActivityManager{
 	make(map[ActivityKey]*Mandate),
 	make([]Activity, 0, 5), //history
 	1,
-	ram.NewRamStorage(512 * 1024 * 1024), // 512 MByte
+	ram.NewRamStorage(3 * 512 * 1024 * 1024), // 1536 MByte
 	make(map[string]chan bool),
 }
 
