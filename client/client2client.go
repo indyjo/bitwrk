@@ -284,8 +284,10 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 		return fmt.Errorf("don't know how to handle message (Content-Type: %v)", r.Header.Get("Content-Type"))
 	}
 
-	if (receiver.workFile == nil && receiver.builder == nil) || receiver.buyerSecret == ZEROHASH {
-		return fmt.Errorf("incomplete work message (work file: %v, chunk hashes: %v. buyer secret: %v)", receiver.workFile != nil, receiver.builder != nil, receiver.buyerSecret != ZEROHASH)
+	if todo.mustHandleReceipt || todo.mustWriteWishList || todo.mustHandleWork {
+		if (receiver.workFile == nil && receiver.builder == nil) || receiver.buyerSecret == ZEROHASH {
+			return fmt.Errorf("incomplete work message (work file: %v, chunk hashes: %v. buyer secret: %v)", receiver.workFile != nil, receiver.builder != nil, receiver.buyerSecret != ZEROHASH)
+		}
 	}
 
 	if todo.mustHandleReceipt {
@@ -314,9 +316,9 @@ func (receiver *endpointReceiver) handleRequest(w http.ResponseWriter, r *http.R
 			return fmt.Errorf("error sending work result back to buyer: %v", err)
 		}
 		return reader.Close()
-	} else {
-		panic("Shouldn't get here")
 	}
+
+	return nil
 }
 
 // Function sendCreatedAssistiveDownloadURLs communicates tickets back to the buyer by

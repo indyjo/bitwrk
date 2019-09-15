@@ -185,7 +185,7 @@ func (t *ticketMan) Dump(w io.Writer) (err error) {
 			return
 		}
 	}
-	_, err = fmt.Fprintf(w, "\nConnections\ndigraph edges {\n")
+	_, err = fmt.Fprintf(w, "}\n\nConnections\ndigraph edges {\n")
 	if err != nil {
 		return
 	}
@@ -195,8 +195,7 @@ func (t *ticketMan) Dump(w io.Writer) (err error) {
 			return
 		}
 	}
-	_, err = fmt.Fprintf(w, "}\n")
-	_, err = fmt.Fprintf(w, "\nPast Connections\ndigraph past_edges {\n")
+	_, err = fmt.Fprintf(w, "}\n\nPast Connections\ndigraph past_edges {\n")
 	if err != nil {
 		return
 	}
