@@ -413,9 +413,16 @@ func (receiver *endpointReceiver) handleMultipartMessage(mreader *multipart.Read
 			// guard against DOS, sync info may not be longer than a rough estimate
 			// based on max chunks allowed
 			r := io.LimitReader(part, 100*MaxNumberOfChunksInWorkFile+1<<16)
+
+			// Temporarily allow other incoming connections (especially: assisturl)
+			// while reading SyncInfo data (which can take a while).
+			receiver.mutex.Unlock()
 			if err := json.NewDecoder(r).Decode(&syncinfo); err != nil {
+				receiver.mutex.Lock()
 				return nil, fmt.Errorf("error decoding sync info: %v", err)
 			}
+			receiver.mutex.Lock()
+
 			receiver.builder = remotesync.NewBuilder(receiver.storage, &syncinfo, 32, receiver.info)
 			// TODO: Generate unpredictable assistive download tickets
 			receiver.unspentTickets["00000000"] = true

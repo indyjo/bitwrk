@@ -18,6 +18,7 @@ package client
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"crypto/aes"
 	"crypto/cipher"
@@ -366,13 +367,22 @@ func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client
 	}
 
 	// A SyncInfo stucture is created regardless of whether the seller actually supports it or not.
-	// In legacy mode,
+	// In legacy mode, it is set to the trivial permutation.
 	var syncinfo remotesync.SyncInfo
 	syncinfo.SetChunksFromFile(a.workFile)
 	if legacy {
 		syncinfo.SetTrivialPermutation()
 	} else {
 		syncinfo.SetPermutation(pseudorand.Perm(256))
+
+		// In this mode, the seller supports assistive download tickets.
+		sellerId := a.mustGetSellerId()
+		assistLog := log.New("assist")
+		assist.Tickets.InitNode(sellerId, assist.HandprintFromSyncInfo(&syncinfo), func(ticket string) {
+			assistLog.Printf("Sending ticket: %v", ticket)
+			go a.postAssistiveDownloadTicketToSeller(assistLog, ticket, client)
+		})
+		defer assist.Tickets.ExitNode(sellerId)
 	}
 
 	if r, err := a.requestMissingChunks(log.New("request missing chunks"), client, &syncinfo, legacy); err != nil {
@@ -426,7 +436,7 @@ func (a *BuyActivity) receiveAssistiveDownloadTickets(log bitwrk.Logger, syncInf
 	sellerId := a.mustGetSellerId()
 	for i, ticket := range tickets {
 		log.Printf("Received assistive download ticket #%v: %v", i, ticket)
-		assist.Tickets.AddTicket(ticket, assist.HandprintFromSyncInfo(syncInfo), sellerId, nil)
+		assist.Tickets.NewTicket(ticket, sellerId)
 	}
 
 }
@@ -535,8 +545,6 @@ func (a *BuyActivity) encodeSyncInfoAndInitiateWishlistTransmission(log bitwrk.L
 				return err
 			}
 		}
-	} else if e := a.sendAssistiveDownloadURL(syncinfo, log, mwriter); e != nil {
-		return e
 	} else if part, err := mwriter.CreateFormFile("syncinfojson", "syncinfo.json"); err != nil {
 		return err
 	} else {
@@ -552,31 +560,6 @@ func (a *BuyActivity) encodeSyncInfoAndInitiateWishlistTransmission(log bitwrk.L
 		return err
 	}
 
-	return nil
-}
-
-func (a *BuyActivity) sendAssistiveDownloadURL(syncinfo *remotesync.SyncInfo, log bitwrk.Logger, mwriter *multipart.Writer) error {
-	handprint := assist.HandprintFromSyncInfo(syncinfo)
-	nTickets := 0
-	sellerId := a.mustGetSellerId()
-	assist.Tickets.ResetNode(sellerId)
-	for {
-		ticket := assist.Tickets.TakeTicket(handprint, sellerId, nil)
-		if ticket == nil {
-			break
-		}
-		nTickets++
-		log.Printf("Sending assistive download ticket: %v", *ticket)
-		if part, err := mwriter.CreateFormField("assisturl"); err != nil {
-			return err
-		} else if _, err := part.Write([]byte(*ticket)); err != nil {
-			return err
-		}
-	}
-	if nTickets == 0 {
-		log.Printf("No assistive download tickets available for this transmission (%v, %v)",
-			a.tx.Seller, handprint)
-	}
 	return nil
 }
 
@@ -597,10 +580,10 @@ func (a *BuyActivity) postToSeller(postData io.Reader, contentType string, compr
 			return nil, err
 		} else if resp.StatusCode != http.StatusOK {
 			buf := make([]byte, 1024)
-			n, _ := resp.Body.Read(buf)
+			n, _ := io.ReadFull(resp.Body, buf)
 			buf = buf[:n]
 			resp.Body.Close()
-			return nil, fmt.Errorf("Seller returned bad status '%v' [response: %#v]", resp.Status, string(buf))
+			return nil, fmt.Errorf("Seller returned bad status '%v' [response: %q]", resp.Status, buf)
 		} else {
 
 			return resp, nil
@@ -678,4 +661,18 @@ func (a *BuyActivity) mustGetSellerId() string {
 		panic(err)
 	}
 	return a.tx.Seller + "_" + u.Host
+}
+
+func (a *BuyActivity) postAssistiveDownloadTicketToSeller(log bitwrk.Logger, ticket string, client *http.Client) {
+	buf := &bytes.Buffer{}
+	mwriter := multipart.NewWriter(buf)
+	if err := mwriter.WriteField("assisturl", ticket); err != nil {
+		log.Println("Error writing assisturl form field:", err)
+	} else if err := mwriter.Close(); err != nil {
+		log.Println("Error closing multipart writer:", err)
+	} else if _, err := a.postToSeller(buf, mwriter.FormDataContentType(), false, client); err != nil {
+		log.Println("Error sending assisturl to seller:", err)
+	} else {
+		log.Printf("Sent assistive download ticket: %v", ticket)
+	}
 }

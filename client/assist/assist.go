@@ -33,34 +33,33 @@ var Tickets = NewTicketStore()
 type nodeid = string
 type ticket = string
 type key string
-type setOfTickets map[ticket]bool
-type index map[key]setOfTickets
 type edge struct{ from, to nodeid }
 
 // Suggested name of HTTP header containing a ticket
 const HeaderName = "X-AssistiveDownloadTicket"
 
-type FilterFunc = func(interface{}) bool
+type GrantTicketFunc = func(string)
 
 // Interface TicketStore handles tickets necessary for managing an assistive transfer network.
 type TicketStore interface {
-	// Function ResetNode tells the TicketStore that a node has reset its cycle.
-	// All incoming and outgoing connections are cleared.
-	// The node is now ready to offer new tickets and establish new connections.
-	ResetNode(node nodeid)
+	// Function InitNode tells the TicketStore that a node has begin its cycle.
+	// The new node is interested in receiving assistive download tickets for files
+	// matching the given handprint.
+	// It may also offer new tickets and establish new connections.
+	// Function `grantTicket` is called asynchronously.
+	InitNode(node nodeid, handprint *Handprint, grantTicket GrantTicketFunc)
 
-	// Function AddTicket associates an assistive download ticket for a file identified by a
-	// handprint with a node offering the download.
-	// When an upload connection to a peer has been established, and that peer has indicated
-	// a ticket for other peers to establish an assistive download, this function stores the
-	// ticket.
-	AddTicket(ticket ticket, handprint *Handprint, source nodeid, userdata interface{})
+	// Function ExitNode tells the TicketStore that a node has finished its cycle.
+	// It is no longer ready to establish connections. All unspent tickets are removed.
+	// All previous incoming and outgoing connections are cleared.
+	ExitNode(node nodeid)
 
-	// Function GetTicket retrieves a ticket to assist a transfer matching `handprint`.
-	// The ticket is consumed. This function is used when establishing a new upload connection.
-	// It is ensured that no more than one connection exists at eny time between a source node
-	// and a target node.
-	TakeTicket(handprint *Handprint, target nodeid, filter FilterFunc) *ticket
+	// Function NewTicket tells the TicketStore that a node offers an assistive download ticket
+	// for the file whose Handprint was given in function InitNode.
+	// The TicketStore tries to grant tickets to interested nodes. Tickets that can't be
+	// granted right away are pooled for later use by appearing nodes. Unspent tickets are removed
+	// when their offering node exits.
+	NewTicket(ticket ticket, source nodeid)
 
 	// Dumps a human-readable state representation to the given stream
 	Dump(w io.Writer) error
@@ -71,171 +70,133 @@ const numIndexes = numFingers + 1
 
 func NewTicketStore() TicketStore {
 	result := ticketMan{
-		entries:   make(map[ticket]entry),
-		bySource:  make(map[nodeid]setOfTickets),
+		nodes:     make(map[nodeid]*nodeInfo),
+		tickets:   make(map[ticket]*ticketInfo),
 		edges:     make(map[edge]bool),
 		pastEdges: make(map[edge]int),
-	}
-	for i := range result.indexes {
-		result.indexes[i] = make(index)
 	}
 	return &result
 }
 
 type ticketMan struct {
 	m         sync.Mutex
-	entries   map[ticket]entry
-	indexes   [numIndexes]index
-	bySource  map[nodeid]setOfTickets
-	edges     map[edge]bool
-	pastEdges map[edge]int
+	nodes     map[nodeid]*nodeInfo   // Known nodes
+	tickets   map[ticket]*ticketInfo // Unspent (pooled) tickets
+	edges     map[edge]bool          // Which nodes are connected to each other currently
+	pastEdges map[edge]int           // How many times nodes have been connected historically
 }
 
-type entry struct {
-	ticket    ticket
-	userdata  interface{}
+type nodeInfo struct {
+	nodeid    nodeid
 	handprint *Handprint
+	grantFunc GrantTicketFunc
+}
+
+type ticketInfo struct {
+	ticket    ticket
 	source    nodeid
+	handprint *Handprint
 }
 
-func (t *ticketMan) ResetNode(node nodeid) {
+func (t *ticketMan) InitNode(node nodeid, handprint *Handprint, grantTicket GrantTicketFunc) {
 	t.m.Lock()
 	defer t.m.Unlock()
-	for ticket := range t.bySource[node] {
-		t.remove(ticket)
+	t.resetNode(node)
+	nodeInfo := nodeInfo{
+		nodeid:    node,
+		handprint: handprint,
+		grantFunc: grantTicket,
 	}
-	delete(t.bySource, node)
-	for e := range t.edges {
-		if e.from == node || e.to == node {
-			delete(t.edges, e)
-			t.pastEdges[e] = t.pastEdges[e] + 1
-		}
+	t.nodes[node] = &nodeInfo
+	// Try to match the new node with all available tickets in the pool
+	for _, ti := range t.tickets {
+		t.match(&nodeInfo, ti)
 	}
 }
 
-func (t *ticketMan) AddTicket(ticket ticket, handprint *Handprint, source nodeid, userdata interface{}) {
-	keys := handprint.keys()
+func (t *ticketMan) ExitNode(node nodeid) {
 	t.m.Lock()
 	defer t.m.Unlock()
-	if _, ok := t.entries[ticket]; ok {
+	t.resetNode(node)
+}
+
+func (t *ticketMan) NewTicket(ticket ticket, source nodeid) {
+	t.m.Lock()
+	defer t.m.Unlock()
+
+	if _, ok := t.tickets[ticket]; ok {
 		return // Ticket already stored? NOP
 	}
-	t.entries[ticket] = entry{
+
+	var handprint *Handprint
+	if n, ok := t.nodes[source]; !ok {
+		return // Source not registered? NOP
+	} else {
+		handprint = n.handprint
+	}
+
+	ticketInfo := ticketInfo{
 		ticket:    ticket,
-		userdata:  userdata,
-		handprint: handprint,
 		source:    source,
+		handprint: handprint,
 	}
-	for i, k := range keys {
-		tickets := t.indexes[i][k]
-		if tickets == nil {
-			tickets = make(setOfTickets)
-			t.indexes[i][k] = tickets
+	t.tickets[ticket] = &ticketInfo
+
+	// Try to match the new ticket against available nodes
+	for _, node := range t.nodes {
+		if t.match(node, &ticketInfo) {
+			return
 		}
-		tickets[ticket] = true
 	}
-	tickets, ok := t.bySource[source]
-	if !ok {
-		tickets = make(setOfTickets)
-		t.bySource[source] = tickets
-	}
-	tickets[ticket] = true
 }
 
-func (t *ticketMan) TakeTicket(handprint *Handprint, target nodeid, filter FilterFunc) *ticket {
-	keys := handprint.keys()
-	t.m.Lock()
-	defer t.m.Unlock()
-	for i, k := range keys {
-		tickets := t.indexes[i][k]
-		if tickets == nil {
-			continue
-		}
-		// Take the first ticket matching our criteria out of the set
-		for ticket := range tickets {
-			var entry entry
-			if e, ok := t.entries[ticket]; !ok {
-				panic("inconsistent entries structure")
-			} else {
-				entry = e
-			}
-
-			if filter != nil && !filter(entry.userdata) {
-				continue
-			} else if entry.source == target {
-				continue
-			} else if t.edges[edge{entry.source, target}] {
-				// there is already an edge between source and target
-				continue
-			}
-			t.remove(ticket)
-			t.edges[edge{entry.source, target}] = true
-			return &ticket
+func (t *ticketMan) resetNode(n nodeid) {
+	// Delete node frm list of nodes
+	delete(t.nodes, n)
+	// Delete all edges involving node
+	for e := range t.edges {
+		if e.from == n || e.to == n {
+			delete(t.edges, e)
 		}
 	}
-
-	return nil
-}
-
-func (t *ticketMan) remove(ticket ticket) {
-	// assumption: already locked
-	entry, ok := t.entries[ticket]
-	if !ok {
-		return
-	}
-	keys := entry.handprint.keys()
-	// Remove from each index
-	for i, index := range t.indexes {
-		key := keys[i]
-		tickets := index[key]
-		delete(tickets, ticket)
-		if len(ticket) == 0 {
-			delete(index, key)
+	// Delete all unspent tickets of node
+	for _, ti := range t.tickets {
+		if ti.source == n {
+			delete(t.tickets, ti.ticket)
 		}
 	}
-	// Remove ticket from source
-	delete(t.bySource[entry.source], entry.ticket)
-	if len(t.bySource[entry.source]) == 0 {
-		// Remove source altogether if no tickets left.
-		delete(t.bySource, entry.source)
-	}
-	// Remove from entries map
-	delete(t.entries, ticket)
 }
 
 func (t *ticketMan) Dump(w io.Writer) (err error) {
 	t.m.Lock()
 	defer t.m.Unlock()
 
-	_, err = fmt.Fprintf(w, "Tickets by source\n")
+	_, err = fmt.Fprintf(w, "Tickets\ndigraph tickets {\n")
 	if err != nil {
 		return
 	}
-	for source, tickets := range t.bySource {
-		_, err = fmt.Fprintf(w, " %v\n", source)
+	for _, ti := range t.tickets {
+		_, err = fmt.Fprintf(w, " \"%v\" -> \"%v\";\n", ti.source, ti.handprint)
 		if err != nil {
 			return
 		}
-		for ticket := range tickets {
-			entry := t.entries[ticket]
-			_, err = fmt.Fprintf(w, "  %v => %v\n", entry.handprint, entry.ticket)
-			if err != nil {
-				return
-			}
+		_, err = fmt.Fprintf(w, "  \"%v\" -> \"%v\";\n", ti.handprint, ti.ticket)
+		if err != nil {
+			return
 		}
 	}
-	_, err = fmt.Fprintf(w, "\nConnections\ndigraph edges{\n")
+	_, err = fmt.Fprintf(w, "\nConnections\ndigraph edges {\n")
 	if err != nil {
 		return
 	}
 	for edge := range t.edges {
-		_, err = fmt.Fprintf(w, "  _%v -> _%v ;\n", edge.from, edge.to)
+		_, err = fmt.Fprintf(w, "  \"%v\" -> \"%v\";\n", edge.from, edge.to)
 		if err != nil {
 			return
 		}
 	}
 	_, err = fmt.Fprintf(w, "}\n")
-	_, err = fmt.Fprintf(w, "\nPast Connections\ndigraph past_edges{\n")
+	_, err = fmt.Fprintf(w, "\nPast Connections\ndigraph past_edges {\n")
 	if err != nil {
 		return
 	}
@@ -250,6 +211,39 @@ func (t *ticketMan) Dump(w io.Writer) (err error) {
 		return
 	}
 	return
+}
+
+func (t *ticketMan) match(node *nodeInfo, ticket *ticketInfo) bool {
+	if node.nodeid == ticket.source {
+		return false // Never grant ticket to its source
+	}
+	edge := edge{ticket.source, node.nodeid}
+	if t.edges[edge] {
+		return false // There is already an edge connecting the ticket source and this node
+	}
+	matches := false
+	ticketKeys := ticket.handprint.keys()
+	for i, k := range node.handprint.keys() {
+		if k == ticketKeys[i] {
+			matches = true
+			break
+		}
+	}
+	if !matches {
+		return false // Ticket doesn't match what the node is interested in
+	}
+
+	// Remove ticket from pool
+	delete(t.tickets, ticket.ticket)
+
+	// Add edge
+	t.edges[edge] = true
+	t.pastEdges[edge]++
+
+	// Notify the world
+	node.grantFunc(ticket.ticket)
+
+	return true
 }
 
 // Struct Handprint contains a set of fingerprints indicating a file.
