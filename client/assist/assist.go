@@ -220,15 +220,7 @@ func (t *ticketMan) match(node *nodeInfo, ticket *ticketInfo) bool {
 	if t.edges[edge] {
 		return false // There is already an edge connecting the ticket source and this node
 	}
-	matches := false
-	ticketKeys := ticket.handprint.keys()
-	for i, k := range node.handprint.keys() {
-		if k == ticketKeys[i] {
-			matches = true
-			break
-		}
-	}
-	if !matches {
+	if !ticket.handprint.Matches(node.handprint, numFingers-1) {
 		return false // Ticket doesn't match what the node is interested in
 	}
 
@@ -302,4 +294,23 @@ func (h *Handprint) insert(finger cafs.SKey) {
 		}
 		finger, h.fingers[i] = other, finger
 	}
+}
+
+// Checks whether two handprints share at least `n` fingerprints.
+func (h *Handprint) Matches(o *Handprint, n int) bool {
+	matches := 0
+	for i, j := 0, 0; i < numFingers && j < numFingers; {
+		cmd := bytes.Compare(h.fingers[i][:], o.fingers[j][:])
+		if cmd <= 0 {
+			i++
+		}
+		if cmd >= 0 {
+			j++
+		}
+		if cmd == 0 {
+			matches++
+		}
+	}
+
+	return matches >= n
 }
