@@ -19,7 +19,6 @@ package client
 import (
 	"bufio"
 	"bytes"
-	"compress/gzip"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -29,6 +28,7 @@ import (
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	. "github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/bitwrk/client/assist"
+	"github.com/indyjo/bitwrk/client/gziputil"
 	"github.com/indyjo/cafs"
 	"github.com/indyjo/cafs/remotesync"
 	"io"
@@ -385,7 +385,7 @@ func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client
 		defer assist.Tickets.ExitNode(sellerId)
 	}
 
-	if r, err := a.requestMissingChunks(log.New("request missing chunks"), client, &syncinfo, legacy); err != nil {
+	if r, err := a.requestMissingChunks(log.New("request missing chunks"), client, &syncinfo, legacy, compressed); err != nil {
 		return nil, fmt.Errorf("Transmitting work (chunked) failed: %v", err)
 	} else {
 		defer r.Close()
@@ -393,16 +393,21 @@ func (a *BuyActivity) transmitWorkChunked(log bitwrk.Logger, client *http.Client
 	}
 }
 
-func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Client, syncinfo *remotesync.SyncInfo, legacy bool) (io.ReadCloser, error) {
+func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Client, syncinfo *remotesync.SyncInfo, legacy bool, compressed bool) (io.ReadCloser, error) {
 	// Send chunk list of work to client
 	pipeIn, pipeOut := io.Pipe()
 	defer pipeIn.Close()
-	mwriter := multipart.NewWriter(pipeOut)
+
+	var compressor io.WriteCloser
+	if compressed {
+		compressor = gziputil.NewFlushingCompressor(pipeOut)
+	} else {
+		compressor = gziputil.NewNopCompressor(pipeOut)
+	}
+	mwriter := multipart.NewWriter(compressor)
 
 	// Write chunk hashes into pipe for HTTP request
 	go func() {
-		defer pipeOut.Close()
-
 		if err := a.encodeSyncInfoAndInitiateWishlistTransmission(log, mwriter, syncinfo, legacy); err != nil {
 			_ = pipeOut.CloseWithError(err)
 			return
@@ -411,10 +416,15 @@ func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Clien
 			_ = pipeOut.CloseWithError(err)
 			return
 		}
+		if err := compressor.Close(); err != nil {
+			_ = pipeOut.CloseWithError(err)
+			return
+		}
+		_ = pipeOut.Close()
 		log.Printf("Work sync info transmitted successfully.")
 	}()
 
-	if resp, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), false, client); err != nil {
+	if resp, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), compressed, client); err != nil {
 		return nil, fmt.Errorf("Error sending work sync data to seller: %v", err)
 	} else {
 		a.receiveAssistiveDownloadTickets(log, syncinfo, resp)
@@ -441,43 +451,16 @@ func (a *BuyActivity) receiveAssistiveDownloadTickets(log bitwrk.Logger, syncInf
 
 }
 
-// When streaming chunk data in compressed mode, we must make sure that the gzip stream is
-// flushed every couple of writes in order to avoid deadlocking.
-type flushingCompressor struct {
-	w   *gzip.Writer
-	n   int
-	err error
-}
-
-// Flush after every write. This wastes some compression but prevents deadlocks.
-func (c *flushingCompressor) Write(buf []byte) (int, error) {
-	if c.err != nil {
-		return 0, c.err
-	} else if written, err := c.w.Write(buf); err != nil {
-		c.err = err
-		return written, err
-	} else {
-		c.err = c.w.Flush()
-		return written, nil
-	}
-}
-
 func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client *http.Client, wishList io.ByteReader, compressed bool, syncinfo *remotesync.SyncInfo) (io.ReadCloser, error) {
 	// Send data of missing chunks to seller
 	pipeIn, pipeOut := io.Pipe()
 	defer pipeIn.Close()
 
-	// Setup compression layer with dummy impl in case of uncompressed transmission
-	var compressor io.Writer
-	var closeCompressor func() error
+	var compressor io.WriteCloser
 	if compressed {
-		c := gzip.NewWriter(pipeOut)
-		fc := &flushingCompressor{w: c}
-		compressor = fc
-		closeCompressor = c.Close
+		compressor = gziputil.NewFlushingCompressor(pipeOut)
 	} else {
-		compressor = pipeOut
-		closeCompressor = func() error { return nil }
+		compressor = gziputil.NewNopCompressor(pipeOut)
 	}
 
 	mwriter := multipart.NewWriter(compressor)
@@ -514,7 +497,7 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 			if err := mwriter.Close(); err != nil {
 				return err
 			}
-			if err := closeCompressor(); err != nil {
+			if err := compressor.Close(); err != nil {
 				return err
 			}
 			return nil

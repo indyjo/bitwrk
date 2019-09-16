@@ -71,3 +71,52 @@ func (gz *gzipBody) Close() error {
 		return nil
 	}
 }
+
+// When streaming chunk data in compressed mode, we must make sure that the gzip stream is
+// flushed every couple of writes in order to avoid deadlocking.
+type flushingCompressor struct {
+	w   *gzip.Writer
+	n   int
+	err error
+}
+
+// Flush after every write. This wastes some compression but prevents deadlocks.
+func (c *flushingCompressor) Write(buf []byte) (int, error) {
+	if c.err != nil {
+		return 0, c.err
+	} else if written, err := c.w.Write(buf); err != nil {
+		c.err = err
+		return written, err
+	} else {
+		c.err = c.w.Flush()
+		return written, nil
+	}
+}
+
+func (c *flushingCompressor) Close() error {
+	return c.w.Close()
+}
+
+// Function NewFlushingCompressor returns a WriteCloser that compresses as gzip and flushes on every Write.
+func NewFlushingCompressor(w io.Writer) io.WriteCloser {
+	c := gzip.NewWriter(w)
+	return &flushingCompressor{w: c}
+}
+
+type nopCompressor struct {
+	w io.Writer
+}
+
+func (c nopCompressor) Write(p []byte) (n int, err error) {
+	return c.Write(p)
+}
+
+func (c nopCompressor) Close() error {
+	return nil
+}
+
+// Function NewNopCompressor returns an implementation of WriteCloser that just passes writes to the
+// underlying Writer and ignores Close.
+func NewNopCompressor(w io.Writer) io.WriteCloser {
+	return nopCompressor{w}
+}
