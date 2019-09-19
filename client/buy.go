@@ -19,6 +19,7 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -400,7 +401,7 @@ func (a *BuyActivity) requestMissingChunks(log bitwrk.Logger, client *http.Clien
 
 	var compressor io.WriteCloser
 	if compressed {
-		compressor = gziputil.NewFlushingCompressor(pipeOut)
+		compressor = gzip.NewWriter(pipeOut)
 	} else {
 		compressor = gziputil.NewNopCompressor(pipeOut)
 	}
