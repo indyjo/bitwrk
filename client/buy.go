@@ -510,6 +510,7 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 		}
 		_ = pipeOut.Close()
 		log.Printf("Missing chunk data transmitted successfully.")
+		assist.Tickets.SetNodeInterested(a.mustGetSellerId(), false)
 	}()
 
 	if resp, err := a.postToSeller(pipeIn, mwriter.FormDataContentType(), compressed, client); err != nil {

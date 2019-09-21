@@ -49,6 +49,9 @@ type TicketStore interface {
 	// Function `grantTicket` is called asynchronously.
 	InitNode(node nodeid, handprint *Handprint, grantTicket GrantTicketFunc)
 
+	// Sets whether or not a node is considered when distributing tickets.
+	SetNodeInterested(node nodeid, interested bool)
+
 	// Function ExitNode tells the TicketStore that a node has finished its cycle.
 	// It is no longer ready to establish connections. All unspent tickets are removed.
 	// All previous incoming and outgoing connections are cleared.
@@ -87,9 +90,10 @@ type ticketMan struct {
 }
 
 type nodeInfo struct {
-	nodeid    nodeid
-	handprint *Handprint
-	grantFunc GrantTicketFunc
+	nodeid     nodeid
+	handprint  *Handprint
+	interested bool
+	grantFunc  GrantTicketFunc
 }
 
 type ticketInfo struct {
@@ -103,15 +107,26 @@ func (t *ticketMan) InitNode(node nodeid, handprint *Handprint, grantTicket Gran
 	defer t.m.Unlock()
 	t.resetNode(node)
 	nodeInfo := nodeInfo{
-		nodeid:    node,
-		handprint: handprint,
-		grantFunc: grantTicket,
+		nodeid:     node,
+		handprint:  handprint,
+		interested: true,
+		grantFunc:  grantTicket,
 	}
 	t.nodes[node] = &nodeInfo
 	// Try to match the new node with all available tickets in the pool
 	for _, ti := range t.tickets {
 		t.match(&nodeInfo, ti)
 	}
+}
+
+func (t *ticketMan) SetNodeInterested(node nodeid, interested bool) {
+	t.m.Lock()
+	defer t.m.Unlock()
+	ni, ok := t.nodes[node]
+	if !ok {
+		return
+	}
+	ni.interested = interested
 }
 
 func (t *ticketMan) ExitNode(node nodeid) {
@@ -215,6 +230,9 @@ func (t *ticketMan) Dump(w io.Writer) (err error) {
 func (t *ticketMan) match(node *nodeInfo, ticket *ticketInfo) bool {
 	if node.nodeid == ticket.source {
 		return false // Never grant ticket to its source
+	}
+	if !node.interested {
+		return false
 	}
 	edge := edge{ticket.source, node.nodeid}
 	if t.edges[edge] {
