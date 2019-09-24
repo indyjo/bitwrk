@@ -105,6 +105,7 @@ func (a *BuyActivity) doLocalBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs
 
 // Performs a remote buy once it has been cleared.
 func (a *BuyActivity) doRemoteBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
+	defer a.returnTransmissionToken()
 	if err := a.beginRemoteTrade(log, interrupt); err != nil {
 		return nil, err
 	}
@@ -285,7 +286,7 @@ func (a *BuyActivity) interactWithSeller(log bitwrk.Logger) error {
 	} else {
 		response, transmissionError = a.transmitWorkLinear(log, scopedClient)
 	}
-	log.Printf("Work transmission finished (error: %v)", transmissionError)
+	log.Printf("Received result from seller (error: %v)", transmissionError)
 	if response != nil {
 		defer response.Close()
 	}
@@ -335,6 +336,7 @@ func (a *BuyActivity) transmitWorkLinear(log bitwrk.Logger, client *http.Client)
 			_ = pipeOut.CloseWithError(err)
 			return
 		}
+		a.returnTransmissionToken()
 		log.Printf("Sending buyer's secret to seller.")
 		err = mwriter.WriteField("buyersecret", a.buyerSecret.String())
 		if err != nil {
@@ -493,7 +495,7 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 				return err
 			}
 
-			// WriteChunkData finished without successfully. Make sure all streams are closed.
+			// WriteChunkData finished successfully. Make sure all streams are closed.
 
 			if err := mwriter.Close(); err != nil {
 				return err
@@ -510,6 +512,7 @@ func (a *BuyActivity) sendMissingChunksAndReturnResult(log bitwrk.Logger, client
 		}
 		_ = pipeOut.Close()
 		log.Printf("Missing chunk data transmitted successfully.")
+		a.returnTransmissionToken()
 		assist.Tickets.SetNodeInterested(a.mustGetSellerId(), false)
 	}()
 

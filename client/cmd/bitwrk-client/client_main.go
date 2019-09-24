@@ -68,7 +68,9 @@ func main() {
 	flags.BoolVar(&cafs.LoggingEnabled, "log-cafs", cafs.LoggingEnabled,
 		"Enable logging for content-addressable file storage")
 	flags.IntVar(&client.NumUnmatchedBids, "num-unmatched-bids", client.NumUnmatchedBids,
-		"Mamimum number of unmatched bids for an article on server")
+		"Maximum number of unmatched bids for an article on server")
+	flags.IntVar(&client.NumTransmittingBids, "num-transmitting-bids", client.NumTransmittingBids,
+		"Maximum number of transmissions at the same time")
 	flags.StringVar(&TrustedAccount, "trusted-account", "1TrsjuCvBch1D9h6nRkadGKakv9KyaiP6",
 		"Account to trust when verifying deposit information.")
 	err := flags.Parse(os.Args[1:])
@@ -108,6 +110,7 @@ func main() {
 	log.Printf("Internal network port for UI and workers: %v\n", InternalPort)
 	log.Printf("Own BitWrk account: %v\n", BitcoinIdentity.GetAddress())
 	log.Printf("Trusted account: %v", TrustedAccount)
+	log.Printf("Limiting to %v unmatched and %v transferring bids.\n", client.NumUnmatchedBids, client.NumTransmittingBids)
 
 	// Create local-only worker manager if no external port has been specified
 	workerManager := client.NewWorkerManager(client.GetActivityManager(), receiveManager, ExternalPort <= 0)

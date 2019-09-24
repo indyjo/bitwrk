@@ -17,6 +17,7 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -43,6 +44,7 @@ type Trade struct {
 	localOnly         bool   // Set to true if publishing not possible (only used for sells)
 	alive             bool   // Set to false on end of life
 	published         bool   // Set to true on Publish
+	transmitting      bool   // Set to true when transmission token is held
 	localMatch        *Trade // Set to a matching trade on local match
 	awaitingClearance bool   // Set to false on local match, Forbid and Publish
 
@@ -74,30 +76,41 @@ type Trade struct {
 // Configuration value for the maximum number of unmatched bids to allow at a time
 var NumUnmatchedBids = 1
 
-func (a *Trade) beginRemoteTrade(log bitwrk.Logger, interrupt <-chan bool) error {
+// Configuration value for the maximum number of bids not in working state
+var NumTransmittingBids = 4
+
+// Goes through the process of creating a bid and waiting for a transaction.
+// If this is a buy, leaves the Trade with the transmission token checked out.
+func (t *Trade) beginRemoteTrade(log bitwrk.Logger, interrupt <-chan bool) error {
 	// Prevent too many unmatched bids on server
-	key := fmt.Sprintf("%v-%v", a.bidType, a.article)
-	if err := a.manager.checkoutToken(key, NumUnmatchedBids, interrupt); err != nil {
+	key := fmt.Sprintf("unmatched-%v-%v", t.bidType, t.article)
+	if err := t.manager.checkoutToken(key, NumUnmatchedBids, interrupt); err != nil {
 		return err
 	}
-	defer a.manager.returnToken(key)
+	defer t.manager.returnToken(key)
 
-	if err := a.awaitBid(); err != nil {
+	if t.bidType == bitwrk.Buy {
+		if err := t.awaitTransmissionToken(interrupt); err != nil {
+			return err
+		}
+	}
+
+	if err := t.awaitBid(); err != nil {
 		return fmt.Errorf("Error awaiting bid: %v", err)
 	}
-	log.Printf("Got bid id: %v", a.bidId)
+	log.Printf("Got bid id: %v", t.bidId)
 
-	if err := a.awaitTransaction(log); err != nil {
+	if err := t.awaitTransaction(log); err != nil {
 		return fmt.Errorf("Error awaiting transaction: %v", err)
 	}
-	log.Printf("Got transaction id: %v", a.txId)
+	log.Printf("Got transaction id: %v", t.txId)
 
-	if tx, etag, err := protocol.FetchTx(a.txId, ""); err != nil {
+	if tx, etag, err := protocol.FetchTx(t.txId, ""); err != nil {
 		return err
 	} else {
-		a.execSync(func() {
-			a.tx = tx
-			a.txETag = etag
+		t.execSync(func() {
+			t.tx = tx
+			t.txETag = etag
 		})
 	}
 
@@ -458,5 +471,28 @@ func (t *Trade) Dispose() {
 			f.Dispose()
 			f = nil
 		}
+	}
+}
+
+func (t *Trade) awaitTransmissionToken(interrupt <-chan bool) error {
+	var wasTransmitting bool
+	t.execSync(func() {
+		wasTransmitting = t.transmitting
+		t.transmitting = true
+	})
+	if wasTransmitting {
+		return errors.New("Was already transmitting")
+	}
+	return t.manager.checkoutToken("transmission", NumTransmittingBids, interrupt)
+}
+
+func (t *Trade) returnTransmissionToken() {
+	var wasTransmitting bool
+	t.execSync(func() {
+		wasTransmitting = t.transmitting
+		t.transmitting = false
+	})
+	if wasTransmitting {
+		t.manager.returnToken("transmission")
 	}
 }
