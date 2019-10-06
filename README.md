@@ -27,6 +27,10 @@ BitWrk provides a service to both groups by connecting them in an easy-to-use wa
 ### Documentation
 [News](NEWS.md) | [Quickstart instructions](QUICKSTART.md) | [Concepts](CONCEPTS.md) | [Compiling](COMPILING.md) | [License information](COPYING)
 
+### Stargazers over time
+
+[![Stargazers over time](https://starchart.cc/indyjo/bitwrk.svg)](https://starchart.cc/indyjo/bitwrk)
+
 Status
 ------
 
