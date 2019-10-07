@@ -17,6 +17,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -81,16 +82,16 @@ var NumTransmittingBids = 4
 
 // Goes through the process of creating a bid and waiting for a transaction.
 // If this is a buy, leaves the Trade with the transmission token checked out.
-func (t *Trade) beginRemoteTrade(log bitwrk.Logger, interrupt <-chan bool) error {
+func (t *Trade) beginRemoteTrade(ctx context.Context, log bitwrk.Logger) error {
 	// Prevent too many unmatched bids on server
 	key := fmt.Sprintf("unmatched-%v-%v", t.bidType, t.article)
-	if err := t.manager.checkoutToken(key, NumUnmatchedBids, interrupt); err != nil {
+	if err := t.manager.checkoutToken(ctx, key, NumUnmatchedBids); err != nil {
 		return err
 	}
 	defer t.manager.returnToken(key)
 
 	if t.bidType == bitwrk.Buy {
-		if err := t.awaitTransmissionToken(interrupt); err != nil {
+		if err := t.awaitTransmissionToken(ctx); err != nil {
 			return err
 		}
 	}
@@ -131,11 +132,11 @@ func (t *Trade) execSync(f func()) {
 // Returns nil on clearance (either local or trade) and
 // ErrNoPermission if permission was rejected.
 // Returns ErrInterrupted if a boolean can be read from 'interrupt' while waiting.
-func (t *Trade) awaitClearance(log bitwrk.Logger, interrupt <-chan bool) error {
+func (t *Trade) awaitClearance(ctx context.Context, log bitwrk.Logger) error {
 	// wait for grant or reject
 	log.Println("Awaiting clearance")
 
-	err := t.interruptibleWaitWhile(interrupt, func() bool { return t.awaitingClearance })
+	err := t.interruptibleWaitWhile(ctx, func() bool { return t.awaitingClearance })
 
 	if err != nil {
 		return fmt.Errorf("Error awaiting clearance: %v", err)
@@ -250,7 +251,7 @@ func (t *Trade) waitWhile(f func() bool) {
 
 // Waits on state changes until either f() returns false or a boolean was read from interrupt,
 // in which case ErrInterrupted is returned. Otherwise, returns nil.
-func (t *Trade) interruptibleWaitWhile(interrupt <-chan bool, f func() bool) error {
+func (t *Trade) interruptibleWaitWhile(ctx context.Context, f func() bool) error {
 	// On end of function, send a boolean through 'exit' to stop
 	exit := make(chan bool)
 	defer func() {
@@ -262,7 +263,7 @@ func (t *Trade) interruptibleWaitWhile(interrupt <-chan bool, f func() bool) err
 	go func() {
 		for {
 			select {
-			case <-interrupt:
+			case <-ctx.Done():
 				interrupted = true
 				t.condition.Broadcast()
 			case <-exit:
@@ -474,7 +475,7 @@ func (t *Trade) Dispose() {
 	}
 }
 
-func (t *Trade) awaitTransmissionToken(interrupt <-chan bool) error {
+func (t *Trade) awaitTransmissionToken(ctx context.Context) error {
 	var wasTransmitting bool
 	t.execSync(func() {
 		wasTransmitting = t.transmitting
@@ -483,7 +484,7 @@ func (t *Trade) awaitTransmissionToken(interrupt <-chan bool) error {
 	if wasTransmitting {
 		return errors.New("Was already transmitting")
 	}
-	return t.manager.checkoutToken("transmission", NumTransmittingBids, interrupt)
+	return t.manager.checkoutToken(ctx, "transmission", NumTransmittingBids)
 }
 
 func (t *Trade) returnTransmissionToken() {

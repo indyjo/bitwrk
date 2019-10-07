@@ -17,6 +17,7 @@
 package client
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"io"
@@ -334,7 +335,7 @@ func (m *ActivityManager) applyMandate(activities []Activity, mandate *Mandate, 
 
 // Consume a limited resource. The resource is named by the key parameter and limited to up
 // to 'limit' checked out tokens.
-func (m *ActivityManager) checkoutToken(key string, limit int, interrupt <-chan bool) error {
+func (m *ActivityManager) checkoutToken(ctx context.Context, key string, limit int) error {
 	m.mutex.Lock()
 	tokenChan := m.bidTokens[key]
 	if tokenChan == nil {
@@ -347,7 +348,7 @@ func (m *ActivityManager) checkoutToken(key string, limit int, interrupt <-chan 
 	}
 	m.mutex.Unlock()
 	select {
-	case <-interrupt:
+	case <-ctx.Done():
 		return ErrInterrupted
 	case <-tokenChan:
 		return nil

@@ -17,9 +17,11 @@
 package client
 
 import (
+	"context"
 	"fmt"
-	"github.com/indyjo/bitwrk/client/receiveman"
 	"io"
+
+	"github.com/indyjo/bitwrk/client/receiveman"
 
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
@@ -34,10 +36,10 @@ type SellActivity struct {
 }
 
 // Manages the complete lifecycle of a sell
-func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *receiveman.ReceiveManager, interrupt <-chan bool) error {
+func (a *SellActivity) PerformSell(ctx context.Context, log bitwrk.Logger, receiveManager *receiveman.ReceiveManager) error {
 	log.Printf("Sell started")
 	defer log.Println("Sell finished")
-	err := a.doPerformSell(log, receiveManager, interrupt)
+	err := a.doPerformSell(ctx, log, receiveManager)
 	if err != nil {
 		a.execSync(func() { a.lastError = err })
 	}
@@ -46,24 +48,24 @@ func (a *SellActivity) PerformSell(log bitwrk.Logger, receiveManager *receiveman
 }
 
 // Waits for clearance and then performs either a local or a remote sell, depending on the decision taken.
-func (a *SellActivity) doPerformSell(log bitwrk.Logger, receiveManager *receiveman.ReceiveManager, interrupt <-chan bool) error {
-	if err := a.awaitClearance(log, interrupt); err != nil {
+func (a *SellActivity) doPerformSell(ctx context.Context, log bitwrk.Logger, receiveManager *receiveman.ReceiveManager) error {
+	if err := a.awaitClearance(ctx, log); err != nil {
 		return err
 	}
 
 	if a.localMatch != nil {
-		return a.doLocalSell(log, interrupt)
+		return a.doLocalSell(ctx, log)
 	} else {
-		return a.doRemoteSell(log, receiveManager, interrupt)
+		return a.doRemoteSell(ctx, log, receiveManager)
 	}
 }
 
 // Performs a local sell.
-func (a *SellActivity) doLocalSell(log bitwrk.Logger, interrupt <-chan bool) error {
+func (a *SellActivity) doLocalSell(ctx context.Context, log bitwrk.Logger) error {
 	// Directly get the work file from the local buy
 	buy := a.localMatch
 	var workFile cafs.File
-	buy.interruptibleWaitWhile(interrupt, func() bool {
+	buy.interruptibleWaitWhile(ctx, func() bool {
 		// Initially, the work file is not set
 		if buy.workFile == nil {
 			return buy.alive
@@ -104,7 +106,7 @@ func (a *SellActivity) doLocalSell(log bitwrk.Logger, interrupt <-chan bool) err
 		a.execSync(func() { a.resultFile = temp.File() })
 
 		// Wait for the buy to accept it
-		buy.interruptibleWaitWhile(interrupt, func() bool {
+		buy.interruptibleWaitWhile(ctx, func() bool {
 			return buy.alive && buy.resultFile == nil
 		})
 
@@ -113,8 +115,8 @@ func (a *SellActivity) doLocalSell(log bitwrk.Logger, interrupt <-chan bool) err
 }
 
 // Performs a remote sell once it has been cleared.
-func (a *SellActivity) doRemoteSell(log bitwrk.Logger, receiveManager *receiveman.ReceiveManager, interrupt <-chan bool) error {
-	if err := a.beginRemoteTrade(log, interrupt); err != nil {
+func (a *SellActivity) doRemoteSell(ctx context.Context, log bitwrk.Logger, receiveManager *receiveman.ReceiveManager) error {
+	if err := a.beginRemoteTrade(ctx, log); err != nil {
 		return err
 	}
 

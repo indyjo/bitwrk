@@ -17,12 +17,14 @@
 package client
 
 import (
+	"context"
 	"fmt"
-	"github.com/indyjo/bitwrk/client/receiveman"
 	"io"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/indyjo/bitwrk/client/receiveman"
 
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
@@ -121,12 +123,14 @@ func (s *WorkerState) offer(log bitwrk.Logger, localOnly bool) {
 	defer log.Printf("Stopped offering")
 	s.cond.L.Lock()
 	defer s.cond.L.Unlock()
-	interrupt := make(chan bool, 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
 	for {
 		// Interrupt if unregistered, stop iterating
 		if s.Unregistered {
 			log.Printf("No longer registered")
-			interrupt <- true
+			cancel()
 			break
 		}
 		if s.Blockers == 0 {
@@ -137,14 +141,14 @@ func (s *WorkerState) offer(log bitwrk.Logger, localOnly bool) {
 				s.blockFor(20 * time.Second)
 			} else {
 				s.Blockers++
-				go s.executeSell(log, sell, interrupt)
+				go s.executeSell(ctx, log, sell)
 			}
 		}
 		s.cond.Wait()
 	}
 }
 
-func (s *WorkerState) executeSell(log bitwrk.Logger, sell *SellActivity, interrupt <-chan bool) {
+func (s *WorkerState) executeSell(ctx context.Context, log bitwrk.Logger, sell *SellActivity) {
 	defer func() {
 		s.cond.L.Lock()
 		s.Blockers--
@@ -152,7 +156,7 @@ func (s *WorkerState) executeSell(log bitwrk.Logger, sell *SellActivity, interru
 		s.cond.L.Unlock()
 	}()
 	defer sell.Dispose()
-	if err := sell.PerformSell(log.Newf("Sell #%v", sell.GetKey()), s.m.receiveManager, interrupt); err != nil {
+	if err := sell.PerformSell(ctx, log.Newf("Sell #%v", sell.GetKey()), s.m.receiveManager); err != nil {
 		s.LastError = fmt.Sprintf("Error performing sell (delaying next sell by 20s): %v", err)
 		log.Println(s.LastError)
 		s.cond.L.Lock()
