@@ -1,3 +1,4 @@
 package main
 
-const ClientVersion = "0.6.4"
+var ClientVersion = "devel"
+var CommitSHA = ""

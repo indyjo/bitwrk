@@ -52,7 +52,9 @@ var BitwrkUrl string
 var TrustedAccount string
 
 func main() {
+	log.Printf("bitwrk-client %v %v",  ClientVersion, CommitSHA)
 	protocol.BitwrkUserAgent = "BitWrkGoClient/" + ClientVersion
+
 	flags := flag.NewFlagSet("bitwrk-client", flag.ExitOnError)
 	flags.StringVar(&ExternalAddress, "extaddr", "auto",
 		"IP address or name this host can be reached under from the internet")

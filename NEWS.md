@@ -1,5 +1,7 @@
 News
 ====
+- **2019-10-19:** BitWrk 0.6.5 is a preview of a feature that allows much faster transmission of work data
+  to multiple sellers. This version is supposed to be the last version with support for Blender 2.79.
 - **2018-04-22:** BitWrk 0.6.4 fixes bugs and provides UI for local GPU rendering
 - **2017-12-03:** BitWrk 0.6.3 enables support for Blender 2.79
 - **2017-05-23:** BitWrk 0.6.2 fixes a bug that prevented local network rendering from working when the

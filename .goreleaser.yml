@@ -7,16 +7,16 @@ builds:
   -
     main: ./client/cmd/bitwrk-client/
     binary: bitwrk-client
-    ldflags: -s -w -X main.Version={{ .Version }} -X main.CommitSHA={{ .Commit }}
+    ldflags: -s -w -X main.ClientVersion={{ .Major }}.{{ .Minor }}.{{ .Patch }} -X main.CommitSHA={{ .Commit }}
     goos:
       - linux
       - darwin
       - windows
     goarch:
       - amd64
-      - arm64
-      - 386
-      - arm
+#      - arm64
+#      - 386
+#      - arm
     goarm:
       - 6
       - 7
@@ -30,21 +30,27 @@ sign:
   artifacts: checksum
 archives:
   -
+    format_overrides:
+      - goos: windows
+        format: zip
+
     replacements:
-      darwin: Darwin
-      linux: Linux
-      windows: Windows
-      386: i386
-      amd64: x86_64
+      darwin: osx
+      linux: linux
+      windows: windows
+      386: x86
+      amd64: x64
 
     files:
-      - share/**/*
+      - resources/**/*
 
-    wrap_in_directory: true
+    wrap_in_directory: "{{ .ProjectName }}-{{ .Version }}"
+
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}.{{ .Arch }}"
 checksum:
-  name_template: 'checksums.txt'
+  name_template: 'checksums-{{ .Version }}.txt'
 snapshot:
-  name_template: "{{ .Tag }}-next"
+  name_template: "{{ .Version }}-next"
 changelog:
   sort: asc
   filters:

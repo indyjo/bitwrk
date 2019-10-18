@@ -33,17 +33,15 @@ Git operations
 - Push tag:
     git push origin vx.y.z
 
-Creating a source tarball
--------------------------
-Use "git-archive-all" to prepare the tarballs, because github's tarballs don't include
-the submodules (cafs, bitwrk-common)
+Building using GoReleaser
+------------------------- 
+Beginning with BitWrk 0.6.5, releases are built using [GoReleaser](http://goreleaser.com).
+All three platforms are built using this command:
 
-    # git-archive-all can be cloned from github like this:
-    # git clone https://github.com/Kentzo/git-archive-all.git
-    git-archive-all --prefix bitwrk-x.y.z/ ../bitwrk-x.y.z.tar.gz
-    # repeat for .zip
-
-Now upload both .tar.gz and .zip to github, associate with release.
+    # Build a snapshot version
+    goreleaser --snapshot --skip-publish --rm-dist
+    # Build a final version
+    goreleaser --skip-publish --rm-dist
 
 Compiling for Mac OS X
 ----------------------

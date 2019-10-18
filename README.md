@@ -34,7 +34,7 @@ BitWrk provides a service to both groups by connecting them in an easy-to-use wa
 Status
 ------
 
-As of version 0.6.4:
+As of version 0.6.5:
 - BitWrk concentrates on the use case of providing peer-to-peer rendering for [Blender](http://blender.org),
   the free rendering software, into which it integrates by use of an add-on. Local network and swarm rendering
   can be combined. GPU rendering is supported, too.
