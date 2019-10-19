@@ -99,9 +99,9 @@ if __name__ == "__main__":
     try:
         args = sys.argv[idx + 1:]
         if len(args) > 1 and args[0] == 'process':
-	        print("Make all objects local")
-	        if {'FINISHED'} != bpy.ops.object.make_local(type='ALL'):
-		        sys.exit(-2)
+            print("Make all objects local")
+            if {'FINISHED'} != bpy.ops.object.make_local(type='ALL'):
+                sys.exit(-2)
             _repath()
             _remove_scripted_drivers()
             bpy.ops.wm.save_as_mainfile(filepath=args[1], check_existing=False, compress=False)
