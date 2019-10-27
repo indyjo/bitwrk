@@ -20,23 +20,25 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
+	pseudorand "math/rand"
+	"mime/multipart"
+	"net/http"
+	"net/url"
+
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	. "github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/bitwrk/client/assist"
 	"github.com/indyjo/bitwrk/client/gziputil"
 	"github.com/indyjo/cafs"
 	"github.com/indyjo/cafs/remotesync"
-	"io"
-	pseudorand "math/rand"
-	"mime/multipart"
-	"net/http"
-	"net/url"
 )
 
 type BuyActivity struct {
@@ -46,7 +48,7 @@ type BuyActivity struct {
 // Manages the complete lifecycle of a buy, which can either be local or remote.
 // When a bool can be read from interrupt, the buy is aborted.
 // On success, returns a cafs.File to the result data.
-func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workFile cafs.File) (cafs.File, error) {
+func (a *BuyActivity) PerformBuy(ctx context.Context, log bitwrk.Logger, workFile cafs.File) (cafs.File, error) {
 	log.Printf("Buy started")
 	a.execSync(func() { a.workFile = workFile.Duplicate() })
 	defer a.execSync(func() {
@@ -54,7 +56,7 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workF
 		log.Printf("Buy finished")
 	})
 
-	file, err := a.doPerformBuy(log, interrupt)
+	file, err := a.doPerformBuy(ctx, log)
 	if err != nil {
 		a.execSync(func() { a.lastError = err })
 	}
@@ -63,25 +65,25 @@ func (a *BuyActivity) PerformBuy(log bitwrk.Logger, interrupt <-chan bool, workF
 }
 
 // Waits for clearance and then performs either a local or a remote buy, depending on the decision taken.
-func (a *BuyActivity) doPerformBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
-	if err := a.awaitClearance(log, interrupt); err != nil {
+func (a *BuyActivity) doPerformBuy(ctx context.Context, log bitwrk.Logger) (cafs.File, error) {
+	if err := a.awaitClearance(ctx, log); err != nil {
 		return nil, err
 	}
 
 	if a.localMatch != nil {
-		return a.doLocalBuy(log, interrupt)
+		return a.doLocalBuy(ctx, log)
 	} else {
-		return a.doRemoteBuy(log, interrupt)
+		return a.doRemoteBuy(ctx, log)
 	}
 }
 
 // Performs a local buy.
-func (a *BuyActivity) doLocalBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
+func (a *BuyActivity) doLocalBuy(ctx context.Context, log bitwrk.Logger) (cafs.File, error) {
 	sell := a.localMatch
 	var resultFile cafs.File
 
 	// Wait for sell to either die or produce a result
-	if err := sell.interruptibleWaitWhile(interrupt, func() bool {
+	if err := sell.interruptibleWaitWhile(ctx, func() bool {
 		if sell.alive && sell.resultFile == nil {
 			return true
 		} else {
@@ -104,9 +106,9 @@ func (a *BuyActivity) doLocalBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs
 }
 
 // Performs a remote buy once it has been cleared.
-func (a *BuyActivity) doRemoteBuy(log bitwrk.Logger, interrupt <-chan bool) (cafs.File, error) {
+func (a *BuyActivity) doRemoteBuy(ctx context.Context, log bitwrk.Logger) (cafs.File, error) {
 	defer a.returnTransmissionToken()
-	if err := a.beginRemoteTrade(log, interrupt); err != nil {
+	if err := a.beginRemoteTrade(ctx, log); err != nil {
 		return nil, err
 	}
 

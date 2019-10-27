@@ -20,8 +20,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/indyjo/bitwrk/client/assist"
-	"github.com/indyjo/bitwrk/client/receiveman"
 	"html/template"
 	"io"
 	"log"
@@ -33,6 +31,9 @@ import (
 	"runtime/pprof"
 	"strings"
 	"time"
+
+	"github.com/indyjo/bitwrk/client/assist"
+	"github.com/indyjo/bitwrk/client/receiveman"
 
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
@@ -455,13 +456,10 @@ func handleBuy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Listen for close notfications
-	interrupt := w.(http.CloseNotifier).CloseNotify()
-
 	workFile := workTemp.File()
 	defer workFile.Dispose()
 	var result cafs.File
-	if res, err := buy.PerformBuy(log, interrupt, workFile); err != nil {
+	if res, err := buy.PerformBuy(r.Context(), log, workFile); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("Error receiving result from BitWrk network: %v", err)
 		return
