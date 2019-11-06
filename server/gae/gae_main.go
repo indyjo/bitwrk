@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"time"
 
-	. "github.com/indyjo/bitwrk-common/bitwrk"
+	. "github.com/indyjo/bitwrk/common/bitwrk"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/memcache"

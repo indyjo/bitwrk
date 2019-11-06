@@ -23,7 +23,7 @@ import (
 	"net/http"
 
 	"bitbucket.org/ww/goautoneg"
-	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk/common/bitwrk"
 	db "github.com/indyjo/bitwrk/server/gae"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"

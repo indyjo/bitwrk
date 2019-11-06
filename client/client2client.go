@@ -38,7 +38,7 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk/common/bitwrk"
 	"github.com/indyjo/cafs"
 	"github.com/indyjo/cafs/remotesync"
 )

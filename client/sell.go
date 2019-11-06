@@ -23,9 +23,9 @@ import (
 
 	"github.com/indyjo/bitwrk/client/receiveman"
 
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	. "github.com/indyjo/bitwrk-common/protocol"
+	"github.com/indyjo/bitwrk/common/bitcoin"
+	"github.com/indyjo/bitwrk/common/bitwrk"
+	. "github.com/indyjo/bitwrk/common/protocol"
 	"github.com/indyjo/cafs"
 )
 

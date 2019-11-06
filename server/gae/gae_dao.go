@@ -22,7 +22,7 @@ import (
 
 	"google.golang.org/appengine/datastore"
 
-	. "github.com/indyjo/bitwrk-common/bitwrk"
+	. "github.com/indyjo/bitwrk/common/bitwrk"
 )
 
 type gaeAccountingDao struct {

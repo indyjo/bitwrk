@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk/common/bitwrk"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/taskqueue"
 )

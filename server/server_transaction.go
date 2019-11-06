@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"bitbucket.org/ww/goautoneg"
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk/common/bitcoin"
+	"github.com/indyjo/bitwrk/common/bitwrk"
 	"github.com/indyjo/bitwrk/server/config"
 	db "github.com/indyjo/bitwrk/server/gae"
 	"github.com/indyjo/bitwrk/server/util"

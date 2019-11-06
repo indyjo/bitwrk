@@ -30,8 +30,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/protocol"
+	"github.com/indyjo/bitwrk/common/bitwrk"
+	"github.com/indyjo/bitwrk/common/protocol"
 	client "github.com/indyjo/bitwrk/client"
 )
 

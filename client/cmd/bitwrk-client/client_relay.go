@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/protocol"
+	"github.com/indyjo/bitwrk/common/protocol"
 )
 
 type cacheEntry struct {
