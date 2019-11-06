@@ -26,12 +26,14 @@ import (
 
 	"bitbucket.org/ww/goautoneg"
 	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk/server/config"
-	db "github.com/indyjo/bitwrk/server/gae"
-	"github.com/indyjo/bitwrk/server/util"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
+
+	"github.com/indyjo/bitwrk/server/config"
+	db "github.com/indyjo/bitwrk/server/gae"
+	"github.com/indyjo/bitwrk/server/nonce"
+	"github.com/indyjo/bitwrk/server/util"
 )
 
 const depositCreateHtml = `
@@ -117,9 +119,9 @@ func handleCreateDeposit(w http.ResponseWriter, r *http.Request) {
 
 func createDeposit(c context.Context, depositType, depositAccount, depositAmount, depositNonce, depositUid, depositRef, depositSig string) (err error) {
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
-	err = checkNonce(c, depositNonce)
+	err = nonce.CheckNonce(c, depositNonce)
 	if config.CfgRequireValidNonce && err != nil {
-		return fmt.Errorf("Error in checkNonce: %v", err)
+		return fmt.Errorf("Error in CheckNonce: %v", err)
 	}
 
 	// Bitcoin addresses must have the right network id

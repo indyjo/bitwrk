@@ -14,7 +14,8 @@
 //  You should have received a copy of the GNU General Public License
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package server
+// Package nonce deals with creation and verification of short-lived nonce values.
+package nonce
 
 import (
 	"context"
@@ -44,7 +45,7 @@ func NonceKey(c context.Context, nonce string) *datastore.Key {
 }
 
 // Handler function for /nonce
-func handleGetNonce(w http.ResponseWriter, r *http.Request) {
+func HandleGetNonce(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 	hash := md5.New()
 	now := time.Now()
@@ -84,7 +85,7 @@ func handleGetNonce(w http.ResponseWriter, r *http.Request) {
 
 var errInvalidNonce = fmt.Errorf("Nonce invalid")
 
-func checkNonce(c context.Context, nonce string) error {
+func CheckNonce(c context.Context, nonce string) error {
 	now := time.Now()
 
 	if len(nonce) < 24 || len(nonce) > 32 {

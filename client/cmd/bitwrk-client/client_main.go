@@ -33,14 +33,16 @@ import (
 	"time"
 
 	"github.com/indyjo/bitwrk/client/assist"
+	"github.com/indyjo/bitwrk/client/common"
 	"github.com/indyjo/bitwrk/client/receiveman"
+
+	"github.com/indyjo/cafs"
 
 	"github.com/indyjo/bitwrk-common/bitcoin"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
 	"github.com/indyjo/bitwrk-common/protocol"
 	"github.com/indyjo/bitwrk/client"
-	"github.com/indyjo/cafs"
 )
 
 var ExternalAddress string
@@ -53,8 +55,8 @@ var BitwrkUrl string
 var TrustedAccount string
 
 func main() {
-	log.Printf("bitwrk-client %v %v",  ClientVersion, CommitSHA)
-	protocol.BitwrkUserAgent = "BitWrkGoClient/" + ClientVersion
+	log.Printf("bitwrk-client %v %v", common.ClientVersion, common.CommitSHA)
+	protocol.BitwrkUserAgent = "BitWrkGoClient/" + common.ClientVersion
 
 	flags := flag.NewFlagSet("bitwrk-client", flag.ExitOnError)
 	flags.StringVar(&ExternalAddress, "extaddr", "auto",
@@ -84,18 +86,18 @@ func main() {
 	}
 
 	if ResourceDir == "auto" {
-		if dir, err := AutoFindResourceDir("bitwrk-client", ClientVersion); err != nil {
+		if dir, err := AutoFindResourceDir("bitwrk-client", common.ClientVersion); err != nil {
 			log.Fatalf("Error finding resource directory: %v", err)
 		} else {
 			ResourceDir = dir
 		}
 	} else {
-		if err := TestResourceDir(ResourceDir, "bitwrk-client", ClientVersion); err != nil {
+		if err := TestResourceDir(ResourceDir, "bitwrk-client", common.ClientVersion); err != nil {
 			log.Fatalf("Directory [%v] is not a valid resource directory: %v", ResourceDir, err)
 		}
 	}
 
-	BitcoinIdentity = LoadOrCreateIdentity("bitwrk-client", bitcoin.AddrVersionBitcoin)
+	BitcoinIdentity = common.MustLoadOrCreateIdentity("bitwrk-client", bitcoin.AddrVersionBitcoin)
 
 	if !strings.HasSuffix(BitwrkUrl, "/") {
 		BitwrkUrl += "/"
@@ -510,7 +512,7 @@ func handleId(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleVersion(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(ClientVersion))
+	w.Write([]byte(common.ClientVersion))
 }
 
 func handleMyIp(w http.ResponseWriter, r *http.Request) {

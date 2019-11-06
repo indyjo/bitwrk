@@ -2,8 +2,8 @@ bitbucket.org/ww/goautoneg v0.0.0-20120707110453-75cd24fc2f2c h1:t+Ra932MCC0eeyD
 bitbucket.org/ww/goautoneg v0.0.0-20120707110453-75cd24fc2f2c/go.mod h1:1vhO7Mn/FZMgOgDVGLy5X1mE6rq1HbkBdkF/yj8zkcg=
 github.com/golang/protobuf v1.3.1 h1:YF8+flBXS5eO826T4nzqPrxfhQThhXl0YzfuUPu4SBg=
 github.com/golang/protobuf v1.3.1/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
-github.com/indyjo/bitwrk-common v0.0.2 h1:6L8ckABr0X23ji9IfUC40SIlg1IW8poG20m6Q0u/KNY=
-github.com/indyjo/bitwrk-common v0.0.2/go.mod h1:YKh1z1GRPXntD7qXQxrCLjvNsU2uqK6aqUoz1XBmDlc=
+github.com/indyjo/bitwrk-common v0.0.3 h1:C9L7vhIT7/+DcGIntOavqjvXsuM/yzJrFON2KNzcHGw=
+github.com/indyjo/bitwrk-common v0.0.3/go.mod h1:YKh1z1GRPXntD7qXQxrCLjvNsU2uqK6aqUoz1XBmDlc=
 github.com/indyjo/cafs v0.0.0-20190907155224-8998008871ee h1:54xKC0cNkcevlpBroUhiH+U+L+bSicXpJ9ZjgTSXixo=
 github.com/indyjo/cafs v0.0.0-20190907155224-8998008871ee/go.mod h1:DVb0eByLY0HnG1x9Gh7L/C+/LFRz+GBO4/ND2pLONNE=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=

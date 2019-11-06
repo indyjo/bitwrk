@@ -28,12 +28,14 @@ import (
 	"bitbucket.org/ww/goautoneg"
 	"github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
-	"github.com/indyjo/bitwrk/server/config"
-	db "github.com/indyjo/bitwrk/server/gae"
-	"github.com/indyjo/bitwrk/server/util"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
+
+	"github.com/indyjo/bitwrk/server/config"
+	db "github.com/indyjo/bitwrk/server/gae"
+	"github.com/indyjo/bitwrk/server/nonce"
+	"github.com/indyjo/bitwrk/server/util"
 )
 
 const accountViewHtml = `
@@ -177,9 +179,9 @@ func renderAccountJson(w http.ResponseWriter, account *bitwrk.ParticipantAccount
 
 func requestDepositAddress(c context.Context, r *http.Request, participant string) (err error) {
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
-	err = checkNonce(c, r.FormValue("nonce"))
+	err = nonce.CheckNonce(c, r.FormValue("nonce"))
 	if config.CfgRequireValidNonce && err != nil {
-		return fmt.Errorf("Error in checkNonce: %v", err)
+		return fmt.Errorf("Error in CheckNonce: %v", err)
 	}
 
 	m := bitwrk.DepositAddressRequest{}
@@ -231,9 +233,9 @@ func requestDepositAddress(c context.Context, r *http.Request, participant strin
 
 func storeDepositInfo(c context.Context, r *http.Request, participant string) (err error) {
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
-	err = checkNonce(c, r.FormValue("nonce"))
+	err = nonce.CheckNonce(c, r.FormValue("nonce"))
 	if config.CfgRequireValidNonce && err != nil {
-		return fmt.Errorf("Error in checkNonce: %v", err)
+		return fmt.Errorf("Error in CheckNonce: %v", err)
 	}
 
 	m := bitwrk.DepositAddressMessage{}

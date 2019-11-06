@@ -38,6 +38,10 @@ func AccountKey(c context.Context, participant string) *datastore.Key {
 	return datastore.NewKey(c, "Account", participant, 0, nil)
 }
 
+func RelationKey(c context.Context, source, target string, reltype RelationType) *datastore.Key {
+	return datastore.NewKey(c, "Relation", source+"/"+reltype.String()+"/"+target, 0, nil)
+}
+
 func DepositKey(c context.Context, uid string) *datastore.Key {
 	return datastore.NewKey(c, "Deposit", uid, 0, nil)
 }

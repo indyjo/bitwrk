@@ -20,14 +20,18 @@ import (
 	"context"
 	"fmt"
 
-	. "github.com/indyjo/bitwrk-common/bitwrk"
 	"google.golang.org/appengine/datastore"
+
+	. "github.com/indyjo/bitwrk-common/bitwrk"
 )
 
 type gaeAccountingDao struct {
 	c         context.Context
 	low, high int64
 }
+
+// Make sure AccountingDao is implemented
+var _ AccountingDao = &gaeAccountingDao{}
 
 func (dao *gaeAccountingDao) GetAccount(participant string) (account ParticipantAccount, err error) {
 	key := AccountKey(dao.c, participant)
@@ -97,6 +101,23 @@ func (dao *gaeAccountingDao) GetDeposit(uid string) (Deposit, error) {
 func (dao *gaeAccountingDao) SaveDeposit(uid string, deposit *Deposit) error {
 	key := DepositKey(dao.c, uid)
 	_, err := datastore.Put(dao.c, key, datastore.PropertyLoadSaver(depositCodec{deposit}))
+	return err
+}
+
+func (dao *gaeAccountingDao) GetRelation(source, target string, reltype RelationType) (*Relation, error) {
+	key := RelationKey(dao.c, source, target, reltype)
+	var relation Relation
+	if err := datastore.Get(dao.c, key, relationCodec{&relation}); err == datastore.ErrNoSuchEntity {
+		return nil, ErrNoSuchObject
+	} else if err != nil {
+		return nil, err
+	}
+	return &relation, nil
+}
+
+func (dao *gaeAccountingDao) SaveRelation(relation *Relation) error {
+	key := RelationKey(dao.c, relation.Source, relation.Target, relation.Type)
+	_, err := datastore.Put(dao.c, key, datastore.PropertyLoadSaver(relationCodec{relation}))
 	return err
 }
 

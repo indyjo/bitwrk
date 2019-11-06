@@ -28,12 +28,14 @@ import (
 
 	"bitbucket.org/ww/goautoneg"
 	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk/server/config"
-	db "github.com/indyjo/bitwrk/server/gae"
-	"github.com/indyjo/bitwrk/server/util"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
+
+	"github.com/indyjo/bitwrk/server/config"
+	db "github.com/indyjo/bitwrk/server/gae"
+	"github.com/indyjo/bitwrk/server/nonce"
+	"github.com/indyjo/bitwrk/server/util"
 )
 
 const bidCreateHtml = `
@@ -183,9 +185,9 @@ func enqueueBid(c context.Context, w http.ResponseWriter, r *http.Request) (err 
 	bidSignature := r.FormValue("signature")
 
 	// Important: checking (and invalidating) the nonce must be the first thing we do!
-	err = checkNonce(c, bidNonce)
+	err = nonce.CheckNonce(c, bidNonce)
 	if config.CfgRequireValidNonce && err != nil {
-		return fmt.Errorf("Error in checkNonce: %v", err)
+		return fmt.Errorf("Error in CheckNonce: %v", err)
 	}
 
 	err = util.CheckArticle(c, bidArticle)

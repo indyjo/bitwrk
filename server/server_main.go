@@ -20,11 +20,14 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/indyjo/bitwrk/server/query"
-	"github.com/indyjo/bitwrk/server/util"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"
 	"google.golang.org/appengine/user"
+
+	"github.com/indyjo/bitwrk/server/nonce"
+	"github.com/indyjo/bitwrk/server/query"
+	"github.com/indyjo/bitwrk/server/rel"
+	"github.com/indyjo/bitwrk/server/util"
 )
 
 func init() {
@@ -32,9 +35,11 @@ func init() {
 	http.HandleFunc("/logout", handleLogout)
 	http.HandleFunc("/bid", handleCreateBid)
 	http.HandleFunc("/bid/", handleRenderBid)
-	http.HandleFunc("/nonce", handleGetNonce)
+	http.HandleFunc("/nonce", nonce.HandleGetNonce)
 	http.HandleFunc("/tx/", handleTx)
 	http.HandleFunc("/account/", handleAccount)
+	http.HandleFunc("/rel", rel.HandleCreate)
+	http.HandleFunc("/rel/", rel.HandleRender)
 	http.HandleFunc("/ledger/", handleAccountMovement)
 	http.HandleFunc("/myip", handleMyIp)
 	http.HandleFunc("/motd", handleMessageOfTheDay)

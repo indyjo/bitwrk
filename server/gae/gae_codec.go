@@ -22,9 +22,10 @@ import (
 	"net/url"
 	"time"
 
+	"google.golang.org/appengine/datastore"
+
 	. "github.com/indyjo/bitwrk-common/bitwrk"
 	"github.com/indyjo/bitwrk-common/money"
-	"google.golang.org/appengine/datastore"
 )
 
 func mustDecodeKey(s *string) *datastore.Key {
@@ -511,6 +512,53 @@ func (codec depositCodec) Load(props []datastore.Property) error {
 			deposit.Signature = p.Value.(string)
 		case "Type":
 			deposit.Type = DepositType(p.Value.(int64))
+		default:
+			return fmt.Errorf("Unknown property %s", p.Name)
+		}
+	}
+
+	return nil
+}
+
+type relationCodec struct {
+	relation *Relation
+}
+
+// Make sure datastore.PropertyLoadSaver is implemented.
+var _ datastore.PropertyLoadSaver = relationCodec{nil}
+
+func (codec relationCodec) Save() ([]datastore.Property, error) {
+	relation := codec.relation
+	return []datastore.Property{
+		datastore.Property{Name: "Source", Value: relation.Source},
+		datastore.Property{Name: "Target", Value: relation.Target},
+		datastore.Property{Name: "Enabled", Value: relation.Enabled},
+		datastore.Property{Name: "LastModified", Value: relation.LastModified},
+		datastore.Property{Name: "Document", Value: relation.Document, NoIndex: true},
+		datastore.Property{Name: "Signature", Value: relation.Signature, NoIndex: true},
+		datastore.Property{Name: "Type", Value: int64(relation.Type)},
+	}, nil
+}
+
+func (codec relationCodec) Load(props []datastore.Property) error {
+	relation := codec.relation
+
+	for _, p := range props {
+		switch p.Name {
+		case "Source":
+			relation.Source = p.Value.(string)
+		case "Target":
+			relation.Target = p.Value.(string)
+		case "Enabled":
+			relation.Enabled = p.Value.(bool)
+		case "LastModified":
+			relation.LastModified = p.Value.(time.Time)
+		case "Document":
+			relation.Document = p.Value.(string)
+		case "Signature":
+			relation.Signature = p.Value.(string)
+		case "Type":
+			relation.Type = RelationType(p.Value.(int64))
 		default:
 			return fmt.Errorf("Unknown property %s", p.Name)
 		}
