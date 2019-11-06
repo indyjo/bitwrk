@@ -26,7 +26,7 @@ import (
 	"os/user"
 	"path/filepath"
 
-	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk/common/bitcoin"
 )
 
 func getMainConfigDir(name string) (string, error) {

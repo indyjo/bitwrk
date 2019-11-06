@@ -24,8 +24,8 @@ import (
 
 	"google.golang.org/appengine/datastore"
 
-	. "github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/money"
+	. "github.com/indyjo/bitwrk/common/bitwrk"
+	"github.com/indyjo/bitwrk/common/money"
 )
 
 func mustDecodeKey(s *string) *datastore.Key {

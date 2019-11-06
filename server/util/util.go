@@ -23,7 +23,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk/common/bitcoin"
 	"github.com/indyjo/bitwrk/server/config"
 )
 

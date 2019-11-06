@@ -20,8 +20,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/money"
+	"github.com/indyjo/bitwrk/common/bitwrk"
+	"github.com/indyjo/bitwrk/common/money"
 	"google.golang.org/appengine/datastore"
 )
 

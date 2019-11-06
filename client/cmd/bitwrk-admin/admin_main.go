@@ -21,8 +21,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/protocol"
+	"github.com/indyjo/bitwrk/common/bitcoin"
+	"github.com/indyjo/bitwrk/common/protocol"
 	"github.com/indyjo/bitwrk/client/common"
 )
 

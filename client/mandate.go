@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/money"
+	"github.com/indyjo/bitwrk/common/bitwrk"
+	"github.com/indyjo/bitwrk/common/money"
 )
 
 // Automates granting permission to (or publishing of, as it is now called) a trade.

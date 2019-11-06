@@ -33,8 +33,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	. "github.com/indyjo/bitwrk-common/protocol"
+	"github.com/indyjo/bitwrk/common/bitwrk"
+	. "github.com/indyjo/bitwrk/common/protocol"
 	"github.com/indyjo/bitwrk/client/assist"
 	"github.com/indyjo/bitwrk/client/gziputil"
 	"github.com/indyjo/cafs"

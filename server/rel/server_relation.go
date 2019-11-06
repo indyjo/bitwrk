@@ -29,7 +29,7 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/log"
 
-	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk/common/bitwrk"
 	"github.com/indyjo/bitwrk/server/config"
 	"github.com/indyjo/bitwrk/server/gae"
 	nonce2 "github.com/indyjo/bitwrk/server/nonce"

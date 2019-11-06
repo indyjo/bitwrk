@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"bitbucket.org/ww/goautoneg"
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/money"
+	"github.com/indyjo/bitwrk/common/bitwrk"
+	"github.com/indyjo/bitwrk/common/money"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"

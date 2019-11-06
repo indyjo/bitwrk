@@ -26,8 +26,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/bitwrk"
-	"github.com/indyjo/bitwrk-common/money"
+	"github.com/indyjo/bitwrk/common/bitwrk"
+	"github.com/indyjo/bitwrk/common/money"
 	db "github.com/indyjo/bitwrk/server/gae"
 	"github.com/indyjo/bitwrk/server/util"
 	"google.golang.org/appengine"
