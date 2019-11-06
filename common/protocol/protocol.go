@@ -32,8 +32,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/bitwrk"
+	"github.com/indyjo/bitwrk/common/bitcoin"
+	"github.com/indyjo/bitwrk/common/bitwrk"
 )
 
 var defaultClient = NewClient(&http.Transport{

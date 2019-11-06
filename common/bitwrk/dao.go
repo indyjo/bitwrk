@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/indyjo/bitwrk-common/money"
+	"github.com/indyjo/bitwrk/common/money"
 )
 
 var ErrNoSuchObject = errors.New("No such object")

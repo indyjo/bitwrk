@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/money"
+	"github.com/indyjo/bitwrk/common/bitcoin"
+	"github.com/indyjo/bitwrk/common/money"
 )
 
 // A single account of money. Corresponds with either the 'Available' or the 'Blocked'

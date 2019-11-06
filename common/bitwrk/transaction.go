@@ -27,8 +27,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/money"
+	"github.com/indyjo/bitwrk/common/bitcoin"
+	"github.com/indyjo/bitwrk/common/money"
 )
 
 type (

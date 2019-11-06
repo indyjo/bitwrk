@@ -22,7 +22,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/bitcoin"
+	"github.com/indyjo/bitwrk/common/bitcoin"
 )
 
 // Type RelationType specifies how to interpret a Relation.

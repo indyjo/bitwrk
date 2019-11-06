@@ -23,8 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/indyjo/bitwrk-common/bitcoin"
-	"github.com/indyjo/bitwrk-common/money"
+	"github.com/indyjo/bitwrk/common/bitcoin"
+	"github.com/indyjo/bitwrk/common/money"
 )
 
 var ErrInsufficientFunds = fmt.Errorf("Insufficient funds")
