@@ -216,8 +216,8 @@ func postFormToServerExpectRedirect(relpath, query string) error {
 		} else {
 			buf := make([]byte, 1024)
 			n, _ := io.ReadFull(r.Body, buf)
-			return fmt.Errorf("Unexpected reply status posting form to server: %v (%v)",
-				r.Status, string(buf[:n]))
+			return fmt.Errorf("unexpected reply from server: %v (%v)",
+				r.Status, strings.TrimSpace(string(buf[:n])))
 		}
 	} else {
 		return fmt.Errorf("Error posting form to server: %v", err)
@@ -396,4 +396,9 @@ func GetParticipantsWithDepositAddressRequest(limit int) ([]string, error) {
 		}
 		return result, nil
 	}
+}
+
+func SendRelation(relation *bitwrk.Relation) error {
+	msg := fmt.Sprintf("%v&signature=%v", relation.Document, url.QueryEscape(relation.Signature))
+	return postFormToServerExpectRedirect("rel", msg)
 }

@@ -40,6 +40,9 @@ type AccountingDao interface {
 
 	GetDeposit(uid string) (Deposit, error)
 	SaveDeposit(uid string, deposit *Deposit) error
+
+	GetRelation(source, target string, reltype RelationType) (*Relation, error)
+	SaveRelation(relation *Relation) error
 }
 
 type CachedAccountingDao interface {
@@ -172,6 +175,14 @@ func (c *cachedAccountingDao) SaveDeposit(uid string, deposit *Deposit) error {
 	c.deposits[uid] = *deposit
 	c.savedDeposits[uid] = true
 	return nil
+}
+
+func (c *cachedAccountingDao) GetRelation(source, target string, reltype RelationType) (*Relation, error) {
+	return c.delegate.GetRelation(source, target, reltype)
+}
+
+func (c *cachedAccountingDao) SaveRelation(relation *Relation) error {
+	return c.delegate.SaveRelation(relation)
 }
 
 func (c *cachedAccountingDao) Flush() error {
