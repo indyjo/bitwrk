@@ -144,9 +144,10 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
     bl_label = "BitWrk Render"
     bl_description = "Performs distributed rendering using the BitWrk marketplace for compute power"
     
-    def render(self, scene):
+    def render(self, depsgraph):
         global _render_count
         _render_count += 1
+        scene = depsgraph.scene
         try:
             if not hasattr(scene, 'bitwrk_settings'):
                 self.report({'ERROR'}, "Must first setup BitWrk")
@@ -172,7 +173,7 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
         self.report({'INFO'}, "mainfile.blend successfully exported: {}".format(filename))
         
         max_pixels_per_tile = max_tilesize(scene)
-        is_multilayer = len(scene.render.layers) > 1 and not scene.render.use_single_layer
+        is_multilayer = len(scene.view_layers) > 1 and not scene.render.use_single_layer
         resx, resy = render_resolution(scene)
         
         tiles = self._makeTiles(scene.frame_current, resx, resy, max_pixels_per_tile)
