@@ -146,6 +146,30 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
         if bitwrkclient.probe_bitwrk_client(settings):
             self.layout.separator()
             
+            self.layout.prop(settings, "trusted_render")
+            if settings.trusted_render:
+                self.layout.label(
+                    icon='FILE_TICK',
+                    text="Your scene is rendered on a trusted cloud.")
+                self.layout.label(
+                    icon='LOCKED',
+                    text="Your assets are secure.")
+                self.layout.label(
+                    icon='BLANK1',
+                    text="Disable 'Trusted Cloud Rendering' for a more economical alternative.")
+            else:
+                self.layout.label(
+                    icon='INFO',
+                    text="Your scene is rendered on a public swarm.")
+                self.layout.label(
+                    icon='UNLOCKED',
+                    text="Don't use for privacy-sensitive projects.")
+                self.layout.label(
+                    icon='BLANK1',
+                    text="Enable 'Trusted Cloud Rendering' for more security and reliability.")
+
+            self.layout.separator()
+
             if settings.expert_mode:
                 row = self.layout.row()
                 row.enabled = not worker.worker_alive()
@@ -153,7 +177,7 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
             
             row = self.layout.split(0.333)
             row.label("Article id: ", icon="RNDCURVE")
-            row.label(get_article_id(settings.complexity))
+            row.label(get_article_id(settings.complexity, settings.trusted_render))
             
             resx, resy = render_resolution(context.scene)
             max_pixels = max_tilesize(context.scene)

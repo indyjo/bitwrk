@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -176,6 +177,8 @@ var newBidDefaults = bitwrk.NewBidDefaults{
 	Timeout:             120 * time.Second,
 }
 
+var errSellerNotTrusted = errors.New("seller is not allowed to create bids of trusted article")
+
 func enqueueBid(c context.Context, w http.ResponseWriter, r *http.Request) (err error) {
 	bidType := r.FormValue("type")
 	bidArticle := r.FormValue("article")
@@ -190,7 +193,7 @@ func enqueueBid(c context.Context, w http.ResponseWriter, r *http.Request) (err 
 		return fmt.Errorf("Error in CheckNonce: %v", err)
 	}
 
-	err = util.CheckArticle(c, bidArticle)
+	trusted, err := util.CheckArticle(c, bidArticle)
 	if err != nil {
 		return
 	}
@@ -210,6 +213,17 @@ func enqueueBid(c context.Context, w http.ResponseWriter, r *http.Request) (err 
 		err = bid.Verify()
 		if err != nil {
 			return
+		}
+	}
+
+	// If this is a trusted sell, check that seller is trusted by configured account.
+	if bid.Type == bitwrk.Sell && trusted && config.CfgRequireTrustsRelation {
+		dao := db.NewGaeAccountingDao(c, false)
+		rel, err := dao.GetRelation(config.CfgTrustsRelationAccount, bidAddress, bitwrk.RELATION_TYPE_TRUSTS)
+		if err == bitwrk.ErrNoSuchObject || (err == nil && !rel.Enabled) {
+			return errSellerNotTrusted
+		} else if err != nil {
+			return err
 		}
 	}
 

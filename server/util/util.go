@@ -43,9 +43,17 @@ func CheckBitcoinAddress(address string) error {
 	return nil
 }
 
-var blenderRegexp = regexp.MustCompile(`^(net\.bitwrk/blender/0/2\.(69|7[0-9])/(512M|2G|8G|32G))$`)
+var blenderRegexp = regexp.MustCompile(`^(net\.bitwrk/blender/0/2\.(69|7[0-9]|8[0-2])/(512M|2G|8G|32G))$`)
 
-func CheckArticle(_ context.Context, article string) error {
+// Function CheckArticle accepts an article id string and returns
+//  - whether the article contains a "~trusted" clause
+//  - nil or an error if the article doesn't match the articles traded on the service.
+func CheckArticle(_ context.Context, article string) (bool, error) {
+	trusted := false
+	if strings.HasSuffix(article, "~trusted") {
+		article = article[:len(article) - len("~trusted")]
+		trusted = true
+	}
 	switch article {
 	case "fnord", "snafu", "foobar",
 		"net.bitwrk/gorays/0":
@@ -53,11 +61,11 @@ func CheckArticle(_ context.Context, article string) error {
 	default:
 		if blenderRegexp.MatchString(article) {
 		} else {
-			return fmt.Errorf("Article not traded here: %#v", article)
+			return trusted, fmt.Errorf("Article not traded here: %#v", article)
 		}
 	}
 
-	return nil
+	return trusted, nil
 }
 
 // Given a string in format host, host:port or [host]:port, returns the host part.

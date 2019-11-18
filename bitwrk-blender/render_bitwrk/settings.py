@@ -92,6 +92,11 @@ class BitWrkSettings(bpy.types.PropertyGroup):
             description="Device that worker uses for rendering",
             items=cycles.properties.enum_devices,
             default='CPU')
+        settings.trusted_render = BoolProperty(
+            name="Trusted Cloud Rendering",
+            description="If enabled, render on servers of BitWrk's trusted cloud, where your assets are secure." +
+                        " If disabled, render on the public swarm, for a lower price.",
+            default=True)
         
         bpy.types.Scene.bitwrk_settings = PointerProperty(type=BitWrkSettings, name="BitWrk Settings", description="Settings for using the BitWrk service")
 
