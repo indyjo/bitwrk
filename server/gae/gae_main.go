@@ -162,6 +162,14 @@ func RetireBid(c context.Context, key *datastore.Key) error {
 			return nil
 		}
 
+		// Some bids were created with erroneous data due to a bug.
+		// Ignore them for now so that the retire tasks don't repeat forever.
+		if bid.Created.Before(time.Unix(0, 0)) {
+			log.Warningf(c, "Not retiring bid created %v", bid.Created)
+			log.Infof(c, "Full bid data: %v", bid)
+			return nil
+		}
+
 		if err := bid.Retire(dao, key.Encode(), now); err != nil {
 			return err
 		}
