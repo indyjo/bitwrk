@@ -52,7 +52,7 @@ class Tile:
             settings.bitwrk_client_host, settings.bitwrk_client_port,
             timeout=600)
         try:
-            self.conn.putrequest("POST", "/buy/" + get_article_id(settings.complexity))
+            self.conn.putrequest("POST", "/buy/" + get_article_id(settings.complexity, settings.trusted_render))
             self.conn.putheader('Transfer-Encoding', 'chunked')
             self.conn.endheaders()
             chunked = Chunked(self.conn)

@@ -3,7 +3,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2019  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -460,6 +460,8 @@ def parse_args():
         help="Network address of this worker [auto]", default="auto")
     parser.add_argument('--device', metavar='DEVICE', help="Device to use for rendering [CPU]",
         choices=["CPU", "GPU"], default="CPU")
+    parser.add_argument('--trusted', default=False, action='store_true',
+        help="Sell as trusted seller (requires special privileges on service)")
     return parser.parse_args()
         
 if __name__ == "__main__":
@@ -475,6 +477,8 @@ if __name__ == "__main__":
     BITWRK_HOST=args.bitwrk_host
     BITWRK_PORT=args.bitwrk_port
     ARTICLE_ID="net.bitwrk/blender/0/{}/{}".format(BLENDER_VERSION, args.max_cost)
+    if args.trusted:
+        ARTICLE_ID=ARTICLE_ID+"~trusted"
     if args.max_cost=='512M':
         MAX_COST=512*1024*1024
     elif args.max_cost=='2G':

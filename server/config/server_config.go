@@ -24,3 +24,12 @@ const CfgRequireValidWorkerURL = true
 
 // Account ID that is trusted when receiving a deposit
 const CfgTrustedAccount = "1TrsjuCvBch1D9h6nRkadGKakv9KyaiP6"
+
+// The following constants refer to the privilege of being able to sell articles with a
+// "~trusted" suffix. This privilege is embodied by a certain account ID having a "trusts"
+// relation to the seller.
+
+// Whether "trusts" relationship is verified when a seller bid with a ~trusted article ID.
+const CfgRequireTrustsRelation = true
+// Account which needs to have "trusts" relation to seller wishing to sell on ~trusted article ID.
+const CfgTrustsRelationAccount = "1C1oudoQRdNh6mKr6VaTg2DPveVq97VAyT"

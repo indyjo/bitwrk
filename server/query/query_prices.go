@@ -149,7 +149,7 @@ func HandleQueryPrices(w http.ResponseWriter, r *http.Request) {
 	if articleStr == "" {
 		http.Error(w, "article argument missing", http.StatusNotFound)
 		return
-	} else if err := util.CheckArticle(c, articleStr); err != nil {
+	} else if _, err := util.CheckArticle(c, articleStr); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	} else {
@@ -403,7 +403,7 @@ func HandleQueryTrades(w http.ResponseWriter, r *http.Request) {
 	if articleStr == "" {
 		http.Error(w, "article argument missing", http.StatusNotFound)
 		return
-	} else if err := util.CheckArticle(c, articleStr); err != nil {
+	} else if _, err := util.CheckArticle(c, articleStr); err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	} else {

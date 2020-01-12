@@ -20,9 +20,10 @@
 
 import bpy, math
 
-def get_article_id(complexity):
+def get_article_id(complexity, trusted):
     major, minor, micro = bpy.app.version
-    return "net.bitwrk/blender/0/{}.{}/{}".format(major, minor, complexity)
+    return "net.bitwrk/blender/0/{}.{}/{}{}".format(major, minor, complexity,
+                                                    "~trusted" if trusted else "")
 
 def render_resolution(scene):
     percentage = max(1, min(10000, scene.render.resolution_percentage))
