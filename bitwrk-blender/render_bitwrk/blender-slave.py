@@ -105,7 +105,7 @@ print("Blender sees:", xmin, ymin, xmax, ymax, MAX_COST, device)
 scene = bpy.context.scene
 render = scene.render
 num_layers = 0
-for layer in render.layers:
+for layer in scene.view_layers:
     if layer.use:
         num_layers += 1
 if render.use_single_layer:
@@ -113,7 +113,7 @@ if render.use_single_layer:
 render.image_settings.file_format='OPEN_EXR'
 # Multi-layer rendering support in BitWrk was introduced with support for
 # Blender 2.70, so only enable multilayer starting with that version.
-if len(render.layers) > 1 and not render.use_single_layer and bpy.app.version >= (2,70,0):
+if len(scene.view_layers) > 1 and not render.use_single_layer and bpy.app.version >= (2,70,0):
     print("Multilayer enabled")
     render.image_settings.file_format='OPEN_EXR_MULTILAYER'
 render.image_settings.color_mode='RGBA'
@@ -438,11 +438,17 @@ def get_blender_version():
         return "2.78"
     elif b"Blender 2.79 (sub" in output:
         return "2.79"
+    elif b"Blender 2.80 (sub" in output:
+        return "2.80"
+    elif b"Blender 2.81 (sub" in output:
+        return "2.81"
+    elif b"Blender 2.82 (sub" in output:
+        return "2.82"
     else:
         raise RuntimeError("Blender version could not be detected.\n"
                            + "This version of " + __file__
                            + " will detect Blender versions "
-                           + "2.76 up to 2.79.")
+                           + "2.76 up to 2.82.")
 
 def parse_args():
     import argparse

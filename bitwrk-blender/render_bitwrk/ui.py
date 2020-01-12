@@ -39,11 +39,11 @@ def draw_device(self, context):
     # Check if Open Shading Language is active and warn
     layout.prop(cscene, "shading_system")
     if cscene.shading_system:
-        layout.label("OSL doesn't work on BitWrk if workers use GPU", icon='ERROR')
+        layout.label(text="OSL doesn't work on BitWrk if workers use GPU", icon='ERROR')
 
 def register():
-    bpy.types.RENDER_PT_render.append(draw_device)
+    bpy.types.RENDER_PT_context.append(draw_device)
     
 def unregister():
-    bpy.types.RENDER_PT_render.remove(draw_device)
+    bpy.types.RENDER_PT_context.remove(draw_device)
 

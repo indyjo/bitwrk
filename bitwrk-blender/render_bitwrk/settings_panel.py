@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2020  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -108,7 +108,7 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
     @classmethod
     def poll(cls, context):
         rd = context.scene.render
-        return rd.engine == 'BITWRK_RENDER' and not rd.use_game_engine
+        return rd.engine == 'BITWRK_RENDER'
     
     def draw(self, context):
         settings=context.scene.bitwrk_settings
@@ -116,7 +116,7 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
             self.layout.operator("bitwrk.startbrowser", icon='URL')
         else:
             self.layout.label(
-                "No BitWrk client at {}:{}".format(settings.bitwrk_client_host, settings.bitwrk_client_port),
+                text="No BitWrk client at {}:{}".format(settings.bitwrk_client_host, settings.bitwrk_client_port),
                 icon='ERROR')
         
         row = self.layout.row(align=True)
@@ -126,21 +126,21 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
         if settings.expert_mode and not bitwrkclient.can_stop_bitwrk_client():
             layout = self.layout.column()
             layout.enabled = not is_render_active() and not worker.worker_alive()
-            row = layout.split(0.5)
-            row.label("BitWrk client host:")
+            row = layout.split(factor=0.5)
+            row.label(text="BitWrk client host:")
             row.prop(settings, "bitwrk_client_host", text="")
-            row = layout.split(0.5)
-            row.label("BitWrk client port:")
+            row = layout.split(factor=0.5)
+            row.label(text="BitWrk client port:")
             row.prop(settings, "bitwrk_client_port", text="")
         
         if not bitwrkclient.probe_bitwrk_client(settings):
-            row = self.layout.split(0.5)
-            row.label("BitWrk client executable file:")
+            row = self.layout.split(factor=0.5)
+            row.label(text="BitWrk client executable file:")
             row.prop(settings, "bitwrk_client_executable_path", text="")
             if settings.expert_mode:
-                self.layout.label("BitWrk can dispatch jobs to local network computers:")
-                row = self.layout.split(0.02)
-                row.label(" ")
+                self.layout.label(text="BitWrk can dispatch jobs to local network computers:")
+                row = self.layout.split(factor=0.02)
+                row.label(text=" ")
                 row.prop(settings, "bitwrk_client_allow_nonlocal_workers")
             
         if bitwrkclient.probe_bitwrk_client(settings):
@@ -175,31 +175,31 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
                 row.enabled = not worker.worker_alive()
                 row.prop(settings, "complexity")
             
-            row = self.layout.split(0.333)
-            row.label("Article id: ", icon="RNDCURVE")
-            row.label(get_article_id(settings.complexity, settings.trusted_render))
+            row = self.layout.split(factor=0.333)
+            row.label(text="Article id: ", icon="RNDCURVE")
+            row.label(text=get_article_id(settings.complexity, settings.trusted_render))
             
             resx, resy = render_resolution(context.scene)
             max_pixels = max_tilesize(context.scene)
             u,v = optimal_tiling(resx, resy, max_pixels)
-            row = self.layout.split(0.333)
-            row.label("Tiles per frame", icon='MESH_GRID')
-            row.label("{}   ({}x{}, efficiency: {:.1%})".format(u*v, u, v, resx*resy/u/v/max_pixels))
+            row = self.layout.split(factor=0.333)
+            row.label(text="Tiles per frame", icon='MESH_GRID')
+            row.label(text="{}   ({}x{}, efficiency: {:.1%})".format(u*v, u, v, resx*resy/u/v/max_pixels))
             
-            row = self.layout.split(0.333)
-            row.label("Tiles at once", icon='NLA')
+            row = self.layout.split(factor=0.333)
+            row.label(text="Tiles at once", icon='NLA')
             row.prop(settings, "concurrency")
             if settings.expert_mode:
-                row = self.layout.split(0.333)
+                row = self.layout.split(factor=0.333)
                 row.enabled = not is_render_active()
-                row.label("Boost factor", icon='NEXT_KEYFRAME')
+                row.label(text="Boost factor", icon='NEXT_KEYFRAME')
                 row.prop(settings, "boost_factor")
             if settings.boost_factor > 1:
-                self.layout.label("A boost factor greater than 1.0 makes rendering more expensive!", icon='ERROR')
+                self.layout.label(text="A boost factor greater than 1.0 makes rendering more expensive!", icon='ERROR')
         
             self.layout.separator()
                 
-            self.layout.label("Also render on this computer:")
+            self.layout.label(text="Also render on this computer:")
             row = self.layout.row(align=True)
             row.operator("bitwrk.startworker", icon='PLAY')
             row.operator("bitwrk.stopworker", icon='X')

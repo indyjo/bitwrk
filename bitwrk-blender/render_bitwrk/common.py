@@ -48,7 +48,7 @@ def max_tilesize(scene):
     
     settings = scene.bitwrk_settings
     num_layers = 0
-    for layer in scene.render.layers:
+    for layer in scene.view_layers:
         if layer.use:
             num_layers += 1
     if scene.render.use_single_layer:
