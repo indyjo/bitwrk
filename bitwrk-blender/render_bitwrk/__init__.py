@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2020  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -30,15 +30,23 @@ bl_info = {
 # Minimum Python version: 3.2 (tempfile.TemporaryDirectory)
 
 from render_bitwrk import render, settings, settings_panel, bitwrkclient, worker, ui
+from render_bitwrk import bitwrkclient, blendfile, chunked, common, render, resources, settings, settings_panel
+from render_bitwrk import tagged, tiling, ui, worker
 
 if "bpy" in locals():
-    import imp
-    imp.reload(render)
-    imp.reload(settings)
-    imp.reload(settings_panel)
-    imp.reload(bitwrkclient)
-    imp.reload(worker)
-    imp.reload(ui)
+    import importlib
+    importlib.reload(bitwrkclient)
+    importlib.reload(blendfile)
+    importlib.reload(chunked)
+    importlib.reload(common)
+    importlib.reload(render)
+    importlib.reload(resources)
+    importlib.reload(settings)
+    importlib.reload(settings_panel)
+    importlib.reload(tagged)
+    importlib.reload(tiling)
+    importlib.reload(ui)
+    importlib.reload(worker)
 import bpy
 
 def register():
