@@ -52,6 +52,8 @@ import bpy
 def register():
     bpy.utils.register_class(render.BitWrkRenderEngine)
     bpy.utils.register_class(settings_panel.RENDER_PT_bitwrk_settings)
+    bpy.utils.register_class(settings_panel.RENDER_PT_bitwrk_trusted_settings)
+    bpy.utils.register_class(settings_panel.RENDER_PT_bitwrk_local_worker_settings)
     bpy.utils.register_class(settings.BitWrkSettings)
     bpy.utils.register_class(settings_panel.StartBrowserOperator)
     bpy.utils.register_class(settings_panel.StartBitwrkClientOperator)
@@ -81,6 +83,8 @@ def unregister():
     bpy.utils.unregister_class(settings_panel.StartBitwrkClientOperator)
     bpy.utils.unregister_class(settings_panel.StartBrowserOperator)
     bpy.utils.unregister_class(settings.BitWrkSettings)
+    bpy.utils.unregister_class(settings_panel.RENDER_PT_bitwrk_local_worker_settings)
+    bpy.utils.unregister_class(settings_panel.RENDER_PT_bitwrk_trusted_settings)
     bpy.utils.unregister_class(settings_panel.RENDER_PT_bitwrk_settings)
     bpy.utils.unregister_class(render.BitWrkRenderEngine)
 
