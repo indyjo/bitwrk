@@ -148,8 +148,9 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
             
             self.layout.prop(settings, "trusted_render")
             if settings.trusted_render:
+                # FAKE_USER_ON is a shield which can be interpreted as providing protection and security.
                 self.layout.label(
-                    icon='FILE_TICK',
+                    icon='FAKE_USER_ON',
                     text="Your scene is rendered on a trusted cloud.")
                 self.layout.label(
                     icon='LOCKED',
