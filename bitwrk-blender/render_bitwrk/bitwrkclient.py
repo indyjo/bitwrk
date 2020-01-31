@@ -26,6 +26,8 @@ LAST_PROBE_TIME = time.time() - 10.0
 LAST_PROBE_RESULT = False
 LAST_PROBE_SETTINGS = None
 LAST_PROBE_THREAD = None
+EXECUTABLE_RELATIVE_PATH = 'bitwrk_client/bitwrk-client'
+
 def probe_bitwrk_client(settings):
     global LAST_PROBE_LOCK, LAST_PROBE_TIME, LAST_PROBE_RESULT, LAST_PROBE_SETTINGS, LAST_PROBE_THREAD
     with LAST_PROBE_LOCK:
@@ -74,8 +76,11 @@ def do_probe_bitwrk_client_pure(settings):
             pass
         return False
 
+
 def client_executable_path(settings):
-    return bpy.path.abspath(settings.bitwrk_client_executable_path)
+    exec_dirname = os.path.dirname(os.path.abspath(__file__))
+    print('Client executable path = {}'.format(os.path.join(exec_dirname, EXECUTABLE_RELATIVE_PATH)))
+    return os.path.join(exec_dirname, EXECUTABLE_RELATIVE_PATH)
 
 CLIENT_PROC = None
 
@@ -98,18 +103,13 @@ def bitwrk_client_alive():
 
 def is_bitwrk_client_executable(clientpath):
     """Check the permissions of the executable"""
-
     if os.access(clientpath, os.X_OK):
-        print("Executable")
         return True
-
-    print("Not executable")
 
     return False
 
 
 def make_bitwrk_client_executable(clientpath):
-    """Changes the permissions for the executable to be executable"""
     os.chmod(clientpath, stat.S_IEXEC)
 
 
@@ -122,8 +122,6 @@ def can_start_bitwrk_client(settings):
 
     if not is_bitwrk_client_executable(clientpath):
         make_bitwrk_client_executable(clientpath)
-
-    print(is_bitwrk_client_executable(clientpath))
 
     return os.path.isfile(clientpath)
 
