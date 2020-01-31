@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2017  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2020  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ from render_bitwrk.common import get_article_id, max_tilesize, render_resolution
 from render_bitwrk.tiling import optimal_tiling
 from render_bitwrk.blendfile import save_copy, process_file
 from render_bitwrk.bitwrkclient import probe_bitwrk_client
+from cycles.engine import register_passes
 
 class Tile:
     def __init__(self, frame, minx, miny, resx, resy, color):
@@ -243,3 +244,7 @@ class BitWrkRenderEngine(bpy.types.RenderEngine):
                 result.append(Tile(frame, xmin, ymin, xmax-xmin, ymax-ymin, [c[0], c[1], c[2], 1]))
         
         return result
+
+    # Delegate render pass registration to Cycles
+    def update_render_passes(self, scene=None, renderlayer=None):
+        register_passes(self, scene, renderlayer)

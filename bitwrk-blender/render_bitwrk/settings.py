@@ -1,7 +1,7 @@
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-#  Copyright (C) 2013-2018  Jonas Eschenburg <jonas@bitwrk.net>
+#  Copyright (C) 2013-2020  Jonas Eschenburg <jonas@bitwrk.net>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -55,7 +55,7 @@ class BitWrkSettings(bpy.types.PropertyGroup):
         settings.concurrency = IntProperty(
             name="Concurrent tiles",
             description="Maximum number of BitWrk trades active in parallel",
-            default=4,
+            default=20,
             min=1,
             max=256)
         settings.boost_factor = FloatProperty(
@@ -114,6 +114,4 @@ class BitWrkSettings(bpy.types.PropertyGroup):
         elif self.complexity == '32G':
             return  32*1024*1024*1024
         else:
-            print(dir(self), self)
-            print(self.complexity)
             raise RuntimeError()
