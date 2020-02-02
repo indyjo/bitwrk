@@ -79,7 +79,6 @@ def do_probe_bitwrk_client_pure(settings):
 
 def client_executable_path(settings):
     exec_dirname = os.path.dirname(os.path.abspath(__file__))
-    print('Client executable path = {}'.format(os.path.join(exec_dirname, EXECUTABLE_RELATIVE_PATH)))
     return os.path.join(exec_dirname, EXECUTABLE_RELATIVE_PATH)
 
 CLIENT_PROC = None
