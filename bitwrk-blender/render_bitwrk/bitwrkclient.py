@@ -18,7 +18,7 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
-import atexit, bpy.path, time, http, re, os, subprocess, threading, stat
+import atexit, bpy.path, time, http, re, os, subprocess, threading
 
 # Functions for probing host:port settings for a running BitWrk client
 LAST_PROBE_LOCK = threading.RLock()
