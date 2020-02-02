@@ -29,8 +29,10 @@ import math
     w = ceil(W/u) and h = ceil(H/v)
 """
 def optimal_tiling(W, H, C):
-    cc = math.sqrt(C)
-    uv = (int(math.ceil(W / cc) + 1), int(math.ceil(H / cc) + 1))
+    # Starting with an edge length <= sqrt(C) guarantees a feasible initial value.
+    L = math.floor(math.sqrt(C))
+    # ceil(W/u) and ceil(H/v) must both be <= L
+    uv = (int(math.ceil(W / L)), int(math.ceil(H / L)))
     def is_feasible(uv):
         u, v = uv
         return u > 0 and v > 0 and math.ceil(W / u) * math.ceil(H / v) <= C
