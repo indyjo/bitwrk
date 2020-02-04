@@ -13,6 +13,9 @@ CLIENT_DIR=bitwrk_client
 RESOURCE_DIR=resources
 RENDER_DIR=bitwrk-blender
 ADDON_DIR=render_bitwrk
+SUFFIX_DARWIN=_osx.x64
+SUFFIX_LINUX=_linux.x64
+SUFFIX_WINDOWS=_windows.x64
 
 all: build-go prep-addon package-darwin package-linux package-windows cleanup-addon
 
@@ -33,7 +36,7 @@ package-darwin:
 	cp $(CLIENT_DARWIN) $(TMPDIR)/$(ADDON_DIR)/$(CLIENT_DIR)/ && \
 	echo "DARWIN: ZIP ADDON" && \
 	cd $(TMPDIR) && \
-	zip -r ../$(ADDON_NAME_ROOT)_osx.zip * && \
+	zip -r ../$(ADDON_NAME_ROOT)$(SUFFIX_DARWIN).zip * && \
 	echo "DARWIN: REMOVE CLIENT EXECUTABLE" && \
 	cd .. && \
 	rm $(TMPDIR)/$(ADDON_DIR)/$(CLIENT_DIR)/$(GO_CLIENT)
@@ -43,7 +46,7 @@ package-linux:
 	cp $(CLIENT_LINUX) $(TMPDIR)/$(ADDON_DIR)/$(CLIENT_DIR)/ && \
 	echo "LINUX: ZIP ADDON" && \
 	cd $(TMPDIR) && \
-	zip -r ../$(ADDON_NAME_ROOT)_linux.zip * && \
+	zip -r ../$(ADDON_NAME_ROOT)$(SUFFIX_LINUX).zip * && \
 	echo "LINUX: REMOVE CLIENT EXECUTABLE" && \
 	cd .. && \
 	rm $(TMPDIR)/$(ADDON_DIR)/$(CLIENT_DIR)/$(GO_CLIENT)
@@ -53,7 +56,7 @@ package-windows:
 	cp $(CLIENT_WINDOWS) $(TMPDIR)/$(ADDON_DIR)/$(CLIENT_DIR)/ && \
 	echo "WINDOWS: ZIP ADDON" && \
 	cd $(TMPDIR) && \
-	zip -r ../$(ADDON_NAME_ROOT)_windows.zip * && \
+	zip -r ../$(ADDON_NAME_ROOT)$(SUFFIX_WINDOWS).zip * && \
 	echo "WINDOWS: REMOVE CLIENT EXECUTABLE" && \
 	cd .. && \
 	rm $(TMPDIR)/$(ADDON_DIR)/$(CLIENT_DIR)/$(GO_CLIENT).exe
