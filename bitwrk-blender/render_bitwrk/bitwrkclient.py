@@ -78,8 +78,17 @@ def do_probe_bitwrk_client_pure(settings):
 
 
 def client_executable_path(settings):
-    exec_dirname = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(exec_dirname, EXECUTABLE_RELATIVE_PATH)
+    """Return the full path to the client executable:
+
+    1. of the client embedded within the addon, OR
+    2. (for older version compatibility and only when in expert mode) of the client path configured via the Bitwrk property panel"""
+
+    if not settings.bitwrk_client_executable_path or not settings.expert_mode:
+        exec_dirname = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(exec_dirname, EXECUTABLE_RELATIVE_PATH)
+
+    return bpy.path.abspath(settings.bitwrk_client_executable_path)
+
 
 CLIENT_PROC = None
 
