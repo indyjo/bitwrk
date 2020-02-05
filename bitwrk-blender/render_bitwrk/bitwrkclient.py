@@ -100,16 +100,10 @@ def bitwrk_client_alive():
     return True
 
 
-def is_bitwrk_client_executable(clientpath):
-    """Check the permissions of the executable"""
-    if os.access(clientpath, os.X_OK):
-        return True
-
-    return False
-
-
 def make_bitwrk_client_executable(clientpath):
-    os.chmod(clientpath, stat.S_IEXEC)
+    """Set the client permissions to executable for both owner and group"""
+    statinfo = os.stat(clientpath)
+    os.chmod(clientpath, statinfo.st_mode | stat.S_IXUSR | stat.S_IXGRP)
 
 
 def can_start_bitwrk_client(settings):
@@ -119,8 +113,7 @@ def can_start_bitwrk_client(settings):
         return False
     clientpath = client_executable_path(settings)
 
-    if not is_bitwrk_client_executable(clientpath):
-        make_bitwrk_client_executable(clientpath)
+    make_bitwrk_client_executable(clientpath)
 
     return os.path.isfile(clientpath)
 
