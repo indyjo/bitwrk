@@ -18,7 +18,7 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
-import atexit, bpy.path, time, http, re, os, subprocess, threading, stat
+import atexit, bpy.path, time, http, re, os, subprocess, threading, stat, platform
 
 # Functions for probing host:port settings for a running BitWrk client
 LAST_PROBE_LOCK = threading.RLock()
@@ -27,6 +27,7 @@ LAST_PROBE_RESULT = False
 LAST_PROBE_SETTINGS = None
 LAST_PROBE_THREAD = None
 EXECUTABLE_RELATIVE_PATH = 'bitwrk_client/bitwrk-client'
+EXECUTABLE_EXTENSION_WINDOWS = '.exe'
 
 def probe_bitwrk_client(settings):
     global LAST_PROBE_LOCK, LAST_PROBE_TIME, LAST_PROBE_RESULT, LAST_PROBE_SETTINGS, LAST_PROBE_THREAD
@@ -79,7 +80,10 @@ def do_probe_bitwrk_client_pure(settings):
 
 def client_executable_path(settings):
     exec_dirname = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(exec_dirname, EXECUTABLE_RELATIVE_PATH)
+    executable_fullpath = os.path.join(exec_dirname, EXECUTABLE_RELATIVE_PATH)
+    if platform.system() == 'Windows':
+        executable_fullpath += EXECUTABLE_EXTENSION_WINDOWS
+    return executable_fullpath
 
 CLIENT_PROC = None
 
