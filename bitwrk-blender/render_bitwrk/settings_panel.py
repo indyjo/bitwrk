@@ -139,8 +139,6 @@ class RENDER_PT_bitwrk_settings(bpy.types.Panel):
         
         if not bitwrkclient.probe_bitwrk_client(settings):
             row = self.layout.split(factor=0.5)
-            row.label(text="BitWrk client executable file:")
-            row.prop(settings, "bitwrk_client_executable_path", text="")
             if settings.expert_mode:
                 self.layout.label(text="BitWrk can dispatch jobs to local network computers:")
                 row = self.layout.split(factor=0.02)
