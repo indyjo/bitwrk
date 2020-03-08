@@ -10,7 +10,7 @@ ADDON_NAME=$(ADDON_NAME_ROOT)-$(VERSION)
 ifeq ($(VERSION),snapshot)
 GORELEASER_CMD:=--snapshot
 else
-GORELEASER_CMD:=v$(VERSION)
+GORELEASER_CMD:=
 endif
 
 # Variables to zip addon and client daemon into one 
