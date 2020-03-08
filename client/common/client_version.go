@@ -1,4 +1,4 @@
 package common
 
-var ClientVersion = "0.6.5"
+var ClientVersion = "0.7.0"
 var CommitSHA = ""

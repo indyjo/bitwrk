@@ -1,5 +1,5 @@
 //  BitWrk - A Bitcoin-friendly, anonymous marketplace for computing power
-//  Copyright (C) 2014-2019  Jonas Eschenburg <jonas@bitwrk.net>
+//  Copyright (C) 2014-2020  Jonas Eschenburg <jonas@bitwrk.net>
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -57,8 +57,8 @@ func getMessageOfTheDay(r *http.Request) motd {
 	micro, _ := strconv.ParseInt(matches[3], 10, 16)
 
 	const currentMajor = 0
-	const currentMinor = 6
-	const currentMicro = 5
+	const currentMinor = 7
+	const currentMicro = 0
 
 	if major > currentMajor || major == currentMajor && (minor > currentMinor || minor == currentMinor && micro >= currentMicro) {
 		return motd{fmt.Sprintf("Welcome to the BitWrk network!"+
