@@ -7,11 +7,6 @@ CLIENT_WINDOWS=$(GO_RELEASE_DIST)/bitwrk_windows_amd64/$(GO_CLIENT).exe
 ADDON_NAME_ROOT=render_bitwrk
 VERSION?=snapshot
 ADDON_NAME=$(ADDON_NAME_ROOT)-$(VERSION)
-ifeq ($(VERSION),snapshot)
-GORELEASER_CMD:=--snapshot
-else
-GORELEASER_CMD:=
-endif
 
 # Variables to zip addon and client daemon into one 
 BUILD_TMPDIR=tmp
@@ -26,7 +21,11 @@ SUFFIX_WINDOWS=-windows.x64
 all: build-go prep-addon package-darwin package-linux package-windows cleanup-addon
 
 build-go:
-	goreleaser $(GORELEASER_CMD) --skip-publish --rm-dist
+ifeq ($(VERSION),snapshot)
+	goreleaser --snapshot --skip-publish --rm-dist
+else
+	GORELEASER_CURRENT_TAG=v$(VERSION) goreleaser --skip-publish --rm-dist
+endif
 
 prep-addon:
 	echo "CLEAN UP PREVIOUS BUILD"
